@@ -1,0 +1,34 @@
+{
+  "backgroundColor": "#000000",
+  "gridColor": "#9c9c9c",
+  "showGridInPlay": false,
+  "ui": "battle",
+  "world": {
+    "width": 900,
+    "height": 600
+  },
+  "camera": {
+    "width": 900
+  },
+  "walls": [],
+  "enemies": [],
+  "spawn": {
+    "x": 130,
+    "y": 300,
+    "scheme": "yellow",
+    "hp": 100,
+    "maxHp": 100,
+    "level": 1,
+    "exp": 0,
+    "expToNext": 100,
+    "gold": 0,
+    "weapons": [
+      "radial",
+      "yellow",
+      "green"
+    ],
+    "weaponType": "yellow"
+  },
+  "triggers": [],
+  "background": null
+}

@@ -1,0 +1,170 @@
+{
+  "backgroundColor": "#000000",
+  "gridColor": "#3b3b3b",
+  "showGridInPlay": false,
+  "ui": "battle",
+  "world": {
+    "width": 1920,
+    "height": 1920
+  },
+  "camera": {
+    "width": 1440
+  },
+  "walls": [
+    {
+      "id": "wall-1786978088939",
+      "x": 343.00000000000006,
+      "y": 733.789229352969,
+      "w": 8,
+      "h": 234.14644241197402,
+      "color": "#ffffff",
+      "rotation": 0
+    },
+    {
+      "id": "wall-1786978139170",
+      "x": 1578,
+      "y": 1069.89126861514,
+      "w": 8,
+      "h": 224.325533824489,
+      "color": "#ffffff",
+      "rotation": 0
+    }
+  ],
+  "enemies": [
+    {
+      "id": "enemy-1",
+      "x": 1140,
+      "y": 870,
+      "type": "basic1",
+      "hp": 30,
+      "damage": 10,
+      "drops": {
+        "gold": 1,
+        "exp": 1,
+        "charge": 0
+      }
+    },
+    {
+      "id": "enemy-2",
+      "x": 1140,
+      "y": 420,
+      "type": "basic1",
+      "hp": 30,
+      "damage": 10,
+      "drops": {
+        "gold": 1,
+        "exp": 1,
+        "charge": 0
+      }
+    },
+    {
+      "id": "enemy-5",
+      "x": 510,
+      "y": 870,
+      "type": "basic1",
+      "hp": 30,
+      "damage": 10,
+      "drops": {
+        "gold": 1,
+        "exp": 1,
+        "charge": 0
+      }
+    }
+  ],
+  "spawn": {
+    "x": 420,
+    "y": 420,
+    "scheme": "default",
+    "hp": 100,
+    "maxHp": 100,
+    "level": 1,
+    "exp": 0,
+    "expToNext": 100,
+    "gold": 0,
+    "weapons": [
+      "radial",
+      "yellow"
+    ]
+  },
+  "triggers": [
+    {
+      "id": "trigger-1786978304148",
+      "x": 1140,
+      "y": 690,
+      "w": 725.589991966858,
+      "h": 697.1927241801804,
+      "color": "#f3b63f",
+      "visible": false,
+      "action": "spawnEnemy",
+      "once": true,
+      "cooldown": 0,
+      "spawn": {
+        "mode": "offscreen",
+        "enemyType": "basic2",
+        "count": 8,
+        "waveInterval": 0,
+        "waves": [
+          {
+            "enemyType": "basic2",
+            "shape": "polygon",
+            "sides": 6,
+            "radius": 120,
+            "thickness": 10,
+            "circleCount": 8,
+            "drawDuration": 500,
+            "fadeDuration": 500
+          }
+        ]
+      }
+    },
+    {
+      "id": "trigger-1786978359214",
+      "x": 770.7305660988304,
+      "y": 1028.1915138252098,
+      "w": 745.458793974577,
+      "h": 699.5038662351033,
+      "color": "#f3b63f",
+      "visible": false,
+      "action": "spawnEnemy",
+      "once": true,
+      "cooldown": 0,
+      "spawn": {
+        "mode": "surround",
+        "enemyType": "basic1",
+        "count": 10,
+        "waveInterval": 0,
+        "waves": [
+          {
+            "enemyType": "basic1",
+            "shape": "circle",
+            "sides": 6,
+            "radius": 320,
+            "thickness": 2,
+            "circleCount": 10,
+            "drawDuration": 400,
+            "fadeDuration": 400
+          },
+          {
+            "enemyType": "basic2",
+            "shape": "circle",
+            "sides": 6,
+            "radius": 500,
+            "thickness": 2,
+            "circleCount": 12,
+            "drawDuration": 400,
+            "fadeDuration": 400
+          }
+        ]
+      }
+    }
+  ],
+  "background": {
+    "src": "/uploads/1786978443111-517883.png",
+    "x": 960,
+    "y": 960,
+    "w": 1920,
+    "h": 1920,
+    "aspect": 1,
+    "visible": true
+  }
+}

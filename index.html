@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ARC ENGINE</title>
+  <link href="https://fonts.font.im/css?family=Poppins" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@100..900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="brand">
+        <img src="logo.svg" alt="ARC ENGINE" class="logo"/>
+        <h1>ARC ENGINE</h1>
+      </div>
+      <div class="mode-buttons">
+        <button id="editorMode" class="active">关卡编辑</button>
+        <button id="playMode">游戏预览</button>
+        <button id="flowPlay">流程试玩</button>
+        <button id="uiConfig">UI 配置</button>
+      </div>
+    </header>
+
+    <main>
+      <aside id="editorPanel">
+        <details class="editor-section project" open>
+          <summary>项目关卡</summary>
+          <div class="section-body">
+            <div class="row">
+              <select id="levelList"></select>
+              <button id="newLevel">新建</button>
+            </div>
+            <div class="row">
+              <button id="copyLevel">复制</button>
+              <button id="deleteLevel">删除</button>
+            </div>
+            <select id="template">
+              <option value="blank">空白战斗场</option>
+              <option value="training">训练场</option>
+              <option value="single">单波敌人</option>
+              <option value="multi">多波敌人</option>
+              <option value="defend">防守目标</option>
+            </select>
+            <button id="applyTemplate">应用模板到当前关卡</button>
+          </div>
+        </details>
+
+        <details class="editor-section flow" open>
+          <summary>流程编排</summary>
+          <div class="section-body">
+            <select id="flowType">
+              <option value="game">游戏流程</option>
+              <option value="tutorial">教程流程</option>
+            </select>
+            <label>入口节点 <select id="flowStart"></select></label>
+            <div id="flowList"></div>
+            <div class="row">
+              <select id="flowAdd"></select>
+              <button id="addFlow">添加节点</button>
+            </div>
+            <button id="saveFlow">保存流程</button>
+            <button id="previewFlow">预览当前流程</button>
+            <button id="tutorialPlay">试玩教程流程</button>
+          </div>
+        </details>
+
+        <details class="editor-section entities" open>
+          <summary>实体工具</summary>
+          <div class="section-body">
+            <p class="hint">选择工具后，在画布点击放置；选择工具可拖拽实体。</p>
+            <div class="tools">
+              <button data-tool="select" class="tool active">选择 / 移动</button>
+              <button data-tool="wall" class="tool">墙体</button>
+              <button data-tool="crate" class="tool">箱子</button>
+              <button data-tool="barrel" class="tool">油桶</button>
+              <button data-tool="enemy" class="tool">敌人</button>
+              <button data-tool="trigger" class="tool">关卡触发器</button>
+              <button data-tool="spawn" class="tool">玩家出生点</button>
+              <button data-tool="erase" class="tool">删除</button>
+            </div>
+          </div>
+        </details>
+
+        <div class="settings">
+          <h2>画面设置</h2>
+          <label>关卡背景颜色 <input id="backgroundColor" type="color"/></label>
+          <label>网格线颜色 <input id="gridColor" type="color"/></label>
+          <label class="checkbox"><input id="showGridInEditor" type="checkbox" checked/> 编辑器显示网格线</label>
+          <label class="checkbox"><input id="showGridInPlay" type="checkbox"/> 正式游戏显示网格线</label>
+          <h2>背景图</h2>
+          <label class="import">导入背景图<input id="bgImage" type="file" accept="image/*"/></label>
+          <button id="bgRemove">移除背景图</button>
+          <h2>关卡尺寸</h2>
+          <label>地图宽度 <input id="worldWidth" type="number" min="600" step="30"/></label>
+          <label>地图高度 <input id="worldHeight" type="number" min="600" step="30"/></label>
+          <h2>摄像头</h2>
+          <label>视口宽度（高自动 16:9）<input id="cameraWidth" type="number" min="300" step="30"/></label>
+          <h2>UI</h2>
+          <label>UI 种类 <select id="levelUi">
+            <option value="battle">战斗UI</option>
+            <option value="interface">界面UI</option>
+            <option value="login">登录UI</option>
+          </select></label>
+          <p class="hint">滚轮缩放 · 中键/右键拖拽平移</p>
+        </div>
+
+        <div class="actions">
+          <button id="save">保存关卡</button>
+          <button id="load">加载正式关卡</button>
+          <button id="export">导出 JSON</button>
+          <label class="import">导入 JSON<input id="import" type="file" accept="application/json"/></label>
+        </div>
+
+        <div id="draftStatus"></div>
+        <div id="selection">未选择实体</div>
+      </aside>
+
+      <section class="stage">
+        <div id="game"></div>
+        <section id="entity-properties" class="entity-properties" hidden>
+          <h2 id="entity-title">实体属性</h2>
+          <div id="entity-fields"></div>
+        </section>
+        <div id="status"></div>
+        <div id="zoomInfo"></div>
+      </section>
+    </main>
+
+    <section id="uiConfigPage" class="ui-config-page" hidden>
+      <header class="ui-config-bar">
+        <button id="uiConfigBack">← 返回关卡编辑</button>
+        <h2>UI 配置</h2>
+        <select id="uiGraphSelect">
+          <option value="battle">战斗UI (battle)</option>
+          <option value="interface">界面UI (interface)</option>
+          <option value="login">登录UI (login)</option>
+        </select>
+        <select id="uiNodeType">
+          <option value="text">文本</option>
+          <option value="bar">进度条</option>
+          <option value="panel">面板</option>
+          <option value="icon">图标</option>
+          <option value="button">按钮</option>
+          <option value="shape">几何形状</option>
+          <option value="image">图片</option>
+        </select>
+        <button id="uiNodeAdd">添加节点</button>
+        <button id="uiConfigSave">保存</button>
+      </header>
+      <div class="ui-config-main">
+        <div id="uiNodeList" class="ui-node-list"></div>
+        <aside class="ui-preview">
+          <h3>预览</h3>
+          <canvas id="uiPreviewCanvas" width="960" height="540"></canvas>
+        </aside>
+      </div>
+    </section>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

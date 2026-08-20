@@ -1,0 +1,30 @@
+{
+  "backgroundColor": "#000000",
+  "gridColor": "#173a55",
+  "showGridInPlay": false,
+  "ui": "login",
+  "world": { "width": 1920, "height": 1080 },
+  "camera": { "width": 1920 },
+  "walls": [],
+  "enemies": [],
+  "spawn": { "x": 130, "y": 300 },
+  "triggers": [],
+  "crates": [],
+  "barrels": [],
+  "background": {
+    "fx": "wormhole",
+    "x": 1600,
+    "y": 260,
+    "radius": 1600,
+    "rings": 10,
+    "orbitCount": 2,
+    "driftAmp": 6400,
+    "driftSpeed": 0.5,
+    "yDrift": 12,
+    "ySpeed": 0.6,
+    "scaleAmp": 0.06,
+    "scaleSpeed": 0.4,
+    "orbitSpeed": 0.7,
+    "visible": true
+  }
+}

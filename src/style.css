@@ -1,0 +1,552 @@
+.stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  gap: 12px;
+  align-items: start;
+}
+
+.entity-properties {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  background: #000;
+  border: 1px solid #fff;
+  border-radius: 8px;
+  padding: 12px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+}
+
+.entity-properties label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 12px;
+  color: #fff;
+}
+
+.entity-properties input {
+  width: 90px;
+  background: #000;
+  border: 1px solid #fff;
+  color: #fff;
+  padding: 6px;
+  border-radius: 4px;
+}
+
+#status {
+  grid-column: 1;
+}
+
+:root {
+  font-family: 'Poppins', 'Noto Sans SC', sans-serif;
+  color: #fff;
+  background: #000;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 900px;
+  background: #000;
+}
+
+#app {
+  max-width: 1360px;
+  margin: auto;
+  padding: 18px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.logo {
+  height: 85px;
+  width: auto;
+  display: block;
+}
+
+h1 {
+  font: 700 37.5px 'Poppins', 'Noto Sans SC', sans-serif;
+  letter-spacing: 2px;
+  margin: 0;
+  color: #fff;
+}
+
+.mode-buttons button,
+button,
+.import,
+select {
+  border: 1px solid #fff;
+  background: #000;
+  color: #fff;
+  padding: 9px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.mode-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.active,
+.mode-buttons .active {
+  background: #fff;
+  border-color: #fff;
+  color: #000;
+}
+
+main {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 15px;
+}
+
+aside {
+  background: #000;
+  border: 1px solid #fff;
+  border-radius: 8px;
+  padding: 16px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #fff #000;
+}
+
+aside::-webkit-scrollbar {
+  width: 8px;
+}
+
+aside::-webkit-scrollbar-thumb {
+  background: #fff;
+  border-radius: 4px;
+}
+
+aside::-webkit-scrollbar-track {
+  background: #000;
+}
+
+h2 {
+  font-size: 14px;
+}
+
+.hint {
+  font-size: 12px;
+  color: #fff;
+  line-height: 1.5;
+}
+
+.tools {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.tool {
+  width: 100%;
+  text-align: left;
+}
+
+.tool.active {
+  background: #fff;
+  border-color: #fff;
+  color: #000;
+}
+
+.actions,
+.project,
+.flow {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid #fff;
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+}
+
+.row > * {
+  flex: 1;
+}
+
+.project select,
+.flow select {
+  min-width: 0;
+  width: 100%;
+}
+
+.flow label {
+  font-size: 12px;
+  display: grid;
+  gap: 5px;
+}
+
+.flowList {
+  font-size: 12px;
+  line-height: 2;
+  color: #fff;
+}
+
+.settings {
+  border-top: 1px solid #fff;
+  padding-top: 15px;
+  margin-top: 15px;
+}
+
+.settings label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 12px;
+  color: #fff;
+}
+
+.settings input[type=color] {
+  width: 42px;
+  height: 26px;
+  padding: 2px;
+}
+
+.settings input[type=number] {
+  width: 90px;
+  background: #000;
+  border: 1px solid #fff;
+  color: #fff;
+  padding: 6px;
+  border-radius: 4px;
+}
+
+.settings .checkbox {
+  justify-content: flex-start;
+}
+
+.import {
+  text-align: center;
+}
+
+.import input {
+  display: none;
+}
+
+details.editor-section {
+  display: block;
+  border-top: 1px solid #fff;
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+details.editor-section:first-child {
+  border-top: 0;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+details.editor-section summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  padding: 4px 0;
+}
+
+details.editor-section summary::-webkit-details-marker {
+  display: none;
+}
+
+details.editor-section summary::before {
+  content: '▸';
+  display: inline-block;
+  width: 18px;
+  color: #fff;
+}
+
+details.editor-section[open] summary::before {
+  content: '▾';
+}
+
+details.editor-section .section-body {
+  padding-top: 10px;
+}
+
+.wall-properties {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #fff;
+  border-radius: 5px;
+  background: #000;
+}
+
+.wall-properties h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+
+.wall-properties label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 7px 0;
+  font-size: 12px;
+  color: #fff;
+}
+
+.wall-properties input[type=number] {
+  width: 90px;
+  padding: 5px;
+  border: 1px solid #fff;
+  background: #000;
+  color: #fff;
+  border-radius: 4px;
+}
+
+.wall-properties input[type=color] {
+  width: 42px;
+  height: 26px;
+  padding: 2px;
+}
+
+.stage {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  background: #000;
+  border: 1px solid #fff;
+  border-radius: 8px;
+  padding: 12px;
+  min-height: 650px;
+}
+
+#game canvas {
+  border-radius: 4px;
+  max-width: 100%;
+  height: auto;
+}
+
+#status {
+  position: absolute;
+  left: 25px;
+  top: 20px;
+  color: #fff;
+  font: 13px 'Poppins', 'Noto Sans SC', sans-serif;
+}
+
+#zoomInfo {
+  position: absolute;
+  right: 260px;
+  top: 20px;
+  color: #fff;
+  font: 13px 'Poppins', 'Noto Sans SC', sans-serif;
+  background: #000;
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: 1px solid #fff;
+  pointer-events: none;
+}
+
+body.play-mode #zoomInfo {
+  display: none;
+}
+
+body.play-mode {
+  min-width: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+body.play-mode #app {
+  max-width: none;
+  height: 100vh;
+  padding: 0;
+}
+
+body.play-mode header {
+  display: none;
+}
+
+body.play-mode .brand {
+  display: none;
+}
+
+body.play-mode .mode-buttons {
+  pointer-events: auto;
+}
+
+body.play-mode main {
+  display: block;
+  height: 100vh;
+}
+
+body.play-mode .stage {
+  height: 100vh;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  align-items: center;
+  overflow: hidden;
+}
+
+body.play-mode #game {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+body.play-mode .entity-properties {
+  display: none;
+}
+
+body.play-mode #game canvas {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none;
+  object-fit: contain;
+  border-radius: 0;
+}
+
+body.ui-config-mode main {
+  display: none;
+}
+
+body.ui-config-mode #uiConfigPage {
+  display: block;
+}
+
+.ui-config-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.ui-config-bar h2 {
+  margin: 0;
+  flex: 1;
+}
+
+.ui-config-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 690px;
+  gap: 16px;
+  align-items: start;
+}
+
+.ui-preview {
+  background: #000;
+  border: 1px solid #fff;
+  border-radius: 8px;
+  padding: 12px;
+  position: sticky;
+  top: 16px;
+}
+
+.ui-preview h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #fff;
+}
+
+.ui-preview canvas {
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  border: 1px solid #fff;
+  display: block;
+}
+
+.ui-node-list {
+  display: grid;
+  gap: 12px;
+}
+
+.ui-node {
+  background: #000;
+  border: 1px solid #fff;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.ui-node-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ui-node-head strong {
+  color: #fff;
+}
+
+.ui-node-head em {
+  color: #fff;
+  font-style: normal;
+  font-size: 12px;
+}
+
+.ui-node-head .inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #fff;
+}
+
+.ui-node-del {
+  margin-left: auto;
+}
+
+.ui-node-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ui-node-body label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #fff;
+}
+
+.ui-node-body input,
+.ui-node-body select {
+  width: 110px;
+  background: #000;
+  border: 1px solid #fff;
+  color: #fff;
+  padding: 6px;
+  border-radius: 4px;
+}
+
+.ui-node-body input[type=color] {
+  width: 44px;
+  height: 28px;
+  padding: 2px;
+}

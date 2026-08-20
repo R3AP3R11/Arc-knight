@@ -1,0 +1,242 @@
+{
+  "backgroundColor": "#000000",
+  "gridColor": "#fec3c3",
+  "showGridInPlay": false,
+  "ui": "battle",
+  "world": {
+    "width": 1920,
+    "height": 1080
+  },
+  "camera": {
+    "width": 1440
+  },
+  "walls": [
+    {
+      "x": 61,
+      "y": 285,
+      "w": 8,
+      "h": 510,
+      "id": "wall-1",
+      "color": "#ffffff",
+      "rotation": 0
+    },
+    {
+      "id": "wall-1786527737829",
+      "x": 450,
+      "y": 536,
+      "w": 780,
+      "h": 8,
+      "color": "#ffffff",
+      "rotation": 0
+    }
+  ],
+  "enemies": [
+    {
+      "id": "enemy-4",
+      "x": 990,
+      "y": 90,
+      "type": "advanced2",
+      "hp": 100,
+      "damage": 15,
+      "drops": {
+        "gold": 1,
+        "exp": 1,
+        "charge": 0
+      }
+    },
+    {
+      "id": "enemy-2",
+      "x": 390,
+      "y": 210,
+      "type": "basic1",
+      "hp": 30,
+      "damage": 10,
+      "drops": {
+        "gold": 1,
+        "exp": 1,
+        "charge": 0
+      }
+    },
+    {
+      "id": "enemy-3",
+      "x": 360,
+      "y": 210,
+      "type": "basic1",
+      "hp": 30,
+      "damage": 10,
+      "drops": {
+        "gold": 1,
+        "exp": 1,
+        "charge": 0
+      }
+    },
+    {
+      "id": "enemy-4",
+      "x": 600,
+      "y": 210,
+      "type": "basic1",
+      "hp": 30,
+      "damage": 10,
+      "drops": {
+        "gold": 1,
+        "exp": 1,
+        "charge": 0
+      }
+    },
+    {
+      "id": "enemy-5",
+      "x": 360,
+      "y": 210,
+      "type": "basic1",
+      "hp": 30,
+      "damage": 10,
+      "drops": {
+        "gold": 1,
+        "exp": 1,
+        "charge": 0
+      }
+    },
+    {
+      "id": "enemy-6",
+      "x": 360,
+      "y": 240,
+      "type": "basic1",
+      "hp": 30,
+      "damage": 10,
+      "drops": {
+        "gold": 1,
+        "exp": 1,
+        "charge": 0
+      }
+    },
+    {
+      "id": "enemy-7",
+      "x": 360,
+      "y": 270,
+      "type": "basic1",
+      "hp": 30,
+      "damage": 10,
+      "drops": {
+        "gold": 1,
+        "exp": 1,
+        "charge": 0
+      }
+    }
+  ],
+  "spawn": {
+    "x": 150,
+    "y": 300,
+    "scheme": "hex-ring",
+    "hp": 100,
+    "maxHp": 100,
+    "level": 1,
+    "exp": 0,
+    "expToNext": 100,
+    "gold": 0,
+    "weapons": [
+      "radial",
+      "green",
+      "yellow"
+    ],
+    "weaponType": "radial"
+  },
+  "triggers": [
+    {
+      "id": "trigger-1786870069301",
+      "x": 390,
+      "y": 330,
+      "w": 90,
+      "h": 60,
+      "color": "#f3b63f",
+      "visible": true,
+      "action": "complete",
+      "once": true,
+      "cooldown": 0
+    }
+  ],
+  "crates": [
+    {
+      "id": "crate-1",
+      "x": 330,
+      "y": 210,
+      "w": 50,
+      "h": 50,
+      "hp": 1
+    },
+    {
+      "id": "crate-2",
+      "x": 420,
+      "y": 210,
+      "w": 50,
+      "h": 50,
+      "hp": 1
+    },
+    {
+      "id": "crate-3",
+      "x": 480,
+      "y": 210,
+      "w": 50,
+      "h": 50,
+      "hp": 1
+    },
+    {
+      "id": "crate-4",
+      "x": 540,
+      "y": 210,
+      "w": 50,
+      "h": 50,
+      "hp": 1
+    }
+  ],
+  "barrels": [
+    {
+      "id": "barrel-1",
+      "x": 240,
+      "y": 300,
+      "r": 30,
+      "hp": 1,
+      "explodeRadius": 150
+    },
+    {
+      "id": "barrel-2",
+      "x": 390,
+      "y": 270,
+      "r": 30,
+      "hp": 1,
+      "explodeRadius": 150
+    },
+    {
+      "id": "barrel-3",
+      "x": 450,
+      "y": 270,
+      "r": 30,
+      "hp": 1,
+      "explodeRadius": 150
+    },
+    {
+      "id": "barrel-4",
+      "x": 510,
+      "y": 270,
+      "r": 30,
+      "hp": 1,
+      "explodeRadius": 150
+    },
+    {
+      "id": "barrel-5",
+      "x": 570,
+      "y": 270,
+      "r": 30,
+      "hp": 1,
+      "explodeRadius": 150
+    }
+  ],
+  "background": {
+    "src": "/uploads/1787014677292-557173.png",
+    "x": 420.20981899303735,
+    "y": 353.3448858567633,
+    "w": 620,
+    "h": 620,
+    "aspect": 1,
+    "visible": true
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "backgroundColor": "#000000",
+  "gridColor": "#9c9c9c",
+  "showGridInPlay": false,
+  "walls": [],
+  "enemies": [],
+  "spawn": {
+    "x": 130,
+    "y": 300
+  }
+}
