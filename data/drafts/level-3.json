@@ -38,6 +38,57 @@
     ],
     "weaponType": "green"
   },
-  "triggers": [],
+  "triggers": [
+    {
+      "id": "trigger-1787225321697",
+      "x": 240,
+      "y": 270,
+      "w": 90,
+      "h": 60,
+      "shape": "rect",
+      "color": "#f3b63f",
+      "visible": true,
+      "action": "spawnEnemy",
+      "once": false,
+      "cooldown": 0,
+      "resumeOnReturn": true,
+      "spawn": {
+        "stopOnExit": true,
+        "waves": [
+          {
+            "enemyType": "basic1",
+            "mode": "surround",
+            "count": 5,
+            "shape": "polygon",
+            "sides": 6,
+            "radius": 120,
+            "thickness": 10,
+            "circleCount": 8,
+            "drawDuration": 500,
+            "fadeDuration": 500,
+            "preDelay": 0,
+            "postDelay": 2000
+          },
+          {
+            "enemyType": "basic1",
+            "mode": "offscreen",
+            "count": 5,
+            "shape": "polygon",
+            "sides": 6,
+            "radius": 120,
+            "thickness": 10,
+            "circleCount": 8,
+            "drawDuration": 500,
+            "fadeDuration": 500,
+            "preDelay": 0,
+            "postDelay": 1000
+          }
+        ],
+        "resumeOnReturn": true
+      }
+    }
+  ],
+  "crates": [],
+  "barrels": [],
   "background": null
 }

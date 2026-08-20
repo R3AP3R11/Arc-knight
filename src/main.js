@@ -108,8 +108,10 @@ function renderEntityProperties() {
     fields = [
       ['x', 'X 坐标', 'number'],
       ['y', 'Y 坐标', 'number'],
-      ['w', '宽度', 'number'],
+      ['w', '宽度 / 直径', 'number'],
       ['h', '高度', 'number'],
+      ['shape', '几何形状', 'select', [['rect', '矩形'], ['circle', '圆形']]],
+      ['color', '编辑器颜色', 'color'],
       ['action', '事件类型', 'select', actionOptions],
       ['once', '一次性触发', 'boolean'],
       ['cooldown', '冷却(ms)', 'number'],
@@ -117,28 +119,38 @@ function renderEntityProperties() {
     ];
     if (entity.action === 'spawnEnemy') {
       fields.push(
-        ['spawn.mode', '生成方式', 'select', [['offscreen', '屏幕外生成'], ['surround', '周围生成']]],
-        ['spawn.enemyType', '敌人类型', 'select', enemyTypeOptions],
-        ['spawn.count', '数量', 'number']
+        ['spawn.stopOnExit', '离开触发器后停止生成', 'boolean'],
+        ['spawn.resumeOnReturn', '离开后重新进入：继续进度', 'boolean']
       );
-      if ((entity.spawn || {}).mode !== 'offscreen') {
-        const waves = (entity.spawn || {}).waves || [];
+      const waves = (entity.spawn || {}).waves || [];
+      fields.push(['__waveCount', `波数（当前 ${waves.length}）`, 'number']);
+      for (let i = 0; i < waves.length; i++) {
+        const no = i + 1;
+        const wave = entity.spawn.waves[i] || {};
+        const isSurroundCircle = wave.mode !== 'offscreen' && wave.shape === 'circle';
         fields.push(
-          ['spawn.waveInterval', '每波间隔(ms)', 'number'],
-          ['__waveCount', `波数（当前 ${waves.length}）`, 'number']
+          [`spawn.waves.${i}.enemyType`, `第${no}波敌人类型`, 'select', enemyTypeOptions],
+          [`spawn.waves.${i}.mode`, `第${no}波生成方式`, 'select', [['surround', '周围生成'], ['offscreen', '屏幕外生成']]],
+          [`spawn.waves.${i}.preDelay`, `第${no}波生成前等待(ms)`, 'number'],
+          [`spawn.waves.${i}.postDelay`, `第${no}波生成后等待(ms)`, 'number']
         );
-        for (let i = 0; i < waves.length; i++) {
-          const no = i + 1;
+        if (wave.mode !== 'offscreen') {
           fields.push(
-            [`spawn.waves.${i}.enemyType`, `第${no}波敌人类型`, 'select', enemyTypeOptions],
-            [`spawn.waves.${i}.shape`, `第${no}波形状`, 'select', [['polygon', '多边形'], ['circle', '圆形']]],
+            [`spawn.waves.${i}.shape`, `第${no}波生成形状`, 'select', [['polygon', '角形生成'], ['circle', '圆环生成']]],
             [`spawn.waves.${i}.sides`, `第${no}波边数`, 'number'],
             [`spawn.waves.${i}.radius`, `第${no}波半径`, 'number'],
-            [`spawn.waves.${i}.circleCount`, `第${no}波圆形数量`, 'number'],
             [`spawn.waves.${i}.thickness`, `第${no}波边厚度`, 'number'],
             [`spawn.waves.${i}.drawDuration`, `第${no}波绘制时长(ms)`, 'number'],
             [`spawn.waves.${i}.fadeDuration`, `第${no}波消失时长(ms)`, 'number']
           );
+          if (isSurroundCircle) {
+            fields.push(
+              [`spawn.waves.${i}.count`, `第${no}波数量`, 'number'],
+              [`spawn.waves.${i}.circleCount`, `第${no}波圆形数量`, 'number']
+            );
+          }
+        } else {
+          fields.push([`spawn.waves.${i}.count`, `第${no}波数量`, 'number']);
         }
       }
     } else if (entity.action === 'switchLevel') {
@@ -163,6 +175,12 @@ function renderEntityProperties() {
         ['scaleAmp', '缩放幅度', 'number'],
         ['scaleSpeed', '缩放速度', 'number'],
         ['orbitSpeed', '小球转速', 'number'],
+        ['introShrink', '入场偏移归零时长', 'number'],
+        ['introCamera', '镜头移动时长', 'number'],
+        ['introHold', '到位停顿时长', 'number'],
+        ['introSlow', '极慢放大时长', 'number'],
+        ['introGrow', '入场放大加速度', 'number'],
+        ['introPause', '全黑停顿时长', 'number'],
         ['visible', '可见', 'boolean']
       ];
     } else {
@@ -243,7 +261,7 @@ function renderEntityProperties() {
         renderEntityProperties();
         return;
       }
-      if (field === 'spawn.mode') {
+      if (field === 'spawn.mode' || /^spawn\.waves\.\d+\.(mode|shape)$/.test(field)) {
         renderEntityProperties();
         return;
       }
@@ -276,10 +294,32 @@ function startGame() {
       redraw,
       onSwitchLevel: (target, spawnPoint, done) => switchToLevel(target, spawnPoint, done),
       onExitPreview: () => setMode('editor'),
-      onLevelResult: result => result === 'completed' && completeFlowNode()
+      onLevelResult: result => result === 'completed' && completeFlowNode(),
+      onStartNew: () => startNewGame(),
+      onContinue: () => continueGame(),
+      onSettings: () => {}
     }),
     scale: { mode: Phaser.Scale.NONE, width: W, height: H }
   });
+}
+
+function startNewGame() {
+  localStorage.removeItem('arc_save');
+  const firstGame = state.levels.find(id => id !== 'login') || state.levels[0];
+  if (firstGame) selectLevel(firstGame).then(() => setMode('play'));
+}
+
+function continueGame() {
+  const save = localStorage.getItem('arc_save');
+  if (!save) return;
+  try {
+    const data = JSON.parse(save);
+    if (data.level && state.levels.includes(data.level)) {
+      selectLevel(data.level).then(() => setMode('play'));
+    }
+  } catch {
+    /* 忽略损坏存档 */
+  }
 }
 
 function setMode(mode) {

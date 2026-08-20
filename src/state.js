@@ -40,14 +40,18 @@ export function normalizeEnemy(enemy, index) {
 
 export function normalizeWave(w, def) {
   return {
-    enemyType: ENEMY_TYPES[w?.enemyType] ? w?.enemyType : def.enemyType,
-    shape: (w?.shape ?? def.shape) === 'circle' ? 'circle' : 'polygon',
-    sides: Math.max(3, Number(w?.sides ?? def.sides) || 6),
-    radius: Math.max(20, Number(w?.radius ?? def.radius) || 120),
-    thickness: Math.max(1, Number(w?.thickness ?? def.thickness) || 10),
-    circleCount: Math.max(1, Number(w?.circleCount ?? def.circleCount) || 8),
-    drawDuration: Math.max(1, Number(w?.drawDuration ?? def.drawDuration) || 500),
-    fadeDuration: Math.max(1, Number(w?.fadeDuration ?? def.fadeDuration) || 500)
+    enemyType: ENEMY_TYPES[w?.enemyType] ? w?.enemyType : (def?.enemyType || 'basic1'),
+    mode: w?.mode === 'offscreen' ? 'offscreen' : 'surround',
+    count: Math.max(1, Number(w?.count ?? def?.count) || 5),
+    shape: (w?.shape ?? def?.shape) === 'circle' ? 'circle' : 'polygon',
+    sides: Math.max(3, Number(w?.sides ?? def?.sides) || 6),
+    radius: Math.max(20, Number(w?.radius ?? def?.radius) || 120),
+    thickness: Math.max(1, Number(w?.thickness ?? def?.thickness) || 10),
+    circleCount: Math.max(1, Number(w?.circleCount ?? def?.circleCount) || 8),
+    drawDuration: Math.max(1, Number(w?.drawDuration ?? def?.drawDuration) || 500),
+    fadeDuration: Math.max(1, Number(w?.fadeDuration ?? def?.fadeDuration) || 500),
+    preDelay: Math.max(0, Number(w?.preDelay ?? 0) || 0),
+    postDelay: Math.max(0, Number(w?.postDelay ?? def?.postDelay) || 1000)
   };
 }
 
@@ -73,37 +77,41 @@ export function normalizeBarrel(barrel, index) {
   };
 }
 
-export function normalizeTrigger(trigger, index) {  const base = {
+export function normalizeTrigger(trigger, index) {
+  const base = {
     id: trigger?.id || `trigger-${index + 1}`,
     x: Number(trigger?.x) || 0,
     y: Number(trigger?.y) || 0,
     w: Math.max(Number(trigger?.w) || 90, MIN_WALL_SIZE),
     h: Math.max(Number(trigger?.h) || 90, MIN_WALL_SIZE),
+    shape: trigger?.shape === 'circle' ? 'circle' : 'rect',
     color: trigger?.color || '#f3b63f',
     visible: trigger?.visible !== false,
     action: trigger?.action || 'complete',
     once: trigger?.once !== false,
-    cooldown: Math.max(0, Number(trigger?.cooldown) || 0)
+    cooldown: Math.max(0, Number(trigger?.cooldown) || 0),
+    resumeOnReturn: trigger?.resumeOnReturn !== false
   };
 
   if (base.action === 'spawnEnemy') {
     const s = trigger?.spawn || {};
     const def = {
       enemyType: ENEMY_TYPES[s.enemyType] ? s.enemyType : 'basic1',
-      shape: s.shape === 'circle' ? 'circle' : 'polygon',
-      sides: Math.max(3, Number(s.sides) || 6),
-      radius: Math.max(20, Number(s.radius) || 120),
-      thickness: Math.max(1, Number(s.thickness) || 10),
-      circleCount: Math.max(1, Number(s.circleCount) || 8),
-      drawDuration: Math.max(1, Number(s.drawDuration) || 500),
-      fadeDuration: Math.max(1, Number(s.fadeDuration) || 500)
-    };
-    const rawWaves = Array.isArray(s.waves) && s.waves.length ? s.waves : [s];
-    base.spawn = {
-      mode: s.mode === 'offscreen' ? 'offscreen' : 'surround',
-      enemyType: def.enemyType,
+      mode: 'surround',
       count: Math.max(1, Number(s.count) || 5),
-      waveInterval: Math.max(0, Number(s.waveInterval) || 0),
+      shape: 'polygon',
+      sides: 6,
+      radius: 120,
+      thickness: 10,
+      circleCount: 8,
+      drawDuration: 500,
+      fadeDuration: 500,
+      preDelay: 0,
+      postDelay: 1000
+    };
+    const rawWaves = Array.isArray(s.waves) && s.waves.length ? s.waves : [{ ...s, mode: s.mode, count: s.count }];
+    base.spawn = {
+      stopOnExit: s.stopOnExit === true,
       waves: rawWaves.map(w => normalizeWave(w, def))
     };
   }
@@ -166,6 +174,12 @@ function normalizeBackground(value) {
       scaleAmp: Math.max(0, Number(value.scaleAmp) || 0.06),
       scaleSpeed: Math.max(0, Number(value.scaleSpeed) || 0.4),
       orbitSpeed: Math.max(0, Number(value.orbitSpeed) || 0.7),
+      introShrink: Math.max(0, Number(value.introShrink) || 0.8),
+      introCamera: Math.max(0, Number(value.introCamera) || 1.5),
+      introHold: Math.max(0, Number(value.introHold) || 1),
+      introSlow: Math.max(0, Number(value.introSlow) || 1),
+      introGrow: Math.max(0, Number(value.introGrow) || 6),
+      introPause: Math.max(0, Number(value.introPause) || 0.5),
       visible: value.visible !== false
     };
   }

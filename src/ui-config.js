@@ -87,7 +87,8 @@ function nodeFields(node) {
       return common.concat([
         textField('图片路径', 'src', node.src),
         numberField('宽', 'w', node.w),
-        numberField('高', 'h', node.h)
+        numberField('高', 'h', node.h),
+        numberField('旋转角度°', 'angle', node.angle)
       ]);
     default:
       return common;

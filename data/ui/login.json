@@ -3,17 +3,8 @@
   "type": "login",
   "name": "登录UI",
   "nodes": [
-    { "id": "logo", "type": "image", "x": 96, "y": 96, "w": 96, "h": 86, "src": "/logo.svg" },
-    { "id": "title", "type": "text", "x": 184, "y": 70, "size": 64, "color": "#ffffff", "bold": true, "text": "ARC ENGINE" },
-    { "id": "subtitle", "type": "text", "x": 120, "y": 620, "size": 28, "color": "#9fc3d8", "text": "进入太空电梯井" },
-    { "id": "start", "type": "button", "x": 120, "y": 700, "w": 420, "h": 76, "fill": "#ff9d2e", "label": "开始游戏" },
-    { "id": "startLabel", "type": "text", "x": 322, "y": 724, "size": 32, "color": "#ffffff", "text": "开始游戏" },
-    { "id": "continue", "type": "button", "x": 120, "y": 800, "w": 420, "h": 60, "label": "继续游戏" },
-    { "id": "continueLabel", "type": "text", "x": 306, "y": 816, "size": 24, "color": "#ffffff", "text": "继续游戏" },
-    { "id": "settings", "type": "button", "x": 120, "y": 880, "w": 200, "h": 60, "label": "设置" },
-    { "id": "settingsLabel", "type": "text", "x": 200, "y": 894, "size": 22, "color": "#ffffff", "text": "设置" },
-    { "id": "exit", "type": "button", "x": 340, "y": 880, "w": 200, "h": 60, "label": "退出" },
-    { "id": "exitLabel", "type": "text", "x": 420, "y": 894, "size": 22, "color": "#ffffff", "text": "退出" },
+    { "id": "logo", "type": "image", "x": 230, "y": 162, "w": 326, "h": 292, "angle": -60, "src": "/logo.svg" },
+    { "id": "title", "type": "text", "x": 380, "y": 110, "size": 126, "color": "#ffffff", "bold": true, "text": "ARC ENGINE" },
     { "id": "version", "type": "text", "x": 120, "y": 1010, "size": 20, "color": "#9fc3d8", "text": "v0.1.0" }
   ]
 }

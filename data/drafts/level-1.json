@@ -147,11 +147,33 @@
       "y": 330,
       "w": 90,
       "h": 60,
+      "shape": "rect",
       "color": "#f3b63f",
       "visible": true,
-      "action": "complete",
+      "action": "spawnEnemy",
       "once": true,
-      "cooldown": 0
+      "cooldown": 0,
+      "resumeOnReturn": true,
+      "target": "Level1-Scene1",
+      "spawn": {
+        "resumeOnReturn": true,
+        "waves": [
+          {
+            "enemyType": "basic1",
+            "mode": "surround",
+            "count": 5,
+            "shape": "polygon",
+            "sides": 6,
+            "radius": 120,
+            "thickness": 10,
+            "circleCount": 8,
+            "drawDuration": 500,
+            "fadeDuration": 500,
+            "preDelay": 0,
+            "postDelay": 1000
+          }
+        ]
+      }
     }
   ],
   "crates": [

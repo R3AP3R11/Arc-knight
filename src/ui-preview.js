@@ -167,7 +167,12 @@ export function renderUIPreview(canvas, graph) {
         ensureImage(node.src);
         const img = imageCache.get(node.src);
         if (img) {
-          ctx.drawImage(img, node.x - (node.w || 0) / 2, node.y - (node.h || 0) / 2, node.w || img.width, node.h || img.height);
+          const w = node.w || img.width, h = node.h || img.height;
+          ctx.save();
+          ctx.translate(node.x, node.y);
+          if (node.angle) ctx.rotate(node.angle * Math.PI / 180);
+          ctx.drawImage(img, -w / 2, -h / 2, w, h);
+          ctx.restore();
         }
         break;
       }

@@ -163,6 +163,8 @@ export function renderGraph(g, graph, uiState, bindings, ctx = {}) {
         const img = images?.get(node.id);
         if (img) {
           img.setPosition(node.x ?? 0, node.y ?? 0);
+          if (node.w || node.h) img.setDisplaySize(node.w || img.width, node.h || img.height);
+          if (node.angle != null) img.setRotation(Phaser.Math.DegToRad(node.angle));
           img.setVisible(true);
         }
         break;

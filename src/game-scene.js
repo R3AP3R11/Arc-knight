@@ -115,6 +115,10 @@ function resolveCircleAgainstWalls(entity, radius, walls) {
 }
 
 function hitTrigger(trigger, x, y) {
+  if (trigger.shape === 'circle') {
+    const r = Math.max(trigger.w, trigger.h) / 2;
+    return Math.hypot(x - trigger.x, y - trigger.y) <= r;
+  }
   return x >= trigger.x - trigger.w / 2 && x <= trigger.x + trigger.w / 2
     && y >= trigger.y - trigger.h / 2 && y <= trigger.y + trigger.h / 2;
 }
@@ -363,26 +367,131 @@ function drawRing(graphics, centerX, centerY, radius, thickness, ringColor) {
   graphics.strokeCircle(centerX, centerY, radius);
 }
 
-function drawWormhole(g, fx, t) {
+// ============================================================
+// 主界面背景「虫洞」圆环参数
+// 微调间隔与厚度，改下面这些常量即可
+// ============================================================
+const RING_INNER_RATIO = 0.2;   // 最内环半径 = 最外环半径的 0.2 倍
+const RING_SPACING_EXP  = 1.6;  // 间隔曲线指数：越大 → 内环越密、外环越疏
+const RING_THICK_OUTER  = 14;   // 最外环厚度（像素）
+const RING_THICK_INNER  = 3;    // 最内环厚度（像素）
+
+// 可选：按环索引逐个覆盖（手动精调用）
+// 键 = 环索引（0 = 最外圈），值 = { r?: 半径比例, t?: 厚度 }
+// 填了的环用这里的手动值，没填的环用下面的公式
+const RING_OVERRIDES = {
+  0: { r: 1.25, t: 60 },
+  1: { r: 1, t: 40 },
+  2: { r: 0, t: 0 },
+  3: { r: 0.66, t: 18 },
+  4: { r: 0.5, t: 12 },
+  5: { r: 0.38, t: 8 },
+  6: { r: 0.3, t: 5 },
+  7: { r: 0.25, t: 4 },
+  8: { r: 0.21, t: 3 },
+  9: { r: 0.18, t: 2 },
+  
+};
+
+// 第 i 个环的半径比例（0~1），乘以外环半径得到实际半径
+function wormholeRingRadiusFactor(i, n) {
+  const u = n > 1 ? i / (n - 1) : 0;                       // 0=最外，1=最内
+  return RING_INNER_RATIO
+    + (1 - RING_INNER_RATIO) * Math.pow(1 - u, RING_SPACING_EXP);
+}
+
+// 第 i 个环的厚度（像素）：外厚内薄，线性过渡
+function wormholeRingThickness(i, n) {
+  const u = n > 1 ? i / (n - 1) : 0;
+  return RING_THICK_OUTER * (1 - u) + RING_THICK_INNER * u;
+}
+
+// 第 i 个环的颜色：次外层（索引 1）白色，其余橙色
+function wormholeRingColor(i) {
+  return i === 1 ? 0xffffff : 0xff9d2e;
+}
+
+// 最小非零半径比例（用于判断「所有环都超出屏幕」）
+function wormholeMinRadiusFactor(n) {
+  let min = Infinity;
+  for (let i = 0; i < n; i++) {
+    const ov = RING_OVERRIDES[i] || {};
+    const r = ov.r ?? wormholeRingRadiusFactor(i, n);
+    if (r > 0 && r < min) min = r;
+  }
+  return min === Infinity ? RING_INNER_RATIO : min;
+}
+
+// ============================================================
+// 新游戏开场动画时间轴（秒）
+// ============================================================
+const INTRO_SHRINK = 0.8;       // 环偏移归零时长
+const INTRO_CAMERA = 3;         // 镜头移至虫洞中心时长
+const INTRO_HOLD = 1;           // 镜头到位后停顿（保持原大小）
+const INTRO_SLOW = 1;           // 极慢放大时长
+const INTRO_SLOW_RATE = 0.25;   // 极慢放大速率（倍数/秒）
+const INTRO_GROW_ACCEL = 2;     // 加速放大系数（越大越快掉入）
+const INTRO_BLACK_PAUSE = 1.5;  // 全黑后停顿时长
+
+// 入场放大曲线：镜头到位 -> 停顿 -> 极慢放大 -> 加速放大
+function introGrowScale(t, fx) {
+  const camera = fx.introCamera ?? INTRO_CAMERA;
+  const hold = fx.introHold ?? INTRO_HOLD;
+  const slow = fx.introSlow ?? INTRO_SLOW;
+  const accel = fx.introGrow ?? INTRO_GROW_ACCEL;
+
+  const holdEnd = camera + hold;
+  const slowEnd = holdEnd + slow;
+
+  if (t <= holdEnd) return 1;                                  // 停顿，不放大
+  if (t <= slowEnd) return 1 + (t - holdEnd) * INTRO_SLOW_RATE; // 极慢线性放大
+  const base = 1 + slow * INTRO_SLOW_RATE;                      // 极慢阶段结束倍数
+  const at = t - slowEnd;
+  return base + at * at * accel;                                // 加速放大
+}
+
+function drawWormhole(g, fx, t, intro) {
   if (fx.visible === false) return;
   const n = fx.rings;
-  const scale = 1 + fx.scaleAmp * Math.sin(t * fx.scaleSpeed);
-  const baseY = fx.y + fx.yDrift * Math.sin(t * fx.ySpeed);
+  const shrinkDur = fx.introShrink ?? INTRO_SHRINK;
+  const cameraDur = fx.introCamera ?? INTRO_CAMERA;
+
+  // 入场动画：偏移归零 + 中心移向屏幕中心 + 加速放大
+  let driftScale = 1;
+  let cx0 = fx.x, cy0 = fx.y;
+  let growScale = 1;
+  if (intro) {
+    driftScale = Math.max(0, 1 - intro.t / shrinkDur);
+    const cam = Math.min(1, intro.t / cameraDur);
+    cx0 = fx.x + (VIEW_W / 2 - fx.x) * cam;
+    cy0 = fx.y + (VIEW_H / 2 - fx.y) * cam;
+    growScale = introGrowScale(intro.t, fx);
+  }
+
+  const scale = (1 + fx.scaleAmp * Math.sin(t * fx.scaleSpeed)) * growScale;
+  const baseY = cy0 + fx.yDrift * Math.sin(t * fx.ySpeed) * driftScale;
+  const ang = t * fx.driftSpeed;
 
   g.fillStyle(0xff9d2e, 0.08);
-  g.fillCircle(fx.x, baseY, fx.radius * scale * 1.15);
-
-  const ang = t * fx.driftSpeed;
+  g.fillCircle(cx0, baseY, fx.radius * scale * 1.15);
 
   for (let i = 0; i < n; i++) {
     const u = n > 1 ? i / (n - 1) : 0;
-    const tNorm = 0.2 + 0.8 * Math.pow(1 - u, 1.6);
-    const radius = fx.radius * tNorm * scale;
-    const amp = fx.driftAmp * u;
-    const cx = fx.x + Math.cos(ang) * amp;
+    const ov = RING_OVERRIDES[i] || {};
+
+    // 半径：先用公式，再应用手动覆盖
+    const radius = fx.radius * (ov.r ?? wormholeRingRadiusFactor(i, n)) * scale;
+
+    // 厚度：先用公式，再应用手动覆盖
+    const thickness = ov.t ?? wormholeRingThickness(i, n);
+
+    const ringColor = wormholeRingColor(i);
+
+    // 偏移量：外环 0，越向内越大（同步旋转），入场时归零
+    const amp = fx.driftAmp * u * driftScale;
+    const cx = cx0 + Math.cos(ang) * amp;
     const cy = baseY + Math.sin(ang) * amp;
-    const thickness = Math.max(3, 14 * (1 - u) + 3 * u);
-    const ringColor = i === 1 ? 0xffffff : 0xff9d2e;
+
     g.lineStyle(thickness, ringColor, 1);
     g.strokeCircle(cx, cy, radius);
   }
@@ -391,7 +500,7 @@ function drawWormhole(g, fx, t) {
   for (let k = 0; k < fx.orbitCount; k++) {
     const a = t * fx.orbitSpeed + k * (Math.PI * 2 / Math.max(1, fx.orbitCount));
     g.fillStyle(0xffffff, 1);
-    g.fillCircle(fx.x + Math.cos(a) * outR, baseY + Math.sin(a) * outR, 5);
+    g.fillCircle(cx0 + Math.cos(a) * outR, baseY + Math.sin(a) * outR, 5);
   }
 }
 
@@ -1527,9 +1636,7 @@ export function createGameScene(ctx) {
       return { x: Phaser.Math.Clamp(x, 0, ww), y: Phaser.Math.Clamp(y, 0, wh) };
     }
 
-    spawnOffscreen(t) {
-      const cfg = t.spawn || {};
-      const count = Math.max(1, Number(cfg.count) || 5);
+    spawnOffscreen(t, count, enemyType) {
       const v = this.viewRect();
       const off = SPAWN_OFFSCREEN_PX / this.cameras.main.zoomX;
       const { w: ww, h: wh } = this.worldSize();
@@ -1541,7 +1648,7 @@ export function createGameScene(ctx) {
           if (!this.pointInWall(c.x, c.y)) p = c;
         }
         if (!p) p = this.sampleRingPoint(v, off, ww, wh);
-        this.enemies.push(this.initEnemy({ x: p.x, y: p.y, type: cfg.enemyType || 'basic1' }));
+        this.enemies.push(this.initEnemy({ x: p.x, y: p.y, type: enemyType || 'basic1' }));
       }
     }
 
@@ -1563,6 +1670,7 @@ export function createGameScene(ctx) {
         spawnedEnemies: [],
         holdT: 0,
         holdDuration: 500,
+        triggerId: t?.id || null,
         cx: this.player.x,
         cy: this.player.y,
         startAngle: -Math.PI / 2
@@ -1679,16 +1787,57 @@ export function createGameScene(ctx) {
     }
 
     triggerSpawnEnemy(t) {
-      if ((t.spawn || {}).mode === 'offscreen') this.spawnOffscreen(t);
-      else this.scheduleSurroundWaves(t);
+      const spawn = t.spawn || {};
+      const waves = Array.isArray(spawn.waves) && spawn.waves.length ? spawn.waves : [];
+      if (!waves.length) return;
+
+      const rt = this.triggerState.get(t.id) || { inside: false, lastFire: -1e9, waveIndex: 0, timer: null };
+      const startIndex = spawn.resumeOnReturn !== false ? rt.waveIndex : 0;
+      if (startIndex >= waves.length) return;
+
+      if (rt.timer) { rt.timer.remove(false); rt.timer = null; }
+      rt.waveIndex = startIndex;
+      this.triggerState.set(t.id, rt);
+
+      this.runTriggerWave(t, startIndex, waves[startIndex].preDelay || 0);
     }
 
-    scheduleSurroundWaves(t) {
-      const s = t.spawn || {};
-      const waves = Array.isArray(s.waves) && s.waves.length ? s.waves : [s];
-      const interval = Math.max(0, Number(s.waveInterval) || 0);
-      waves.forEach((w, i) => {
-        this.waveEvents.push(this.time.delayedCall(i * interval, () => this.createSpawnEffect(t, w)));
+    runTriggerWave(t, index, delay) {
+      const waves = t.spawn.waves;
+      if (index >= waves.length) return;
+      const wave = waves[index];
+      const st = this.triggerState.get(t.id);
+      if (!st) return;
+
+      const ev = this.time.delayedCall(delay, () => {
+        st.timer = null;
+        if (wave.mode === 'offscreen') {
+          this.spawnOffscreen(t, wave.count, wave.enemyType);
+        } else {
+          this.createSpawnEffect(t, wave);
+        }
+        st.waveIndex = index + 1;
+        this.triggerState.set(t.id, st);
+        if (index + 1 < waves.length) {
+          const next = waves[index + 1];
+          const nextDelay = (wave.postDelay || 0) + (next.preDelay || 0);
+          this.runTriggerWave(t, index + 1, nextDelay);
+        }
+      });
+      ev.triggerId = t.id;
+      st.timer = ev;
+      this.waveEvents.push(ev);
+      this.triggerState.set(t.id, st);
+    }
+
+    stopTriggerSpawn(t) {
+      const st = this.triggerState.get(t.id);
+      if (st?.timer) { st.timer.remove(false); st.timer = null; }
+      this.waveEvents = this.waveEvents.filter(ev => ev.triggerId !== t.id);
+      this.spawnEffects = this.spawnEffects.filter(fx => {
+        if (fx.triggerId !== t.id) return true;
+        for (const e of fx.spawnedEnemies) e.frozen = false;
+        return false;
       });
     }
 
@@ -1696,20 +1845,33 @@ export function createGameScene(ctx) {
       const l = ctx.state.level;
       for (const t of l.triggers) {
         const inside = hitTrigger(t, this.player.x, this.player.y);
+        const st = this.triggerState.get(t.id) || { inside: false, lastFire: -1e9, waveIndex: 0 };
+
+        if (!inside && st.inside && t.action === 'spawnEnemy' && t.spawn?.stopOnExit) {
+          this.stopTriggerSpawn(t);
+        }
 
         if (t.action === 'switchLevel' || t.once !== false) {
-          if (this.triggered.has(t.id)) continue;
+          if (this.triggered.has(t.id)) {
+            st.inside = inside;
+            this.triggerState.set(t.id, st);
+            continue;
+          }
           if (inside) {
             this.triggered.add(t.id);
             this.fireTrigger(t);
           }
+          st.inside = inside;
+          this.triggerState.set(t.id, st);
           continue;
         }
 
-        const st = this.triggerState.get(t.id) || { inside: false, lastFire: -1e9 };
         if (inside && !st.inside && this.time.now - st.lastFire >= (t.cooldown || 0)) {
           st.lastFire = this.time.now;
           this.fireTrigger(t);
+        }
+        if (!inside && st.inside && t.action === 'spawnEnemy' && t.spawn?.resumeOnReturn === false) {
+          st.waveIndex = 0;
         }
         st.inside = inside;
         this.triggerState.set(t.id, st);
@@ -1753,6 +1915,16 @@ export function createGameScene(ctx) {
 
     pointerDown(p) {
       if (!this.editing) {
+        if (this.isMenuLevel()) {
+          for (const id in this.loginButtonRects) {
+            const r = this.loginButtonRects[id];
+            if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) {
+              this.onLoginButtonClick(id);
+              return;
+            }
+          }
+          return;
+        }
         if (this.state === 'paused') { this.onUIPointer(p); return; }
         if (this.state === 'end' || this.state === 'fail') this.restart();
         return;
@@ -1823,7 +1995,7 @@ export function createGameScene(ctx) {
         l.spawn = { ...l.spawn, x, y };
         ctx.state.selected = l.spawn;
       } else if (tool === 'trigger') {
-        l.triggers.push({ id: `trigger-${Date.now()}`, x, y, w: CELL * 3, h: CELL * 2, color: '#f3b63f', visible: true, action: 'complete', once: true });
+        l.triggers.push({ id: `trigger-${Date.now()}`, x, y, w: CELL * 3, h: CELL * 2, shape: 'rect', color: '#f3b63f', visible: true, action: 'complete', once: true, resumeOnReturn: true });
       } else if (tool === 'crate') {
         l.crates.push(normalizeCrate({ x, y }, l.crates.length));
       } else if (tool === 'barrel') {
@@ -1880,6 +2052,14 @@ export function createGameScene(ctx) {
     }
     update(_, dt) {
       if (this.editing) return this.draw();
+
+      this.updateLoginHover();
+
+      if (this.intro) {
+        this.updateIntro(dt);
+        this.draw();
+        return;
+      }
 
       if (this.keys.ESC && Phaser.Input.Keyboard.JustDown(this.keys.ESC)) {
         if (this.state === 'paused') {
@@ -2171,7 +2351,7 @@ export function createGameScene(ctx) {
 
       g.clear();
 
-      if (l.background?.fx === 'wormhole') drawWormhole(g, l.background, this.time.now / 1000);
+      if (l.background?.fx === 'wormhole') drawWormhole(g, l.background, this.time.now / 1000, this.intro || null);
 
       if ((this.editing && ctx.state.showGridInEditor) || (!this.editing && l.showGridInPlay)) {
         const gridW = this.cameras.main.zoomX ? 1 / this.cameras.main.zoomX : 1;
@@ -2239,6 +2419,17 @@ export function createGameScene(ctx) {
       l.triggers.forEach(t => {
         if (!t.visible && !this.editing) return;
         g.fillStyle(color(t.color));
+        if (t.shape === 'circle') {
+          const r = Math.max(t.w, t.h) / 2;
+          g.fillCircle(t.x, t.y, r);
+          g.lineStyle(2, ctx.state.selected === t ? 0xffe083 : 0xffffff, .6);
+          g.strokeCircle(t.x, t.y, r);
+          if (ctx.state.selected === t && this.editing) {
+            g.lineStyle(2, 0xffe083);
+            g.strokeCircle(t.x, t.y, r + 4);
+          }
+          return;
+        }
         g.fillRect(t.x - t.w / 2, t.y - t.h / 2, t.w, t.h);
         g.lineStyle(2, ctx.state.selected === t ? 0xffe083 : 0xffffff, .6);
         g.strokeRect(t.x - t.w / 2, t.y - t.h / 2, t.w, t.h);
@@ -2421,6 +2612,7 @@ export function createGameScene(ctx) {
             const sprite = this.add.image(node.x, node.y, texKey).setOrigin(0.5).setDepth(1001);
             this.cameras.main.ignore(sprite);
             sprite.setDisplaySize(node.w || img.width, node.h || img.height);
+            if (node.angle != null) sprite.setRotation(Phaser.Math.DegToRad(node.angle));
             sprite.setVisible(false);
             this.uiImages[key].set(node.id, sprite);
           };
@@ -2524,7 +2716,26 @@ export function createGameScene(ctx) {
       const interfaceLevel = (ctx.state.level?.ui || 'battle') === 'interface';
       if (this.isMenuLevel()) {
         this.hideHudOverlay();
-        renderGraph(this.uiG, ui.login, this.uiState, BINDINGS, { texts: this.uiTexts?.login, images: this.uiImages?.login, buttons: this.buttons });
+        if (this.intro) {
+          // 开场动画：HUD 全部隐藏，只留虫洞
+          for (const map of Object.values(this.uiTexts || {})) {
+            for (const t of map.values()) t.setVisible(false);
+          }
+          for (const map of Object.values(this.uiImages || {})) {
+            for (const s of map.values()) s.setVisible(false);
+          }
+          if (this.loginLabels) {
+            for (const label of this.loginLabels.values()) label.setVisible(false);
+          }
+          // 全黑阶段覆盖黑屏
+          if (this.intro.phase === 'black') {
+            this.uiG.fillStyle(0x000000, 1);
+            this.uiG.fillRect(0, 0, VIEW_W, VIEW_H);
+          }
+        } else {
+          renderGraph(this.uiG, ui.login, this.uiState, BINDINGS, { texts: this.uiTexts?.login, images: this.uiImages?.login, buttons: this.buttons });
+          this.drawLoginButtons();
+        }
       } else if (this.state === 'paused' || this.state === 'end' || interfaceLevel) {
         this.hideHudOverlay();
         renderGraph(this.uiG, ui.interface, this.uiState, BINDINGS, { texts: this.uiTexts?.interface, images: this.uiImages?.interface, buttons: this.buttons });
@@ -2628,6 +2839,146 @@ export function createGameScene(ctx) {
         if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) {
           if (b.id === 'close') this.toggleGrowth();
           return;
+        }
+      }
+    }
+
+    // ---------- 登录主界面按钮 ----------
+    loginButtons() {
+      const hasSave = !!localStorage.getItem('arc_save');
+      const defs = [
+        { id: 'new', label: '新游戏' },
+        { id: 'continue', label: '继续游戏', hidden: !hasSave },
+        { id: 'settings', label: '设置' }
+      ];
+      const visible = defs.filter(b => !b.hidden);
+      const startY = 700, h = 66, gap = 22;
+      return visible.map((b, i) => ({
+        id: b.id,
+        label: b.label,
+        y: startY + i * (h + gap),
+        w: 420,
+        h
+      }));
+    }
+
+    loginButtonRect(id) {
+      return this.loginButtons().find(b => b.id === id) || null;
+    }
+
+    drawLoginButtons() {
+      const g = this.uiG;
+      const p = this.input.activePointer;
+      const hoverId = this.loginHoverId;
+      this.loginButtonRects = {};
+      if (!this.loginLabels) this.loginLabels = new Map();
+
+      for (const b of this.loginButtons()) {
+        const x = 120, y = b.y, w = b.w, h = b.h;
+        this.loginButtonRects[b.id] = { x, y, w, h };
+
+        // 黑底（无边框）
+        g.fillStyle(0x000000, 0.85);
+        g.fillRect(x, y, w, h);
+
+        const hovered = hoverId === b.id;
+        // 悬停：纯白色平行四边形遮罩，从左向右渐变进入
+        if (hovered) {
+          const prog = this.loginHoverT != null ? Math.min(1, this.loginHoverT) : 1;
+          const maskW = w * prog;
+          const skew = 28;
+          g.fillStyle(0xffffff, 1);
+          g.beginPath();
+          g.moveTo(x + skew, y);
+          g.lineTo(x + skew + maskW, y);
+          g.lineTo(x + maskW, y + h);
+          g.lineTo(x, y + h);
+          g.closePath();
+          g.fillPath();
+        }
+
+        // 按钮文字：左对齐，悬停（选中态）变黑色
+        let label = this.loginLabels.get(b.id);
+        if (!label) {
+          label = this.add.text(0, 0, b.label, {
+            fontFamily: "'Poppins', 'Noto Sans SC', sans-serif",
+            fontSize: '28px', color: '#ffffff'
+          }).setOrigin(0, 0.5).setDepth(1002);
+          this.cameras.main.ignore(label);
+          this.loginLabels.set(b.id, label);
+        }
+        label.setPosition(x + 32, y + h / 2);
+        label.setColor(hovered ? '#000000' : '#ffffff');
+        label.setVisible(true);
+
+        this.buttons.push({ id: b.id, x, y, w, h, node: b });
+      }
+
+      // 隐藏未使用的标签
+      const active = new Set(this.loginButtons().map(b => b.id));
+      for (const [id, label] of this.loginLabels) {
+        if (!active.has(id)) label.setVisible(false);
+      }
+    }
+
+    updateLoginHover() {
+      if (!this.isMenuLevel()) {
+        this.loginHoverId = null;
+        this.loginHoverT = null;
+        return;
+      }
+      const p = this.input.activePointer;
+      let target = null;
+      for (const id in this.loginButtonRects) {
+        const r = this.loginButtonRects[id];
+        if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) {
+          target = id;
+          break;
+        }
+      }
+      if (target !== this.loginHoverId) {
+        this.loginHoverId = target;
+        this.loginHoverT = 0;
+      } else if (this.loginHoverId && this.loginHoverT < 1) {
+        this.loginHoverT = (this.loginHoverT || 0) + 0.09;
+      }
+    }
+
+    onLoginButtonClick(id) {
+      if (id === 'new') {
+        this.startIntro();
+      } else if (id === 'continue') {
+        ctx.onContinue?.();
+      } else if (id === 'settings') {
+        ctx.onSettings?.();
+      }
+    }
+
+    startIntro() {
+      if (this.intro) return;
+      this.intro = { t: 0, phase: 'fly' };
+    }
+
+    updateIntro(dt) {
+      if (!this.intro) return;
+      const it = this.intro;
+      it.t += dt / 1000;
+      const fx = ctx.state.level?.background || {};
+      const pause = fx.introPause ?? INTRO_BLACK_PAUSE;
+
+      if (it.phase === 'fly') {
+        // 判断所有环是否超出屏幕：最内环半径 > 屏幕对角线
+        const minFactor = wormholeMinRadiusFactor(fx.rings || 1);
+        const minR = (fx.radius || 0) * minFactor * introGrowScale(it.t, fx);
+        if (minR > Math.hypot(VIEW_W, VIEW_H)) {
+          it.phase = 'black';
+          it.blackT = 0;
+        }
+      } else if (it.phase === 'black') {
+        it.blackT += dt / 1000;
+        if (it.blackT >= pause) {
+          this.intro = null;
+          ctx.onStartNew?.();
         }
       }
     }
