@@ -3,14 +3,36 @@
   "gridColor": "#173a55",
   "showGridInPlay": false,
   "ui": "login",
-  "world": { "width": 1920, "height": 1080 },
-  "camera": { "width": 1920 },
+  "world": {
+    "width": 1920,
+    "height": 1080
+  },
+  "camera": {
+    "width": 1920,
+    "mode": "deadzone"
+  },
   "walls": [],
   "enemies": [],
-  "spawn": { "x": 130, "y": 300 },
+  "spawn": {
+    "x": 130,
+    "y": 300,
+    "scheme": "default",
+    "hp": 100,
+    "maxHp": 100,
+    "level": 1,
+    "exp": 0,
+    "expToNext": 100,
+    "gold": 0,
+    "weapons": [
+      "radial"
+    ]
+  },
+  "dropRules": {},
   "triggers": [],
   "crates": [],
   "barrels": [],
+  "chests": [],
+  "vendors": [],
   "background": {
     "fx": "wormhole",
     "x": 1600,
@@ -18,7 +40,7 @@
     "radius": 850,
     "rings": 10,
     "orbitCount": 2,
-    "driftAmp": 250,
+    "driftAmp": 150,
     "driftSpeed": 0.5,
     "yDrift": 12,
     "ySpeed": 0.6,
@@ -29,8 +51,13 @@
     "introCamera": 3.5,
     "introHold": 1,
     "introSlow": 1,
+    "introRingCount": 12,
     "introGrow": 2,
     "introPause": 1.5,
     "visible": true
-  }
+  },
+  "images": [],
+  "gates": [],
+  "roomLayout": null,
+  "spawnZones": []
 }

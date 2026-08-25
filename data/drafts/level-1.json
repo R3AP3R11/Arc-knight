@@ -5,36 +5,47 @@
   "ui": "battle",
   "world": {
     "width": 1920,
-    "height": 1080
+    "height": 1920
   },
   "camera": {
-    "width": 1440
+    "width": 1920,
+    "mode": "center"
   },
   "walls": [
     {
-      "x": 61,
-      "y": 285,
-      "w": 8,
-      "h": 510,
-      "id": "wall-1",
-      "color": "#ffffff",
+      "id": "wall-1787366180472",
+      "x": 768.5620467918376,
+      "y": 964.1596224199011,
+      "w": 577.1240935836747,
+      "h": 338.3192448398022,
+      "shape": "arc",
+      "thickness": 10,
+      "visible": true,
+      "color": "#60758b",
+      "startAngle": 0,
+      "endAngle": 120,
       "rotation": 0
     },
     {
-      "id": "wall-1786527737829",
-      "x": 450,
-      "y": 536,
-      "w": 780,
-      "h": 8,
-      "color": "#ffffff",
-      "rotation": 0
+      "id": "wall-1787366236407",
+      "x": 720,
+      "y": 840,
+      "w": 615.7698286426717,
+      "h": 333.300983373196,
+      "shape": "arc",
+      "thickness": 30,
+      "visible": false,
+      "color": "#60758b",
+      "rotation": 0,
+      "startAngle": 0,
+      "endAngle": 360
     }
   ],
   "enemies": [
     {
-      "id": "enemy-4",
-      "x": 990,
-      "y": 90,
+      "id": "enemy-1",
+      "x": 1230,
+      "y": 1320,
       "type": "advanced2",
       "hp": 100,
       "damage": 15,
@@ -43,89 +54,11 @@
         "exp": 1,
         "charge": 0
       }
-    },
-    {
-      "id": "enemy-2",
-      "x": 390,
-      "y": 210,
-      "type": "basic1",
-      "hp": 30,
-      "damage": 10,
-      "drops": {
-        "gold": 1,
-        "exp": 1,
-        "charge": 0
-      }
-    },
-    {
-      "id": "enemy-3",
-      "x": 360,
-      "y": 210,
-      "type": "basic1",
-      "hp": 30,
-      "damage": 10,
-      "drops": {
-        "gold": 1,
-        "exp": 1,
-        "charge": 0
-      }
-    },
-    {
-      "id": "enemy-4",
-      "x": 600,
-      "y": 210,
-      "type": "basic1",
-      "hp": 30,
-      "damage": 10,
-      "drops": {
-        "gold": 1,
-        "exp": 1,
-        "charge": 0
-      }
-    },
-    {
-      "id": "enemy-5",
-      "x": 360,
-      "y": 210,
-      "type": "basic1",
-      "hp": 30,
-      "damage": 10,
-      "drops": {
-        "gold": 1,
-        "exp": 1,
-        "charge": 0
-      }
-    },
-    {
-      "id": "enemy-6",
-      "x": 360,
-      "y": 240,
-      "type": "basic1",
-      "hp": 30,
-      "damage": 10,
-      "drops": {
-        "gold": 1,
-        "exp": 1,
-        "charge": 0
-      }
-    },
-    {
-      "id": "enemy-7",
-      "x": 360,
-      "y": 270,
-      "type": "basic1",
-      "hp": 30,
-      "damage": 10,
-      "drops": {
-        "gold": 1,
-        "exp": 1,
-        "charge": 0
-      }
     }
   ],
   "spawn": {
-    "x": 150,
-    "y": 300,
+    "x": 750,
+    "y": 840,
     "scheme": "hex-ring",
     "hp": 100,
     "maxHp": 100,
@@ -135,129 +68,19 @@
     "gold": 0,
     "weapons": [
       "radial",
-      "green",
-      "yellow"
+      "green"
     ],
     "weaponType": "radial"
   },
-  "triggers": [
-    {
-      "id": "trigger-1786870069301",
-      "x": 390,
-      "y": 330,
-      "w": 90,
-      "h": 60,
-      "shape": "rect",
-      "color": "#f3b63f",
-      "visible": true,
-      "action": "spawnEnemy",
-      "once": true,
-      "cooldown": 0,
-      "resumeOnReturn": true,
-      "target": "Level1-Scene1",
-      "spawn": {
-        "resumeOnReturn": true,
-        "waves": [
-          {
-            "enemyType": "basic1",
-            "mode": "surround",
-            "count": 5,
-            "shape": "polygon",
-            "sides": 6,
-            "radius": 120,
-            "thickness": 10,
-            "circleCount": 8,
-            "drawDuration": 500,
-            "fadeDuration": 500,
-            "preDelay": 0,
-            "postDelay": 1000
-          }
-        ]
-      }
-    }
-  ],
-  "crates": [
-    {
-      "id": "crate-1",
-      "x": 330,
-      "y": 210,
-      "w": 50,
-      "h": 50,
-      "hp": 1
-    },
-    {
-      "id": "crate-2",
-      "x": 420,
-      "y": 210,
-      "w": 50,
-      "h": 50,
-      "hp": 1
-    },
-    {
-      "id": "crate-3",
-      "x": 480,
-      "y": 210,
-      "w": 50,
-      "h": 50,
-      "hp": 1
-    },
-    {
-      "id": "crate-4",
-      "x": 540,
-      "y": 210,
-      "w": 50,
-      "h": 50,
-      "hp": 1
-    }
-  ],
-  "barrels": [
-    {
-      "id": "barrel-1",
-      "x": 240,
-      "y": 300,
-      "r": 30,
-      "hp": 1,
-      "explodeRadius": 150
-    },
-    {
-      "id": "barrel-2",
-      "x": 390,
-      "y": 270,
-      "r": 30,
-      "hp": 1,
-      "explodeRadius": 150
-    },
-    {
-      "id": "barrel-3",
-      "x": 450,
-      "y": 270,
-      "r": 30,
-      "hp": 1,
-      "explodeRadius": 150
-    },
-    {
-      "id": "barrel-4",
-      "x": 510,
-      "y": 270,
-      "r": 30,
-      "hp": 1,
-      "explodeRadius": 150
-    },
-    {
-      "id": "barrel-5",
-      "x": 570,
-      "y": 270,
-      "r": 30,
-      "hp": 1,
-      "explodeRadius": 150
-    }
-  ],
+  "triggers": [],
+  "crates": [],
+  "barrels": [],
   "background": {
-    "src": "/uploads/1787014677292-557173.png",
-    "x": 420.20981899303735,
-    "y": 353.3448858567633,
-    "w": 620,
-    "h": 620,
+    "src": "/uploads/1787297659809-129301.png",
+    "x": 948.2298618835742,
+    "y": 949.9621686132739,
+    "w": 1920,
+    "h": 1920,
     "aspect": 1,
     "visible": true
   }

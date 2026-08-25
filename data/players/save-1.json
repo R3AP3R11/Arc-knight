@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "meta": {
+    "name": "新存档",
+    "createdAt": 0,
+    "updatedAt": 0,
+    "playTimeSec": 0
+  },
+  "progress": {
+    "level": 1,
+    "exp": 0,
+    "expToNext": 100,
+    "points": 0
+  },
+  "currency": {
+    "gold": 0,
+    "charge": 0
+  },
+  "weapons": {
+    "radial": {
+      "unlocked": true,
+      "enhance": [
+        0,
+        0,
+        0
+      ]
+    },
+    "yellow": {
+      "unlocked": false,
+      "enhance": [
+        0,
+        0,
+        0
+      ]
+    },
+    "green": {
+      "unlocked": false,
+      "enhance": [
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "mods": [],
+  "modInventory": [],
+  "playedNewbee": false,
+  "combat": {
+    "moveSpeed": 1,
+    "attackPower": 1,
+    "critRate": 0,
+    "attackSpeed": 1,
+    "maxHp": 100,
+    "maxShield": 50,
+    "damageReduction": 1,
+    "dodgeRate": 0
+  },
+  "points": {
+    "maxHp": 0,
+    "attackPower": 0,
+    "critRate": 0,
+    "attackSpeed": 0
+  },
+  "items": {
+    "stacks": {},
+    "uniques": []
+  },
+  "levels": {
+    "unlocked": [
+      "level-1"
+    ],
+    "completed": [],
+    "current": "level-1"
+  }
+}

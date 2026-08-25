@@ -1,21 +1,21 @@
 {
   "backgroundColor": "#000000",
-  "gridColor": "#ffffff",
+  "gridColor": "#828282",
   "showGridInPlay": false,
   "ui": "battle",
   "world": {
     "width": 1920,
-    "height": 1080
+    "height": 1920
   },
   "camera": {
-    "width": 1920,
+    "width": 1440,
     "mode": "center"
   },
   "walls": [],
   "enemies": [],
   "spawn": {
-    "x": 450,
-    "y": 330,
+    "x": 1320,
+    "y": 990,
     "scheme": "default",
     "hp": 100,
     "maxHp": 100,
@@ -27,16 +27,21 @@
       "radial"
     ]
   },
+  "dropRules": {},
   "triggers": [],
   "crates": [],
   "barrels": [],
+  "chests": [],
   "background": {
-    "src": "/uploads/1787306583943-910796.png",
-    "x": 956.3957673738456,
-    "y": 537.9726191477884,
-    "w": 1894.338419810037,
-    "h": 1065.5653611431458,
-    "aspect": 1.7777777777777777,
+    "src": "/bg/knight-home.png",
+    "x": 964.7540854752749,
+    "y": 976.0089513214223,
+    "w": 2164.172048133425,
+    "h": 2164.172048133425,
+    "aspect": 1,
     "visible": true
-  }
+  },
+  "images": [],
+  "gates": [],
+  "roomLayout": null
 }

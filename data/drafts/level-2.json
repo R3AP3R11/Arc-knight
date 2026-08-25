@@ -8,7 +8,8 @@
     "height": 600
   },
   "camera": {
-    "width": 900
+    "width": 900,
+    "mode": "center"
   },
   "walls": [],
   "enemies": [],
@@ -30,5 +31,7 @@
     "weaponType": "yellow"
   },
   "triggers": [],
+  "crates": [],
+  "barrels": [],
   "background": null
 }

@@ -17,17 +17,17 @@ export const post = (path, value) => request(path, {
 export const remove = path => request(path, { method: 'DELETE' });
 
 export async function loadLevel(id) {
-  const [draft, formal] = await Promise.allSettled([
-    get(`/drafts/${id}`),
-    get(`/levels/${id}`)
-  ]);
-  return draft.status === 'fulfilled'
-    ? draft.value
-    : formal.status === 'fulfilled' ? formal.value : null;
+  return get(`/levels/${id}`);
 }
 
-export const saveDraft = (id, level) => post(`/drafts/${id}`, level);
 export const saveFormal = (id, level) => post(`/levels/${id}`, level);
+export const saveDraft = saveFormal;
 
 export const getUi = id => get(`/ui/${id}`);
 export const saveUi = (id, graph) => post(`/ui/${id}`, graph);
+
+// 玩家存档 API
+export const listPlayers = () => get('/players');
+export const loadPlayer = id => get(`/players/${id}`);
+export const savePlayer = (id, player) => post(`/players/${id}`, player);
+export const deletePlayer = id => remove(`/players/${id}`);

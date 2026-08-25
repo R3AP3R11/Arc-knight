@@ -8,7 +8,8 @@
     "height": 1080
   },
   "camera": {
-    "width": 1920
+    "width": 1920,
+    "mode": "deadzone"
   },
   "walls": [],
   "enemies": [],
@@ -47,6 +48,7 @@
     "introCamera": 3.5,
     "introHold": 1,
     "introSlow": 1,
+    "introRingCount": 12,
     "introGrow": 2,
     "introPause": 1.5,
     "visible": true

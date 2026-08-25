@@ -8,7 +8,8 @@
     "height": 600
   },
   "camera": {
-    "width": 900
+    "width": 900,
+    "mode": "center"
   },
   "walls": [
     {
@@ -18,10 +19,29 @@
       "h": 210,
       "id": "wall-1",
       "color": "#60758b",
-      "rotation": 0
+      "rotation": 0,
+      "shape": "rect",
+      "visible": true,
+      "startAngle": 0,
+      "endAngle": 360,
+      "thickness": 30
     }
   ],
-  "enemies": [],
+  "enemies": [
+    {
+      "id": "enemy-1",
+      "x": 690,
+      "y": 90,
+      "type": "advanced2",
+      "hp": 100,
+      "damage": 15,
+      "drops": {
+        "gold": 1,
+        "exp": 1,
+        "charge": 0
+      }
+    }
+  ],
   "spawn": {
     "x": 180,
     "y": 180,
@@ -83,8 +103,7 @@
             "preDelay": 0,
             "postDelay": 1000
           }
-        ],
-        "resumeOnReturn": true
+        ]
       }
     }
   ],

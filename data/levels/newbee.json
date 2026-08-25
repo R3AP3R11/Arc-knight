@@ -1,0 +1,84 @@
+{
+  "backgroundColor": "#000000",
+  "gridColor": "#666666",
+  "showGridInPlay": false,
+  "ui": "battle",
+  "world": {
+    "width": 1600,
+    "height": 1600
+  },
+  "camera": {
+    "width": 1440,
+    "mode": "center"
+  },
+  "walls": [
+    {
+      "id": "wall-1787396137660",
+      "x": 798.809861200929,
+      "y": 789.432619494181,
+      "w": 1542.6064753090209,
+      "h": 873.5260339509191,
+      "shape": "arc",
+      "thickness": 10,
+      "visible": false,
+      "color": "#60758b",
+      "rotation": 0,
+      "startAngle": 0,
+      "endAngle": 360
+    }
+  ],
+  "enemies": [],
+  "spawn": {
+    "x": 796,
+    "y": 897,
+    "scheme": "default",
+    "hp": 100,
+    "maxHp": 100,
+    "level": 1,
+    "exp": 0,
+    "expToNext": 100,
+    "gold": 0,
+    "weapons": [
+      "radial",
+      "yellow"
+    ]
+  },
+  "dropRules": {
+    "basic1": [
+      {
+        "item": "gold",
+        "count": 1,
+        "chance": 10
+      },
+      {
+        "item": "exp",
+        "count": 4,
+        "chance": 100
+      }
+    ],
+    "advanced2": [
+      {
+        "item": "exp",
+        "count": 10,
+        "chance": 100
+      }
+    ]
+  },
+  "triggers": [],
+  "crates": [],
+  "barrels": [],
+  "chests": [],
+  "background": {
+    "src": "/bg/newbee.png",
+    "x": 795.6845248323841,
+    "y": 795.928626299057,
+    "w": 1602.2938954667175,
+    "h": 1602.2938954667175,
+    "aspect": 1,
+    "visible": true
+  },
+  "images": [],
+  "gates": [],
+  "spawnZones": [],
+  "roomLayout": null
+}

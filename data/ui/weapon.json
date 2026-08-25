@@ -1,0 +1,19 @@
+{
+  "id": "weapon",
+  "type": "weapon",
+  "name": "武器页面",
+  "nodes": [],
+  "weapons": ["radial", "yellow", "green"],
+  "prices": { "yellow": 100, "green": 200 },
+  "modPrices": { "multi-track": 50, "spin": 50, "triple": 50, "ricochet": 120, "split": 120, "capacity": 150, "pierce": 150 },
+  "x": 80,
+  "y": 150,
+  "w": 650,
+  "h": 760,
+  "listX": 820,
+  "listY": 390,
+  "cardW": 170,
+  "cardH": 260,
+  "gap": 28,
+  "skew": 42
+}

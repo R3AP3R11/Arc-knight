@@ -1,0 +1,13 @@
+{
+  "id": "workshop",
+  "type": "workshop",
+  "name": "工坊页面",
+  "nodes": [],
+  "trees": ["radial", "yellow", "green"],
+  "x": 80,
+  "y": 180,
+  "treeW": 520,
+  "treeH": 620,
+  "gap": 36,
+  "skew": 42
+}

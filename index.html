@@ -19,7 +19,7 @@
       <div class="mode-buttons">
         <button id="editorMode" class="active">关卡编辑</button>
         <button id="playMode">游戏预览</button>
-        <button id="flowPlay">流程试玩</button>
+        <button id="trialPlay">流程试玩</button>
         <button id="uiConfig">UI 配置</button>
       </div>
     </header>
@@ -38,32 +38,45 @@
               <button id="deleteLevel">删除</button>
             </div>
             <select id="template">
-              <option value="blank">空白战斗场</option>
-              <option value="training">训练场</option>
-              <option value="single">单波敌人</option>
-              <option value="multi">多波敌人</option>
-              <option value="defend">防守目标</option>
+              <option value="single">单箱庭关卡</option>
+              <option value="multi">多箱庭关卡</option>
             </select>
             <button id="applyTemplate">应用模板到当前关卡</button>
           </div>
         </details>
 
-        <details class="editor-section flow" open>
-          <summary>流程编排</summary>
+        <details class="editor-section rooms" id="roomPanel" open hidden>
+          <summary>多箱庭关卡</summary>
           <div class="section-body">
-            <select id="flowType">
-              <option value="game">游戏流程</option>
-              <option value="tutorial">教程流程</option>
-            </select>
-            <label>入口节点 <select id="flowStart"></select></label>
-            <div id="flowList"></div>
             <div class="row">
-              <select id="flowAdd"></select>
-              <button id="addFlow">添加节点</button>
+              <label>面板列数<input id="roomCols" type="number" min="1" max="8" step="1"/></label>
+              <label>面板行数<input id="roomRows" type="number" min="1" max="8" step="1"/></label>
             </div>
-            <button id="saveFlow">保存流程</button>
-            <button id="previewFlow">预览当前流程</button>
-            <button id="tutorialPlay">试玩教程流程</button>
+            <label>墙体厚度<input id="roomThickness" type="number" min="8" max="200" step="2"/></label>
+            <label>墙体颜色<input id="roomWallColor" type="color"/></label>
+            <div class="row">
+              <label>道路宽度<input id="roomRoadWidth" type="number" min="120" max="1100" step="4"/></label>
+              <label>道路长度<input id="roomRoadLength" type="number" min="60" max="1680" step="20"/></label>
+            </div>
+            <div id="roomGrid"></div>
+            <div id="roomCellPopup" class="room-cell-popup" hidden>
+              <div class="rcp-head">
+                <strong id="roomCellPopupTitle">房间设置</strong>
+                <button id="roomCellPopupClose" type="button">✕</button>
+              </div>
+              <label>房间大小
+                <input id="roomCellSize" type="number" min="400" max="2400" step="20"/>
+              </label>
+              <p class="hint">单位：内壁宽高（正方形），每格独立设置。</p>
+            </div>
+            <p class="hint">点击方格选中小房间（新方格须与已选方格相邻），相邻房间自动以道路连通；右键房间弹窗设置该格大小；墙体厚度、颜色、道路宽长与关卡尺寸均可配置。</p>
+          </div>
+        </details>
+
+        <details class="editor-section flow" open>
+          <summary>试玩存档</summary>
+          <div class="section-body">
+            <p class="hint">点击右上角「流程试玩」将使用正式玩家存档数据进入当前正在编辑的关卡。试玩中的等级、经验、金币、加点等改动会写回存档。</p>
           </div>
         </details>
 
@@ -76,8 +89,12 @@
               <button data-tool="wall" class="tool">墙体</button>
               <button data-tool="crate" class="tool">箱子</button>
               <button data-tool="barrel" class="tool">油桶</button>
+              <button data-tool="chest" class="tool">宝箱</button>
               <button data-tool="enemy" class="tool">敌人</button>
               <button data-tool="trigger" class="tool">关卡触发器</button>
+              <button data-tool="gate" class="tool">能量门</button>
+              <button data-tool="vendor" class="tool">售货机</button>
+              <button data-tool="spawnzone" class="tool">生成区域</button>
               <button data-tool="spawn" class="tool">玩家出生点</button>
               <button data-tool="erase" class="tool">删除</button>
             </div>
@@ -93,11 +110,20 @@
           <h2>背景图</h2>
           <label class="import">导入背景图<input id="bgImage" type="file" accept="image/*"/></label>
           <button id="bgRemove">移除背景图</button>
+          <h2>场景图片（背景之上、实体之下）</h2>
+          <label class="import">插入场景图片<input id="levelImage" type="file" accept="image/*"/></label>
           <h2>关卡尺寸</h2>
           <label>地图宽度 <input id="worldWidth" type="number" min="600" step="30"/></label>
           <label>地图高度 <input id="worldHeight" type="number" min="600" step="30"/></label>
           <h2>摄像头</h2>
           <label>视口宽度（高自动 16:9）<input id="cameraWidth" type="number" min="300" step="30"/></label>
+          <label>玩家镜头模式 <select id="cameraMode">
+            <option value="deadzone">软跟随（死区）</option>
+            <option value="center">玩家始终居中</option>
+          </select></label>
+          <h2>敌人掉落配置</h2>
+          <p class="hint">按敌人类型统一配置本关卡爆率，每条规则独立判定；未配置时沿用敌人个体掉落数值。</p>
+          <div id="dropRulesEditor"></div>
           <h2>UI</h2>
           <label>UI 种类 <select id="levelUi">
             <option value="battle">战斗UI</option>
@@ -106,6 +132,69 @@
           </select></label>
           <p class="hint">滚轮缩放 · 中键/右键拖拽平移</p>
         </div>
+
+        <details class="editor-section preview-player" open>
+          <summary>试玩存档（正式玩家数据）</summary>
+          <div class="section-body">
+            <p class="hint">选择存档栏位后，下方数据自动套用所选存档。点击「保存存档」写回该栏位；「流程试玩」会使用这份数据。</p>
+            <label>存档栏位
+              <select id="tpSlot">
+                <option value="save-1">存档 1</option>
+                <option value="save-2">存档 2</option>
+                <option value="save-3">存档 3</option>
+              </select>
+            </label>
+            <h3>等级与货币</h3>
+            <label>等级 <input id="tpLevel" type="number" min="1" step="1"/></label>
+            <label>经验 <input id="tpExp" type="number" min="0" step="1"/></label>
+            <label>升级点数 <input id="tpPoints" type="number" min="0" step="1"/></label>
+            <label>金币 <input id="tpGold" type="number" min="0" step="1"/></label>
+            <label>充能 <input id="tpCharge" type="number" min="0" step="1"/></label>
+            <h3>武器</h3>
+            <div id="tpWeapons"></div>
+            <h3>改件</h3>
+            <div id="tpMods"></div>
+            <h3>战斗属性</h3>
+            <label>移动速度 (x1=<span>100%</span>) <input id="tpMoveSpeed" type="number" min="0.1" step="0.1"/></label>
+            <label>攻击力倍率 (x1=<span>100%</span>) <input id="tpAttackPower" type="number" min="0" step="0.05"/></label>
+            <label>暴击率 (0~1) <input id="tpCritRate" type="number" min="0" max="1" step="0.05"/></label>
+            <label>攻速倍率 (x1=<span>100%</span>) <input id="tpAttackSpeed" type="number" min="0.1" step="0.1"/></label>
+            <label>生命值 <input id="tpMaxHp" type="number" min="1" step="1"/></label>
+            <label>护盾值 <input id="tpMaxShield" type="number" min="0" step="1"/></label>
+            <label>免伤 (0~1, 1=<span>100%</span>) <input id="tpDamageReduction" type="number" min="0" max="1" step="0.05"/></label>
+            <label>闪避率 (0~1) <input id="tpDodgeRate" type="number" min="0" max="1" step="0.05"/></label>
+            <div class="row">
+              <button id="tpSave">保存存档</button>
+              <button id="tpReload">重新加载</button>
+            </div>
+          </div>
+        </details>
+
+        <details class="editor-section preview-player" open>
+          <summary>预览玩家数据</summary>
+          <div class="section-body">
+            <p class="hint">仅在"游戏预览"时生效，不影响正式存档。</p>
+            <h3>等级与货币</h3>
+            <label>等级 <input id="pvLevel" type="number" min="1" step="1"/></label>
+            <label>经验 <input id="pvExp" type="number" min="0" step="1"/></label>
+            <label>升级点数 <input id="pvPoints" type="number" min="0" step="1"/></label>
+            <label>金币 <input id="pvGold" type="number" min="0" step="1"/></label>
+            <label>充能 <input id="pvCharge" type="number" min="0" step="1"/></label>
+            <h3>武器</h3>
+            <div id="pvWeapons"></div>
+            <h3>改件</h3>
+            <div id="pvMods"></div>
+            <h3>战斗属性</h3>
+            <label>移动速度 (x1=<span>100%</span>) <input id="pvMoveSpeed" type="number" min="0.1" step="0.1"/></label>
+            <label>攻击力倍率 (x1=<span>100%</span>) <input id="pvAttackPower" type="number" min="0" step="0.05"/></label>
+            <label>暴击率 (0~1) <input id="pvCritRate" type="number" min="0" max="1" step="0.05"/></label>
+            <label>攻速倍率 (x1=<span>100%</span>) <input id="pvAttackSpeed" type="number" min="0.1" step="0.1"/></label>
+            <label>生命值 <input id="pvMaxHp" type="number" min="1" step="1"/></label>
+            <label>护盾值 <input id="pvMaxShield" type="number" min="0" step="1"/></label>
+            <label>免伤 (0~1, 1=<span>100%</span>) <input id="pvDamageReduction" type="number" min="0" max="1" step="0.05"/></label>
+            <label>闪避率 (0~1) <input id="pvDodgeRate" type="number" min="0" max="1" step="0.05"/></label>
+          </div>
+        </details>
 
         <div class="actions">
           <button id="save">保存关卡</button>

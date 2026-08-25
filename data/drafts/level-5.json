@@ -8,7 +8,8 @@
     "height": 1600
   },
   "camera": {
-    "width": 1350
+    "width": 1350,
+    "mode": "center"
   },
   "walls": [
     {
@@ -89,8 +90,8 @@
     }
   ],
   "spawn": {
-    "x": 600,
-    "y": 1200,
+    "x": 1290,
+    "y": 750,
     "scheme": "hex-ring",
     "hp": 100,
     "maxHp": 100,
@@ -106,5 +107,7 @@
     "weaponType": "radial"
   },
   "triggers": [],
+  "crates": [],
+  "barrels": [],
   "background": null
 }

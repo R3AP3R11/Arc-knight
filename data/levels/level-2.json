@@ -2,10 +2,100 @@
   "backgroundColor": "#000000",
   "gridColor": "#9c9c9c",
   "showGridInPlay": false,
+  "ui": "battle",
+  "world": {
+    "width": 1440,
+    "height": 600
+  },
+  "camera": {
+    "width": 1440,
+    "mode": "center"
+  },
   "walls": [],
   "enemies": [],
   "spawn": {
     "x": 130,
-    "y": 300
-  }
+    "y": 300,
+    "scheme": "yellow",
+    "hp": 100,
+    "maxHp": 100,
+    "level": 1,
+    "exp": 0,
+    "expToNext": 100,
+    "gold": 0,
+    "weapons": [
+      "radial",
+      "yellow",
+      "green"
+    ],
+    "weaponType": "yellow"
+  },
+  "dropRules": {},
+  "triggers": [
+    {
+      "id": "trigger-1787543085610",
+      "x": 570,
+      "y": 210,
+      "w": 90,
+      "h": 60,
+      "shape": "rect",
+      "color": "#f3b63f",
+      "visible": true,
+      "action": "spawnEnemy",
+      "once": true,
+      "cooldown": 0,
+      "resumeOnReturn": true,
+      "spawn": {
+        "stopOnExit": false,
+        "spawnZoneId": "",
+        "waves": [
+          {
+            "enemyType": "basic1",
+            "mode": "inscreen",
+            "count": 5,
+            "playerMinRadius": 200,
+            "waitForClear": false,
+            "shape": "polygon",
+            "sides": 6,
+            "radius": 120,
+            "thickness": 10,
+            "circleCount": 8,
+            "drawDuration": 500,
+            "fadeDuration": 500,
+            "preDelay": 0,
+            "postDelay": 1000
+          }
+        ]
+      }
+    }
+  ],
+  "crates": [],
+  "barrels": [],
+  "chests": [
+    {
+      "id": "chest-1",
+      "x": 360,
+      "y": 270,
+      "trigger": "start",
+      "triggerId": "",
+      "openRadius": 50,
+      "rewards": [
+        {
+          "item": "gold",
+          "count": 6,
+          "chance": 100
+        },
+        {
+          "item": "exp",
+          "count": 16,
+          "chance": 100
+        }
+      ]
+    }
+  ],
+  "background": null,
+  "images": [],
+  "gates": [],
+  "roomLayout": null,
+  "spawnZones": []
 }

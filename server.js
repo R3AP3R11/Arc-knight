@@ -3,17 +3,17 @@ import path from 'node:path';
 import { createServer as createViteServer } from 'vite';
 
 const root=process.cwd(), dataDir=path.join(root,'data');
-const dirs={levels:path.join(dataDir,'levels'),drafts:path.join(dataDir,'drafts'),ui:path.join(dataDir,'ui'),uploads:path.join(dataDir,'uploads')};
+const dirs={levels:path.join(dataDir,'levels'),ui:path.join(dataDir,'ui'),uploads:path.join(dataDir,'uploads'),players:path.join(dataDir,'players')};
 const legacy=path.join(dataDir,'level.json');
 const defaultLevel={backgroundColor:'#0b1b2b',gridColor:'#173a55',showGridInPlay:false,ui:'battle',walls:[{x:450,y:300,w:30,h:210}],enemies:[{x:730,y:130},{x:730,y:470},{x:180,y:460}],spawn:{x:130,y:300},triggers:[]};
 const templates={
- blank:{name:'空白战斗场',level:{...defaultLevel,walls:[],enemies:[]}},
- training:{name:'训练场',level:{...defaultLevel,walls:[{x:450,y:300,w:30,h:210}],enemies:[]}},
- single:{name:'单波敌人',level:{...defaultLevel,enemies:[{x:730,y:300}]}},
- multi:{name:'多波敌人',level:{...defaultLevel,enemies:[{x:730,y:130},{x:730,y:470},{x:180,y:460},{x:760,y:300},{x:220,y:150}]}},
- defend:{name:'防守目标',level:{...defaultLevel,goal:{x:700,y:300},enemies:[{x:780,y:120},{x:780,y:480},{x:160,y:300}]}}
+ single:{name:'单箱庭关卡',level:{...defaultLevel,walls:[],enemies:[]}},
+ multi:{name:'多箱庭关卡',level:{
+  ...defaultLevel,walls:[],enemies:[],
+  roomLayout:{mode:'multi',cols:4,rows:4,wallThickness:30,roadWidth:448,roadLength:560,cells:[{c:0,r:1},{c:1,r:1},{c:2,r:1}]}
+ }}
 };
-await Promise.all([fs.mkdir(dirs.levels,{recursive:true}),fs.mkdir(dirs.drafts,{recursive:true}),fs.mkdir(dirs.ui,{recursive:true}),fs.mkdir(dirs.uploads,{recursive:true})]);
+await Promise.all([fs.mkdir(dirs.levels,{recursive:true}),fs.mkdir(dirs.ui,{recursive:true}),fs.mkdir(dirs.uploads,{recursive:true}),fs.mkdir(dirs.players,{recursive:true})]);
 const defaultUi={
  battle:{id:'battle',type:'battle',name:'战斗UI',nodes:[
   {id:'hpBar',type:'bar',x:40,y:40,w:360,h:28,fill:'#e84c5e',bg:'#3a1f2b',bind:{ratio:'hpRatio'}},
@@ -56,9 +56,12 @@ const json=(res,value,status=200)=>{res.statusCode=status;res.setHeader('Content
 async function body(req){let text='';for await(const c of req)text+=c;return JSON.parse(text||'{}')}
 async function rawBody(req){const chunks=[];for await(const c of req)chunks.push(c);return Buffer.concat(chunks)}
 async function list(kind){return (await fs.readdir(dirs[kind])).filter(x=>x.endsWith('.json')).map(x=>x.slice(0,-5)).sort()}
-async function migrateLegacyDraft(){const legacyDraft=path.join(dataDir,'draft.json');try{const drafts=await list('drafts');if(!drafts.length){const value=JSON.parse(await fs.readFile(legacyDraft,'utf8'));await fs.writeFile(path.join(dirs.drafts,'level-1.json'),JSON.stringify(value,null,2))}}catch{}}
-await migrateLegacyDraft();
 async function file(kind,id){return path.join(dirs[kind],`${id}.json`)}
+const playersIndex=path.join(dirs.players,'index.json');
+async function readJson(f,fallback){try{return JSON.parse(await fs.readFile(f,'utf8'))}catch{return fallback?structuredClone(fallback):null}}
+async function writeJson(f,value){await fs.writeFile(f,JSON.stringify(value,null,2))}
+async function listPlayers(){return await readJson(playersIndex,[])}
+async function savePlayers(slots){await writeJson(playersIndex,slots)}
 const vite=await createViteServer({root,server:{middlewareMode:true}});
 const server=(await import('node:http')).createServer(async(req,res)=>{
  const url=new URL(req.url,`http://${req.headers.host||'localhost'}`), parts=url.pathname.split('/').filter(Boolean);
@@ -69,14 +72,11 @@ const server=(await import('node:http')).createServer(async(req,res)=>{
     const id=parts[2]; if(!id||!/^[-\w]+$/.test(id))return json(res,{error:'Invalid id'},400);
     if(req.method==='GET')return json(res,JSON.parse(await fs.readFile(await file('levels',id),'utf8')));
     if(req.method==='POST'){const value=await body(req);await fs.writeFile(await file('levels',id),JSON.stringify(value,null,2));return json(res,{ok:true})}
-    if(req.method==='DELETE'){await fs.rm(await file('levels',id),{force:true});await fs.rm(await file('drafts',id),{force:true});return json(res,{ok:true})}
-   }
-   if(parts[1]==='drafts'){
-    const id=parts[2];if(req.method==='GET')return json(res,JSON.parse(await fs.readFile(await file('drafts',id),'utf8')));if(req.method==='POST'){await fs.writeFile(await file('drafts',id),JSON.stringify(await body(req),null,2));return json(res,{ok:true})}if(req.method==='DELETE'){await fs.rm(await file('drafts',id),{force:true});return json(res,{ok:true})}
+    if(req.method==='DELETE'){await fs.rm(await file('levels',id),{force:true});return json(res,{ok:true})}
    }
    if(parts[1]==='templates'&&req.method==='GET')return json(res,templates);
    if(parts[1]==='flow'){if(req.method==='GET'){try{return json(res,JSON.parse(await fs.readFile(path.join(dataDir,'flow.json'),'utf8')))}catch{return json(res,{version:2,flows:{game:{name:'游戏流程',entry:'',nodes:[]},tutorial:{name:'教程流程',entry:'',nodes:[]}}})}}if(req.method==='POST'){await fs.writeFile(path.join(dataDir,'flow.json'),JSON.stringify(await body(req),null,2));return json(res,{ok:true})}}
-   if(parts[1]==='draft'||parts[1]==='level'){const kind=parts[1]==='draft'?'drafts':'levels',id=parts[2]||'level-1';if(req.method==='GET')return json(res,JSON.parse(await fs.readFile(await file(kind,id),'utf8')));if(req.method==='POST'){await fs.writeFile(await file(kind,id),JSON.stringify(await body(req),null,2));return json(res,{ok:true})}}
+   if(parts[1]==='level'){const id=parts[2]||'level-1';if(req.method==='GET')return json(res,JSON.parse(await fs.readFile(await file('levels',id),'utf8')));if(req.method==='POST'){await fs.writeFile(await file('levels',id),JSON.stringify(await body(req),null,2));return json(res,{ok:true})}}
    if(parts[1]==='ui'){
     const id=parts[2];
     if(!id||!/^[-\w]+$/.test(id))return json(res,{error:'Invalid id'},400);
@@ -84,8 +84,30 @@ const server=(await import('node:http')).createServer(async(req,res)=>{
     if(req.method==='GET'){try{return json(res,JSON.parse(await fs.readFile(f,'utf8')))}catch{return json(res,defaultUi[id]||{id,name:id,nodes:[]})}}
     if(req.method==='POST'){await fs.writeFile(f,JSON.stringify(await body(req),null,2));return json(res,{ok:true})}
    }
-   if(parts[1]==='uploads'&&req.method==='POST'){
-    const buf=await rawBody(req);
+   if(parts[1]==='players'){
+    if(parts.length===2&&req.method==='GET'){
+     const slots=await listPlayers();
+     const metas={};
+     for(const id of slots){try{const p=await readJson(await file('players',id));if(p)metas[id]={name:p.meta?.name,updatedAt:p.meta?.updatedAt,level:p.progress?.level}}catch{}}
+     return json(res,{slots,metas});
+    }
+    const id=parts[2]; if(!id||!/^[-\w]+$/.test(id))return json(res,{error:'Invalid id'},400);
+    if(req.method==='GET'){const p=await readJson(await file('players',id));if(!p)return json(res,{error:'Not found'},404);return json(res,p)}
+    if(req.method==='POST'){
+     const value=await body(req);const slots=await listPlayers();
+     if(!slots.includes(id))slots.push(id);
+     await savePlayers(slots);
+     await writeJson(await file('players',id),value);
+     return json(res,{ok:true});
+    }
+    if(req.method==='DELETE'){
+     await fs.rm(await file('players',id),{force:true});
+     const slots=(await listPlayers()).filter(x=>x!==id);
+     await savePlayers(slots);
+     return json(res,{ok:true});
+    }
+   }
+   if(parts[1]==='uploads'&&req.method==='POST'){    const buf=await rawBody(req);
     const ct=(req.headers['content-type']||'').toLowerCase();
     const ext=ct.includes('png')?'png':ct.includes('webp')?'webp':ct.includes('gif')?'gif':ct.includes('svg')?'svg':'jpg';
     const name=`${Date.now()}-${Math.round(Math.random()*1e6)}.${ext}`;
@@ -93,7 +115,7 @@ const server=(await import('node:http')).createServer(async(req,res)=>{
     return json(res,{path:`/uploads/${name}`});
    }
    return json(res,{error:'Not found'},404);
-  }catch(e){return json(res,{error:'Not found'},404)}
+  }catch(e){console.error('[api error]',req.method,url.pathname,e);return json(res,{error:'Not found'},404)}
  }
  if(parts[0]==='uploads'){
   const name=parts[1];
