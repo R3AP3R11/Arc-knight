@@ -3,17 +3,17 @@
   "meta": {
     "name": "新存档",
     "createdAt": 0,
-    "updatedAt": 1787738310448,
+    "updatedAt": 1787738326224,
     "playTimeSec": 0
   },
   "progress": {
     "level": 5,
-    "exp": 269,
+    "exp": 0,
     "expToNext": 100,
     "points": 0
   },
   "currency": {
-    "gold": 112,
+    "gold": 6,
     "charge": 0
   },
   "weapons": {
@@ -50,7 +50,7 @@
     "attackPower": 1,
     "critRate": 0,
     "attackSpeed": 1,
-    "maxHp": 125,
+    "maxHp": 100,
     "maxShield": 50,
     "damageReduction": 1,
     "dodgeRate": 0
@@ -69,9 +69,7 @@
     "unlocked": [
       "level-1"
     ],
-    "completed": [
-      "level-1"
-    ],
+    "completed": [],
     "current": "level-1"
   }
 }

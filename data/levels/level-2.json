@@ -5,7 +5,7 @@
   "ui": "battle",
   "world": {
     "width": 1440,
-    "height": 600
+    "height": 1440
   },
   "camera": {
     "width": 1440,
@@ -28,45 +28,52 @@
       "yellow",
       "green"
     ],
-    "weaponType": "yellow"
+    "weaponType": "yellow",
+    "id": "spawn"
   },
   "dropRules": {},
   "triggers": [
     {
       "id": "trigger-1787543085610",
-      "x": 570,
-      "y": 210,
+      "x": 150,
+      "y": 120,
       "w": 90,
       "h": 60,
       "shape": "rect",
       "color": "#f3b63f",
       "visible": true,
-      "action": "spawnEnemy",
       "once": true,
       "cooldown": 0,
       "resumeOnReturn": true,
-      "spawn": {
-        "stopOnExit": false,
-        "spawnZoneId": "",
-        "waves": [
-          {
-            "enemyType": "basic1",
-            "mode": "inscreen",
-            "count": 5,
-            "playerMinRadius": 200,
-            "waitForClear": false,
-            "shape": "polygon",
-            "sides": 6,
-            "radius": 120,
-            "thickness": 10,
-            "circleCount": 8,
-            "drawDuration": 500,
-            "fadeDuration": 500,
-            "preDelay": 0,
-            "postDelay": 1000
+      "events": [
+        {
+          "type": "spawnEnemy",
+          "when": "enter",
+          "spawn": {
+            "stopOnExit": false,
+            "resumeOnReturn": true,
+            "waves": [
+              {
+                "enemyType": "basic1",
+                "mode": "inscreen",
+                "count": 5,
+                "playerMinRadius": 200,
+                "zoneId": "",
+                "waitForClear": false,
+                "shape": "polygon",
+                "sides": 6,
+                "radius": 120,
+                "thickness": 10,
+                "circleCount": 8,
+                "drawDuration": 500,
+                "fadeDuration": 500,
+                "preDelay": 0,
+                "postDelay": 1000
+              }
+            ]
           }
-        ]
-      }
+        }
+      ]
     }
   ],
   "crates": [],
@@ -91,6 +98,19 @@
           "chance": 100
         }
       ]
+    }
+  ],
+  "portals": [],
+  "vendors": [],
+  "idols": [
+    {
+      "id": "idol-1787710235596",
+      "x": 711.8422486670311,
+      "y": 608.0173029116949,
+      "w": 743.112192709953,
+      "h": 521.3093978042798,
+      "interactRadius": 130,
+      "visible": true
     }
   ],
   "background": null,

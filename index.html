@@ -94,6 +94,9 @@
               <button data-tool="trigger" class="tool">关卡触发器</button>
               <button data-tool="gate" class="tool">能量门</button>
               <button data-tool="vendor" class="tool">售货机</button>
+              <button data-tool="idol" class="tool">神像</button>
+              <button data-tool="icon" class="tool">可交互图标</button>
+              <button data-tool="portal" class="tool">传送门</button>
               <button data-tool="spawnzone" class="tool">生成区域</button>
               <button data-tool="spawn" class="tool">玩家出生点</button>
               <button data-tool="erase" class="tool">删除</button>
@@ -149,7 +152,6 @@
             <label>经验 <input id="tpExp" type="number" min="0" step="1"/></label>
             <label>升级点数 <input id="tpPoints" type="number" min="0" step="1"/></label>
             <label>金币 <input id="tpGold" type="number" min="0" step="1"/></label>
-            <label>充能 <input id="tpCharge" type="number" min="0" step="1"/></label>
             <h3>武器</h3>
             <div id="tpWeapons"></div>
             <h3>改件</h3>
@@ -179,7 +181,6 @@
             <label>经验 <input id="pvExp" type="number" min="0" step="1"/></label>
             <label>升级点数 <input id="pvPoints" type="number" min="0" step="1"/></label>
             <label>金币 <input id="pvGold" type="number" min="0" step="1"/></label>
-            <label>充能 <input id="pvCharge" type="number" min="0" step="1"/></label>
             <h3>武器</h3>
             <div id="pvWeapons"></div>
             <h3>改件</h3>
@@ -248,6 +249,24 @@
       </div>
     </section>
   </div>
+  <script>
+    (function () {
+      try {
+        var packaged = window.__APP_PACKAGED__ === true ||
+          new URLSearchParams(window.location.search).get('packaged') === '1';
+        if (packaged) {
+          document.body.classList.add('packaged');
+          var hide = function (selector) {
+            var el = document.querySelector(selector);
+            if (el) el.style.display = 'none';
+          };
+          hide('.mode-buttons');
+          hide('#editorPanel');
+          hide('#uiConfigPage');
+        }
+      } catch (e) {}
+    })();
+  </script>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

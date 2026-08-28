@@ -1,5 +1,5 @@
            import Phaser from 'phaser';
-import { DEFAULT_WALL_COLOR, MIN_WALL_SIZE, ENEMY_TYPES, normalizeEnemy, normalizeWeapons, WEAPON_LABELS, normalizeCrate, normalizeBarrel, normalizeChest, MOD_DEFS } from './state.js';
+import { DEFAULT_WALL_COLOR, MIN_WALL_SIZE, ENEMY_TYPES, normalizeEnemy, normalizeWeapons, WEAPON_LABELS, WEAPON_TYPES, ITEM_DEFS, normalizeCrate, normalizeBarrel, normalizeChest, normalizePortal, MOD_DEFS } from './state.js';
 import { renderGraph, drawWeaponGlyph, drawLock } from './ui-layer.js';
 import { BINDINGS } from './ui-bindings.js';
 import { buildGrid, findPath, nearestWalkable } from './pathfinding.js';
@@ -20,8 +20,23 @@ const CHEST_SIZE = 75;           // 宝箱显示尺寸（无碰撞体积，透�
 const CHEST_OPEN_SCALE_CORRECTION = 1005 / 852; // 开启态内容更窄，按内容宽比补偿到与常态同宽
 const CHEST_OPEN_FX_MS = 320;    // 开启金色十字星特效时长（更快）
 const CHEST_SPAWN_FX_MS = 260;   // 出现金色十字星特效时长
+const PORTAL_COLOR = 0x00ffff;   // 传送门主体色（青）
+const PORTAL_ALPHA = 0.6;        // 传送门整体透明度（对应图标 opacity 60）
+const PORTAL_LABEL = 'EVACUATION';
 const VENDOR_TEX_KEY = '__vendor__';
 const VENDOR_ICON = '/vending.png';
+const IDOL_TEX_KEY = '__idol__';
+const IDOL_ICON = '/idol.png';
+
+// 神像祝福池：从玩家基础属性中随机抽 3 项，选 1 生效（仅当局）
+const IDOL_BUFFS = [
+  { id: 'atk', key: 'attackPower', name: '力量祝福', desc: '攻击力 +15%', apply: scene => { const c = scene.player.combat; c.attackPower = (c.attackPower ?? 1) * 1.15; } },
+  { id: 'crit', key: 'critRate', name: '致命祝福', desc: '暴击率 +10%', apply: scene => { const c = scene.player.combat; c.critRate = (c.critRate ?? 0) + 0.1; } },
+  { id: 'dodge', key: 'dodgeRate', name: '迅捷祝福', desc: '闪避率 +8%', apply: scene => { const c = scene.player.combat; c.dodgeRate = (c.dodgeRate ?? 0) + 0.08; } },
+  { id: 'speed', key: 'moveSpeed', name: '疾风祝福', desc: '移动速度 +12%', apply: scene => { const c = scene.player.combat; c.moveSpeed = (c.moveSpeed ?? 1) * 1.12; } },
+  { id: 'hp', key: 'maxHp', name: '生命祝福', desc: '生命上限 +25', apply: scene => { const c = scene.player.combat; c.maxHp = (c.maxHp ?? 100) + 25; scene.player.maxHp = c.maxHp; } },
+  { id: 'reduction', key: 'damageReduction', name: '守护祝福', desc: '受到伤害 -10%', apply: scene => { const c = scene.player.combat; c.damageReduction = (c.damageReduction ?? 1) * 0.9; } }
+];
 
 // 局内商店（售货机）商品：仅当局生效的属性加成，后续在此补充
 const VENDOR_BUFFS = [
@@ -68,7 +83,7 @@ const PATH_WAYPOINT_RADIUS = CELL * 0.4;
 const SWITCH_FADE_MS = 500;
 const SPAWN_OFFSCREEN_PX = 10;
 const ENEMY_BULLET_SPEED = 400;
-const WEAPON_SLOT_LEVELS = [10, 30];
+const WEAPON_SLOT_LEVELS = [12, 30];
 const LEVEL_HP_BONUS = 10;
 
 // 玩家战斗属性计算（combat 数据来自存档）
@@ -100,14 +115,10 @@ const ENEMY_BEHAVIOR = {
 
 // 工坊页基础属性加点配置：key → 属性键 / 每点收益 / 上限 / 显示
 const UPGRADE_STATS = {
-  maxHp:          { label: '生命值', per: 20, cap: 10, fmt: v => `${Math.round(v)}` },
-  maxShield:      { label: '护盾值', per: 10, cap: 10, fmt: v => `${Math.round(v)}` },
-  attackPower:    { label: '攻击力', per: 0.1, cap: 10, fmt: v => `${Math.round((v - 1) * 100)}%` },
-  attackSpeed:    { label: '攻速', per: 0.08, cap: 10, fmt: v => `${Math.round((v - 1) * 100)}%` },
-  critRate:       { label: '暴击率', per: 0.04, cap: 10, fmt: v => `${Math.round(v * 100)}%` },
-  moveSpeed:      { label: '移速', per: 0.05, cap: 10, fmt: v => `${Math.round((v - 1) * 100)}%` },
-  damageReduction:{ label: '免伤', per: -0.05, cap: 10, fmt: v => `${Math.round((1 - v) * 100)}%` },
-  dodgeRate:      { label: '闪避率', per: 0.04, cap: 10, fmt: v => `${Math.round(v * 100)}%` }
+  maxHp:       { label: '生命', per: 20, cap: 10, fmt: v => `${Math.round(v)}` },
+  maxShield:   { label: '护盾', per: 10, cap: 10, fmt: v => `${Math.round(v)}` },
+  attackPower: { label: '攻击', per: 0.1, cap: 10, fmt: v => `${Math.round((v - 1) * 100)}%` },
+  attackSpeed: { label: '攻速', per: 0.08, cap: 10, fmt: v => `${Math.round((v - 1) * 100)}%` }
 };
 
 // ============================================================
@@ -119,7 +130,8 @@ const ENEMY_EDGE_MARGIN = 60;          // 敌人生成距世界边界的最小�
 const HUB_INTERACT_RADIUS = 80;        // 骑士之家可互动物体的触发距离
 const HUB_INTERACTABLES = [
   { id: 'workshop', x: 1320, y: 680, label: '工坊' },   // 打开工坊页面
-  { id: 'weapon', x: 540, y: 300, label: '商店' }       // 打开武器页面
+  { id: 'weapon', x: 540, y: 300, label: '商店' },      // 打开武器页面
+  { id: 'levelSelect', x: 940, y: 300, label: '选择关卡' } // 打开关卡选择页面
 ];
 const NEWBEE_HINT_FADE_MS = 1000;      // 提示淡入/淡出时长
 const NEWBEE_HINT_PRE_MS = 2000;       // 提示出现前延迟
@@ -136,6 +148,25 @@ const NEWBEE_ICONS = {
 function color(value) {
   return Phaser.Display.Color.HexStringToColor(value).color;
 }
+
+// 战斗 HUD 顶部状态指示器（EXPLORE / COMBAT / SECURE）
+const HUD_RECT_W = 400, HUD_RECT_H = 60;
+const HUD_RECT_X = (VIEW_W - HUD_RECT_W) / 2;   // 760
+const HUD_RECT_Y = 16;
+const HUD_TRANSITION_MS = 500;   // 0.5s 切换动画
+const HUD_IDLE_MS = 3000;        // 3s 常态脉冲
+const HUD_STATES = {
+  explore: { color: '#ffffff', label: 'EXPLORE', text: '#000000' },
+  combat:  { color: '#ff3b3b', label: 'COMBAT',  text: '#ffffff' },
+  secure:  { color: '#37d67a', label: 'SECURE',  text: '#ffffff' },
+  black:   { color: '#000000', label: '',        text: '#ffffff' }   // 脉冲用黑色，文本沿用当前态
+};
+
+// 战斗 HUD 设置菜单图标（/图标 文件夹，经 /icons/ 接口提供）
+const ICON_SETTINGS = `/icons/${encodeURIComponent('设置.png')}`;
+const ICON_EXIT = `/icons/${encodeURIComponent('退出.png')}`;
+const ICON_RETRY = `/icons/${encodeURIComponent('再来一次.png')}`;
+const ICON_CONTINUE = `/icons/${encodeURIComponent('继续.png')}`;
 
 const toCell = (x, y) => ({ x: Math.floor(x / CELL), y: Math.floor(y / CELL) });
 
@@ -193,7 +224,10 @@ function resolveCircleAgainstWalls(entity, radius, walls) {
       const inArc = w.shape === 'circle'
         || ((angle - start + 360) % 360 <= span);
       if (!inArc || distance > outer || distance < inner) continue;
-      const target = distance < (inner + outer) / 2 ? inner : outer;
+      // 完整圆墙永远向外推到外缘，避免敌人被吸到圆心永久困死
+      const target = w.shape === 'circle'
+        ? outer
+        : (distance < (inner + outer) / 2 ? inner : outer);
       entity.x = w.x + dx / distance * target;
       entity.y = w.y + dy / distance * target;
       continue;
@@ -273,7 +307,8 @@ function rayWallDistance(x0, y0, dx, dy, walls) {
 function rayCircleDistance(x0, y0, dx, dy, wall) {
   const ox = x0 - wall.x, oy = y0 - wall.y;
   const b = ox * dx + oy * dy;
-  const c = ox * ox + oy * oy - Math.pow(wall.w / 2 + wall.thickness / 2, 2);
+  const radius = wall.w / 2 + (wall.thickness || 0) / 2;
+  const c = ox * ox + oy * oy - radius * radius;
   const discriminant = b * b - c;
   if (discriminant < 0) return null;
   const t = -b - Math.sqrt(discriminant);
@@ -576,6 +611,12 @@ function pickTopEntity(l, x, y) {
     if (Math.hypot(ch.x - x, ch.y - y) <= Math.max(ch.openRadius, CHEST_SIZE / 2)) return { entity: ch, type: 'chest' };
   }
 
+  for (let i = (l.portals || []).length - 1; i >= 0; i--) {
+    const p = l.portals[i];
+    const halfDiag = Math.hypot(p.w, p.h) / 2;
+    if (Math.hypot(p.x - x, p.y - y) <= Math.max(p.interactRadius, halfDiag)) return { entity: p, type: 'portal' };
+  }
+
   for (let i = l.triggers.length - 1; i >= 0; i--) {
     const t = l.triggers[i];
     if (hitTrigger(t, x, y)) return { entity: t, type: 'trigger' };
@@ -589,6 +630,16 @@ function pickTopEntity(l, x, y) {
   for (let i = (l.vendors || []).length - 1; i >= 0; i--) {
     const v = l.vendors[i];
     if (hitBackground(v, x, y)) return { entity: v, type: 'vendor' };
+  }
+
+  for (let i = (l.idols || []).length - 1; i >= 0; i--) {
+    const v = l.idols[i];
+    if (hitBackground(v, x, y)) return { entity: v, type: 'idol' };
+  }
+
+  for (let i = (l.icons || []).length - 1; i >= 0; i--) {
+    const ic = l.icons[i];
+    if (hitBackground(ic, x, y)) return { entity: ic, type: 'icon' };
   }
 
   for (let i = (l.spawnZones || []).length - 1; i >= 0; i--) {
@@ -629,6 +680,29 @@ function drawCrate(g, x, y) {
   g.lineBetween(x - s, y + s - inset, x - s, y - s + inset);
   g.lineBetween(x - s * k, y - s * k, x + s * k, y + s * k);
   g.lineBetween(x + s * k, y - s * k, x - s * k, y + s * k);
+}
+
+// 传送门图标：按 mxGraph 解密样式绘制（#00FFFF 填充、透明度 60%、无描边 + EVACUATION 文字）
+function fillRotatedRect(g, cx, cy, w, h, rad) {
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+  const hw = w / 2, hh = h / 2;
+  const pts = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]]
+    .map(([lx, ly]) => [cx + lx * cos - ly * sin, cy + lx * sin + ly * cos]);
+  g.beginPath();
+  g.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < 4; i++) g.lineTo(pts[i][0], pts[i][1]);
+  g.closePath();
+  g.fillPath();
+}
+
+function drawPortalShape(g, x, y, w, h, rotation = 0) {
+  const rad = Phaser.Math.DegToRad(rotation);
+  const bh = Math.max(6, h * 0.42);
+  g.fillStyle(PORTAL_COLOR, PORTAL_ALPHA);
+  // 下层宽条
+  fillRotatedRect(g, x, y + h * 0.06, w, bh, rad);
+  // 上层窄条
+  fillRotatedRect(g, x, y - h * 0.06, w * 0.85, bh, rad);
 }
 
 function drawCrateDebris(g, d) {
@@ -1053,8 +1127,8 @@ function drawWeaponWheel(g, player, anim) {
   const angles = [];
   for (let i = 0; i < n; i++) angles.push(Phaser.Math.DegToRad(i === 0 ? 60 : 15));
 
-  const drawArc = (a0, a1, fillColor) => {
-    g.fillStyle(fillColor, 1);
+  const drawArc = (a0, a1, fillColor, alpha = 1) => {
+    g.fillStyle(fillColor, alpha);
     g.beginPath();
     g.arc(cx, cy, rOuter, a0, a1, false);
     g.arc(cx, cy, rInner, a1, a0, true);
@@ -1067,14 +1141,17 @@ function drawWeaponWheel(g, player, anim) {
     const end = start + angles[i] - (i < n - 1 ? gap : 0);
     const fromColor = color(WEAPONS[fromOrder[i]]?.ringColor || '#ffffff');
     const toColor = color(WEAPONS[toOrder[i]]?.ringColor || '#ffffff');
+    const wt = toOrder[i];
+    const dim = WEAPONS[wt]?.maxAmmo !== Infinity && (player.ammo?.[wt] ?? 0) <= 0 && (player.weaponCharge?.[wt]?.have ?? 0) < (player.weaponCharge?.[wt]?.need ?? 0);
+    const alpha = dim ? 0.28 : 1.0;
 
     if (sweep <= start) {
-      drawArc(start, end, toColor);
+      drawArc(start, end, toColor, alpha);
     } else if (sweep >= end) {
-      drawArc(start, end, fromColor);
+      drawArc(start, end, fromColor, alpha);
     } else {
-      drawArc(start, sweep, fromColor);
-      drawArc(sweep, end, toColor);
+      drawArc(start, sweep, fromColor, alpha);
+      drawArc(sweep, end, toColor, alpha);
     }
     start += angles[i];
   }
@@ -1216,6 +1293,7 @@ const WEAPONS = {
     fireInterval: 150,
     baseDamage: 8,
     maxAmmo: 45,
+    chargeRequired: 5,
     fire(player, level) {
       const muzzle = getWeaponOrbPosition(player);
       const base = player.weaponAngle || 0;
@@ -1304,10 +1382,11 @@ const WEAPONS = {
 
   green: {
     scheme: 'green',
-    ringColor: '#00ff66',
+    ringColor: '#42d978',
     fireInterval: 150,
     baseDamage: 16,
     maxAmmo: 30,
+    chargeRequired: 8,
     fire(player, level, scene) {
       const angle = player.weaponAngle || 0;
       const width = PLAYER_ART.weaponOrbRadius * 1.25 * 1.5;
@@ -1330,14 +1409,15 @@ const WEAPONS = {
 // （改件定义 MOD_DEFS 见 state.js）
 // ============================================================
 function activeMods(scene, weaponType) {
-  const mods = scene.player?.mods || [];
+  const slot = scene.player?.equipment?.weaponMods?.[weaponType];
+  if (!slot) return new Set();
+  const generic = Array.isArray(slot.generic) ? slot.generic : [];
+  const list = slot.dedicated ? [...generic, slot.dedicated] : generic;
   return new Set(
-    mods
-      .filter(m => {
-        const def = MOD_DEFS[m.id];
-        return def && (def.weapon === '' || def.weapon === weaponType);
-      })
-      .map(m => m.id)
+    list.filter(id => {
+      const def = MOD_DEFS[id];
+      return def && (def.weapon === '' || def.weapon === weaponType);
+    })
   );
 }
 
@@ -1453,11 +1533,19 @@ export function createGameScene(ctx) {
       this.barrelSprites = new Map();
       this.chestSprites = new Map();
       this.vendorSprites = new Map();
+      this.idolSprites = new Map();
+      this.iconSprites = new Map();
+      this.portalTexts = new Map();
       this.levelImageSprites = new Map();
       this.levelImageLoading = new Set();
+      this.iconLoading = new Set();
       this.gateTexts = new Map();
       if (!this.textures.exists(VENDOR_TEX_KEY)) {
         this.load.image(VENDOR_TEX_KEY, VENDOR_ICON);
+        this.load.start();
+      }
+      if (!this.textures.exists(IDOL_TEX_KEY)) {
+        this.load.image(IDOL_TEX_KEY, IDOL_ICON);
         this.load.start();
       }
       if (!this.textures.exists(BARREL_TEX_KEY)) {
@@ -1473,7 +1561,7 @@ export function createGameScene(ctx) {
       if (!this.editing) this.applyWorldBounds();
       this.input.on('pointerdown', p => this.pointerDown(p));
       this.input.on('pointermove', p => this.pointerMove(p));
-      this.input.on('pointerup', () => { this.drag = null; this.panning = false; ctx.redraw(); });
+      this.input.on('pointerup', () => { this.handleWorkshopPointerUp(); this.drag = null; this.panning = false; ctx.redraw(); });
       this.game.canvas.addEventListener('wheel', e => {
         e.preventDefault();
         const rect = this.game.canvas.getBoundingClientRect();
@@ -1519,6 +1607,10 @@ export function createGameScene(ctx) {
       this.transition = null;
       this.intro = null;
       this.wheelAnim = null;
+      this.hudMode = 'explore';
+      this.hudAnim = null;
+      this.hudIdleClock = HUD_IDLE_MS;
+      this.hudIdleStep = null;
       if (this.waveEvents) {
         this.waveEvents.forEach(ev => ev.remove(false));
       }
@@ -1535,10 +1627,24 @@ export function createGameScene(ctx) {
         opened: false,
         fx: null
       }));
+      this.portals = (l.portals || []).map(p => ({
+        ...p,
+        spawned: p.trigger === 'start',
+        used: false
+      }));
+      this.portalNearest = null;
+      this.portalTipT = 0;
       this.vendors = (l.vendors || []).map(v => ({ ...v }));
       this.vendorNearest = null;
       this.vendorTipT = 0;
       this.vendorBought = new Set();
+      this.idols = (l.idols || []).map(v => ({ ...v, used: false }));
+      this.idolNearest = null;
+      this.idolTipT = 0;
+      this.idolOffer = null;
+      this.icons = (l.icons || []).map(v => ({ ...v }));
+      this.iconNearest = null;
+      this.iconTipT = 0;
       this.gates = (l.gates || []).map(gt => ({ ...gt, spawnT: gt.active ? 1 : 0 }));
       this.crateDebris = [];
       this.barrelExplosions = [];
@@ -1549,13 +1655,16 @@ export function createGameScene(ctx) {
         ...(l.barrels || []).map(b => ({ x: b.x, y: b.y, w: b.r * 2, h: b.r * 2 }))
       ];
       this.grid = buildGrid({ width: l.world.width, height: l.world.height }, obstacles, CELL, PATH_INFLATE);
-      // 数据源：游戏预览用临时数据，试玩/正式游戏用真实存档
+      // 数据源：游戏预览用临时数据，试玩/正式游戏用真实存档（试玩为测试存档）
       const source = this.isPreviewMode() ? ctx.state.previewPlayer : ctx.state.player;
       // 局内武器：关卡 spawn 配置 + 存档已解锁武器（购买武器后可在战斗中使用）
       const saveUnlocked = !this.editing
         ? Object.entries(source?.weapons || {}).filter(([, v]) => v?.unlocked).map(([k]) => k)
         : [];
-      const weapons = normalizeWeapons([...new Set([...(l.spawn.weapons || []), ...saveUnlocked])]);
+      const fallbackWeapons = normalizeWeapons([...new Set([...(l.spawn.weapons || []), ...saveUnlocked])]);
+      const loadoutUnlocked = (Array.isArray(source?.loadout) ? source.loadout : [])
+        .filter(w => w && source?.weapons?.[w]?.unlocked);
+      const weapons = loadoutUnlocked.length ? normalizeWeapons(loadoutUnlocked) : fallbackWeapons;
       const weaponType = weapons[0];
       const weapon = WEAPONS[weaponType] || WEAPONS.radial;
       const scheme = weapon.scheme;
@@ -1576,14 +1685,21 @@ export function createGameScene(ctx) {
         ? (l.spawn.maxHp ?? 100) + (level - 1) * LEVEL_HP_BONUS
         : (combat.maxHp ?? 100);
       const maxShield = this.editing ? SHIELD_MAX : (combat.maxShield ?? SHIELD_MAX);
-      const sourceMods = source?.mods || [];
-      const hasCapacity = sourceMods.some(m => m.id === 'capacity');
+      const greenSlot = source?.equipment?.weaponMods?.green;
+      const hasCapacity = greenSlot?.dedicated === 'capacity'
+        || (Array.isArray(greenSlot?.generic) && greenSlot.generic.includes('capacity'));
       const ammo = {};
       for (const w of weapons) {
         let max = WEAPONS[w]?.maxAmmo ?? Infinity;
         // 容量改件：绿色武器弹量翻倍
         if (hasCapacity && w === 'green' && max !== Infinity) max *= 2;
         ammo[w] = max;
+      }
+
+      const weaponCharge = {};
+      for (const w of weapons) {
+        const need = WEAPONS[w]?.chargeRequired;
+        if (need) weaponCharge[w] = { need, have: 0 };
       }
 
       this.player = {
@@ -1595,6 +1711,7 @@ export function createGameScene(ctx) {
         weapons,
         weaponIndex: 0,
         ammo,
+        weaponCharge,
         hp: maxHp,
         maxHp,
         level: savedProgress.level ?? l.spawn.level ?? 1,
@@ -1615,11 +1732,20 @@ export function createGameScene(ctx) {
         shield: maxShield,
         maxShield,
         shieldBroken: false,
-        charge: savedCurrency.charge ?? 0,
         hitFlash: null,
         combat,
         points: source?.points || {},
-        mods: source?.mods || [],
+        loadout: Array.isArray(source?.loadout) ? [...source.loadout] : ['radial'],
+        equipment: source?.equipment || {
+          weaponMods: {
+            radial: { generic: [], dedicated: null },
+            yellow: { generic: [], dedicated: null },
+            green: { generic: [], dedicated: null }
+          },
+          relics: [],
+          pets: []
+        },
+        items: source?.items || { stacks: {}, uniques: [] },
         spendablePoints: savedProgress.points ?? 0
       };
 
@@ -1705,6 +1831,34 @@ export function createGameScene(ctx) {
         make();
       };
       raw.src = '/f.png';
+      return null;
+    }
+
+    // 通用图标精灵（懒加载）：首次调用触发 Image 加载，加载完成后再返回精灵
+    iconSprite(id, src) {
+      if (!this.menuIconSprites) this.menuIconSprites = new Map();
+      if (this.menuIconSprites.has(id)) return this.menuIconSprites.get(id);
+      if (!this.menuIconLoading) this.menuIconLoading = new Set();
+      const texKey = `__menu_icon_${id}__`;
+      const make = () => {
+        const s = this.add.image(0, 0, texKey).setOrigin(0.5).setDepth(1002);
+        this.cameras.main.ignore(s);
+        s.setVisible(false);
+        this.menuIconSprites.set(id, s);
+        return s;
+      };
+      if (this.textures.exists(texKey)) return make();
+      if (this.menuIconLoading.has(id)) return null;
+      this.menuIconLoading.add(id);
+      const raw = new Image();
+      raw.onload = () => {
+        this.menuIconLoading.delete(id);
+        if (!raw.naturalWidth || this.menuIconSprites.has(id)) return;
+        if (!this.textures.exists(texKey)) this.textures.addImage(texKey, raw);
+        make();
+      };
+      raw.onerror = () => this.menuIconLoading.delete(id);
+      raw.src = src;
       return null;
     }
 
@@ -1835,6 +1989,12 @@ export function createGameScene(ctx) {
         .map(v => ({ x: v.x, y: v.y, w: v.w, h: v.h, shape: 'rect', rotation: 0 }));
       if (vendorWalls.length) resolveCircleAgainstWalls(entity, r, vendorWalls);
 
+      const idols = this.editing ? (l.idols || []) : (this.idols || []);
+      const idolWalls = idols
+        .filter(v => v.visible !== false)
+        .map(v => ({ x: v.x, y: v.y, w: Math.min(v.w, v.h), thickness: 0, shape: 'circle' }));
+      if (idolWalls.length) resolveCircleAgainstWalls(entity, r, idolWalls);
+
       const crates = this.editing ? (l.crates || []) : this.crates.filter(c => c.alive);
       resolveCircleAgainstWalls(entity, r, crates);
 
@@ -1931,10 +2091,10 @@ export function createGameScene(ctx) {
 
     hasLOS(x0, y0, x1, y1) {
       const dx = x1 - x0, dy = y1 - y0;
-      return !ctx.state.level.walls.some(w => {
-        const t = rayRotatedRectDistance(x0, y0, dx, dy, w);
-        return t !== null && t <= 1;
-      });
+      const walls = ctx.state.level.walls;
+      const gateWalls = this.activeGateWalls();
+      return rayWallDistance(x0, y0, dx, dy, walls) > 1
+        && rayWallDistance(x0, y0, dx, dy, gateWalls) > 1;
     }
 
     findEnemyPath(e) {
@@ -2150,22 +2310,35 @@ export function createGameScene(ctx) {
       if (Array.isArray(rules) && rules.length) {
         for (const rule of rules) {
           if (Math.random() * 100 >= rule.chance) continue;
-          this.spawnDropItems(e, rule.item, Math.max(0, Math.floor(Number(rule.count) || 0)));
+          const count = Math.max(0, Math.floor(Number(rule.count) || 0));
+          if (rule.item === 'charge') {
+            // weapon 未指定时：为玩家局内拥有的每把特殊武器各掉一个充能球
+            const targets = rule.weapon ? [rule.weapon] : Object.keys(this.player.weaponCharge || {});
+            for (const weapon of targets) {
+              const c = this.player.weaponCharge?.[weapon];
+              if (!c || c.have >= c.need) continue;
+              this.spawnDropItems(e, 'charge', count, weapon);
+            }
+            continue;
+          }
+          this.spawnDropItems(e, rule.item, count);
         }
         return;
       }
       const d = e.drops || {};
-      const counts = { gold: Number(d.gold) || 0, exp: Number(d.exp) || 0, charge: Number(d.charge) || 0 };
+      const counts = { gold: Number(d.gold) || 0, exp: Number(d.exp) || 0 };
       for (const [type, count] of Object.entries(counts)) this.spawnDropItems(e, type, count);
     }
 
-    spawnDropItems(e, type, count) {
+    spawnDropItems(e, type, count, weapon = '') {
+      if (type === 'charge' && !weapon) return;
       for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
         const driftSpeed = type === 'gold' ? 10 : 20;
         const driftTtl = type === 'gold' ? 1000 : 600;
         this.drops.push({
           type,
+          weapon,
           x: e.x + (Math.random() - 0.5) * 30,
           y: e.y + (Math.random() - 0.5) * 30,
           drift: { vx: Math.cos(angle) * driftSpeed, vy: Math.sin(angle) * driftSpeed, ttl: driftTtl }
@@ -2178,16 +2351,29 @@ export function createGameScene(ctx) {
         this.player.exp = (this.player.exp || 0) + 1;
         this.commitPlayer();
       } else if (d.type === 'charge') {
-        this.player.charge = (this.player.charge || 0) + 1;
-        this.commitPlayer();
+        const c = this.player.weaponCharge?.[d.weapon];
+        if (!c) return;
+        c.have++;
+        this.tryRefillWeapon(d.weapon);
       } else if (d.type === 'gold') {
         // 金币局内累加，通关结算时才写入存档
         this.player.gold = (this.player.gold || 0) + 1;
       }
     }
 
+    tryRefillWeapon(type) {
+      const c = this.player.weaponCharge?.[type];
+      if (!c) return;
+      const ammo = this.player.ammo?.[type];
+      if (ammo === undefined || ammo === Infinity) return;
+      if (ammo <= 0 && c.have >= c.need) {
+        c.have = 0;
+        this.player.ammo[type] = WEAPONS[type]?.maxAmmo ?? ammo;
+      }
+    }
+
     // 把运行时资产/进度回写到数据层；预览模式写临时数据，试玩/正式写存档
-    // 经验/充能实时写入；金币在 settleVictory 通关结算时写入
+    // 经验实时写入；金币在 settleVictory 通关结算时写入
     commitPlayer() {
       if (this.editing) return;
       const p = this.isPreviewMode() ? ctx.state.previewPlayer : ctx.state.player;
@@ -2195,8 +2381,7 @@ export function createGameScene(ctx) {
       p.progress.level = this.player.level ?? p.progress.level;
       p.progress.exp = this.player.exp ?? p.progress.exp;
       p.progress.expToNext = this.player.expToNext ?? p.progress.expToNext;
-      p.currency.charge = this.player.charge ?? p.currency.charge;
-      if (!this.isPreviewMode()) ctx.onPlayerSave?.(p);
+      this.persistSave(p);
     }
 
     // 通关结算：金币、关卡完成进度、当前关卡写入存档；失败不调用
@@ -2210,7 +2395,7 @@ export function createGameScene(ctx) {
         p.levels.completed.push(levelId);
       }
       if (levelId) p.levels.current = levelId;
-      if (!this.isPreviewMode()) ctx.onPlayerSave?.(p);
+      this.persistSave(p);
     }
 
     // 宝箱出现：伴随金色十字星特效
@@ -2218,6 +2403,40 @@ export function createGameScene(ctx) {
       if (chest.spawned || chest.opened) return;
       chest.spawned = true;
       chest.fx = { t: CHEST_SPAWN_FX_MS, kind: 'spawn' };
+    }
+
+    // 触发器清敌事件派发后，令绑定该触发器的宝箱出现
+    spawnChestsForTrigger(triggerId) {
+      if (!this.chests || !triggerId) return;
+      for (const chest of this.chests) {
+        if (chest.trigger === 'trigger' && chest.triggerId === triggerId) {
+          this.spawnChest(chest);
+        }
+      }
+    }
+
+    // 触发器清敌事件派发后，令绑定该触发器的传送门出现
+    spawnPortalsForTrigger(triggerId) {
+      if (!this.portals || !triggerId) return;
+      for (const portal of this.portals) {
+        if (portal.trigger === 'trigger' && portal.triggerId === triggerId) {
+          this.spawnPortal(portal);
+        }
+      }
+    }
+
+    spawnPortal(portal) {
+      if (portal.spawned || portal.used) return;
+      portal.spawned = true;
+      portal.fx = { t: CHEST_SPAWN_FX_MS, kind: 'spawn' };
+    }
+
+    // 传送门交互：直接触发整体通关标记（回到骑士之家）
+    usePortal(portal) {
+      if (portal.used) return;
+      portal.used = true;
+      this.state = 'end';
+      this.settleVictory();
     }
 
     openChest(chest) {
@@ -2232,11 +2451,7 @@ export function createGameScene(ctx) {
 
     updateChests(dt) {
       if (!this.chests) return;
-      const allCleared = this.enemies.length && this.enemies.every(e => !e.alive);
       for (const chest of this.chests) {
-        if (!chest.spawned && chest.trigger === 'clearEnemies' && allCleared) {
-          this.spawnChest(chest);
-        }
         if (chest.fx) {
           chest.fx.t -= dt;
           if (chest.fx.t <= 0) chest.fx = null;
@@ -2244,6 +2459,16 @@ export function createGameScene(ctx) {
         if (chest.spawned && !chest.opened
           && Math.hypot(this.player.x - chest.x, this.player.y - chest.y) <= chest.openRadius) {
           this.openChest(chest);
+        }
+      }
+    }
+
+    updatePortals(dt) {
+      if (!this.portals) return;
+      for (const p of this.portals) {
+        if (p.fx) {
+          p.fx.t -= dt;
+          if (p.fx.t <= 0) p.fx = null;
         }
       }
     }
@@ -2317,7 +2542,8 @@ export function createGameScene(ctx) {
     }
 
     pointInWall(x, y) {
-      return ctx.state.level.walls.some(w => hitWall(w, x, y));
+      return ctx.state.level.walls.some(w => hitWall(w, x, y))
+        || this.activeGateWalls().some(w => hitWall(w, x, y));
     }
 
     sampleRingPoint(v, off, ww, wh) {
@@ -2334,31 +2560,35 @@ export function createGameScene(ctx) {
 
     spawnOffscreen(t, count, enemyType) {
       const v = this.viewRect();
-      const off = SPAWN_OFFSCREEN_PX / this.cameras.main.zoomX;
+      const baseOff = SPAWN_OFFSCREEN_PX / this.cameras.main.zoomX;
       const { w: ww, h: wh } = this.worldSize();
+      const type = enemyType || 'basic1';
 
       for (let i = 0; i < count; i++) {
         let p = null;
-        for (let attempt = 0; attempt < 8 && !p; attempt++) {
+        // 随机更换位置，直到找到与玩家连线无障碍的屏幕外点
+        for (let attempt = 0; attempt < 60 && !p; attempt++) {
+          const off = baseOff * (1 + Math.floor(attempt / 12));
           const c = this.sampleRingPoint(v, off, ww, wh);
-          if (!this.pointInWall(c.x, c.y)) p = c;
+          if (this.canSpawnAt(c.x, c.y, type)) p = c;
         }
-        if (!p) p = this.sampleRingPoint(v, off, ww, wh);
-        this.enemies.push(this.initEnemy({ x: p.x, y: p.y, type: enemyType || 'basic1' }));
+        if (!p) p = this.findClearSpawnNearPlayer(type);
+        if (!p) continue;
+
+        this.enemies.push(this.initEnemy({ x: p.x, y: p.y, type, triggerId: t.id }));
       }
     }
 
-    // 屏幕内随机生成：在触发器矩形范围内随机取点，
-    // 不落在墙/阻挡内，且距玩家不小于 playerMinRadius。
+    // 屏幕内随机生成：在触发器/生成区域矩形范围内随机取点，
+    // 距玩家不小于 playerMinRadius，且与玩家连线无障碍。
     // 每个位置先显示四角白色锁定框（渐显+缩小 0.5s），动画结束后敌人生成。
     spawnInScreen(t, wave) {
       const minRadius = Math.max(0, Number(wave.playerMinRadius ?? 200) || 0);
       const count = Math.max(1, Number(wave.count) || 1);
-      const { w: ww, h: wh } = this.worldSize();
-      const px = this.player.x, py = this.player.y;
+      const type = wave.enemyType || 'basic1';
 
-      // 生成范围：优先使用触发器关联的生成区域，否则回退到触发器自身矩形
-      const zone = (t.spawn?.spawnZoneId && ctx.state.level.spawnZones?.find(z => z.id === t.spawn.spawnZoneId))
+      // 生成范围：优先使用该波次指定的生成区域，否则回退到触发器自身矩形
+      const zone = (wave.zoneId && ctx.state.level.spawnZones?.find(z => z.id === wave.zoneId))
         || { x: t.x, y: t.y, w: t.w, h: t.h };
       const minX = zone.x - zone.w / 2, maxX = zone.x + zone.w / 2;
       const minY = zone.y - zone.h / 2, maxY = zone.y + zone.h / 2;
@@ -2368,33 +2598,27 @@ export function createGameScene(ctx) {
       });
 
       for (let i = 0; i < count; i++) {
-        let x = 0, y = 0, ok = false;
-        // 第一轮：严格满足 边界 + 安全半径 + 不撞墙
-        for (let attempt = 0; attempt < 60 && !ok; attempt++) {
+        let p = null;
+        // 第一轮：严格满足 安全半径 + 连线无障碍
+        for (let attempt = 0; attempt < 60 && !p; attempt++) {
           const c = rand();
-          if (c.x < 0 || c.y < 0 || c.x > ww || c.y > wh) continue;
-          if (minRadius > 0 && Math.hypot(c.x - px, c.y - py) < minRadius) continue;
-          if (this.pointInWall(c.x, c.y)) continue;
-          x = c.x; y = c.y; ok = true;
+          if (this.canSpawnAt(c.x, c.y, type, minRadius)) p = c;
         }
-        // 第二轮：触发区域整体落在安全半径内时，退化为仅在框内随机、避开墙体与玩家脚下
-        for (let attempt = 0; attempt < 60 && !ok; attempt++) {
+        // 第二轮：区域整体落在安全半径内时，退化为仅连线无障碍 + 避玩家脚下
+        for (let attempt = 0; attempt < 60 && !p; attempt++) {
           const c = rand();
-          if (c.x < 0 || c.y < 0 || c.x > ww || c.y > wh) continue;
-          if (Math.hypot(c.x - px, c.y - py) < 20) continue;
-          if (this.pointInWall(c.x, c.y)) continue;
-          x = c.x; y = c.y; ok = true;
+          if (this.canSpawnAt(c.x, c.y, type, 20)) p = c;
         }
-        if (!ok) continue;
+        if (!p) continue;
 
-        const size = (ENEMY_BEHAVIOR[wave.enemyType] || ENEMY_BEHAVIOR.basic1).size;
+        const size = (ENEMY_BEHAVIOR[type] || ENEMY_BEHAVIOR.basic1).size;
         this.lockEffects.push({
-          x,
-          y,
+          x: p.x,
+          y: p.y,
           size: size + 20,
           duration: 500,
           t: 0,
-          enemyType: wave.enemyType || 'basic1',
+          enemyType: type,
           triggerId: t.id
         });
       }
@@ -2440,6 +2664,34 @@ export function createGameScene(ctx) {
       return { x: cx, y: cy };
     }
 
+    // 生成点是否安全：世界边界内、不在墙内、与玩家连线无障碍（可被击杀）、可选最小玩家距离
+    canSpawnAt(x, y, enemyType = 'basic1', minPlayerDist = 0) {
+      const b = ENEMY_BEHAVIOR[enemyType] || ENEMY_BEHAVIOR.basic1;
+      const r = b.size / 2;
+      const { w: ww, h: wh } = this.worldSize();
+      if (x < r || y < r || x > ww - r || y > wh - r) return false;
+      if (this.pointInWall(x, y)) return false;
+      if (minPlayerDist > 0 && Math.hypot(x - this.player.x, y - this.player.y) < minPlayerDist) return false;
+      return this.hasLOS(x, y, this.player.x, this.player.y);
+    }
+
+    // 玩家附近螺旋找一个连线无障碍的生成点（多边形全顶点被挡时的兜底）
+    findClearSpawnNearPlayer(enemyType = 'basic1') {
+      const b = ENEMY_BEHAVIOR[enemyType] || ENEMY_BEHAVIOR.basic1;
+      const r = b.size / 2;
+      for (let ring = 1; ring <= 8; ring++) {
+        const samples = ring * 8;
+        for (let a = 0; a < samples; a++) {
+          const ang = (a / samples) * Math.PI * 2;
+          const dist = ring * (r + 40);
+          const x = this.player.x + Math.cos(ang) * dist;
+          const y = this.player.y + Math.sin(ang) * dist;
+          if (this.canSpawnAt(x, y, enemyType)) return { x, y };
+        }
+      }
+      return null;
+    }
+
     // 新手关：套用触发器多边形生成（以玩家为中心，三角形，半径 500）
     spawnNewbeeEnemies(count, enemyType) {
       this.createSpawnEffect(null, {
@@ -2454,27 +2706,25 @@ export function createGameScene(ctx) {
       this.nb?.enemies && (this.nb.enemies = this.enemies.slice());
     }
 
-    // 视口右上方生成进阶敌人2（远程怪无需走近玩家，只要不在墙里即可）
+    // 视口右上方生成进阶敌人2（需与玩家连线无障碍，否则玩家打不到）
     spawnAdvanced2AtTopRight() {
       const v = this.viewRect();
       const { w: ww, h: wh } = this.worldSize();
-      let x = Phaser.Math.Clamp(v.x + v.w - 120, ENEMY_EDGE_MARGIN, ww - ENEMY_EDGE_MARGIN);
-      let y = Phaser.Math.Clamp(v.y + 150, ENEMY_EDGE_MARGIN, wh - ENEMY_EDGE_MARGIN);
+      const x = Phaser.Math.Clamp(v.x + v.w - 120, ENEMY_EDGE_MARGIN, ww - ENEMY_EDGE_MARGIN);
+      const y = Phaser.Math.Clamp(v.y + 150, ENEMY_EDGE_MARGIN, wh - ENEMY_EDGE_MARGIN);
 
-      // 右上角点落在墙里时，向玩家方向逐层外扩寻找一个不在墙里的点
-      if (this.pointInWall(x, y)) {
-        const px = this.player.x, py = this.player.y;
-        const dirX = (px - x) || 1, dirY = (py - y);
-        const len = Math.hypot(dirX, dirY) || 1;
-        const ux = dirX / len, uy = dirY / len;
-        for (let step = 40; step <= 600; step += 40) {
-          const nx = Phaser.Math.Clamp(x + ux * step, ENEMY_EDGE_MARGIN, ww - ENEMY_EDGE_MARGIN);
-          const ny = Phaser.Math.Clamp(y + uy * step, ENEMY_EDGE_MARGIN, wh - ENEMY_EDGE_MARGIN);
-          if (!this.pointInWall(nx, ny)) { x = nx; y = ny; break; }
+      let p = this.canSpawnAt(x, y, 'advanced2') ? { x, y } : null;
+      for (let step = 40; step <= 600 && !p; step += 40) {
+        for (const [dx, dy] of [[-step, 0], [step, 0], [0, -step], [0, step]]) {
+          const nx = Phaser.Math.Clamp(x + dx, ENEMY_EDGE_MARGIN, ww - ENEMY_EDGE_MARGIN);
+          const ny = Phaser.Math.Clamp(y + dy, ENEMY_EDGE_MARGIN, wh - ENEMY_EDGE_MARGIN);
+          if (this.canSpawnAt(nx, ny, 'advanced2')) { p = { x: nx, y: ny }; break; }
         }
       }
+      if (!p) p = this.findClearSpawnNearPlayer('advanced2');
+      if (!p) return null;
 
-      const adv = this.initEnemy({ x, y, type: 'advanced2', hp: 100, damage: 15, attackRange: Infinity });
+      const adv = this.initEnemy({ x: p.x, y: p.y, type: 'advanced2', hp: 100, damage: 15, attackRange: Infinity });
       this.enemies.push(adv);
       return adv;
     }
@@ -2504,18 +2754,31 @@ export function createGameScene(ctx) {
       });
     }
 
-    spawnAtVertex(fx, i, total) {
-      const angle = fx.startAngle + (i / total) * Math.PI * 2;
-      const x = fx.cx + Math.cos(angle) * fx.radius;
-      const y = fx.cy + Math.sin(angle) * fx.radius;
-      // 顶点越出世界边界时收敛到边界内侧，避免敌人被世界边界「墙」卡住
-      const { w: ww, h: wh } = this.worldSize();
-      const px = Phaser.Math.Clamp(x, ENEMY_EDGE_MARGIN, ww - ENEMY_EDGE_MARGIN);
-      const py = Phaser.Math.Clamp(y, ENEMY_EDGE_MARGIN, wh - ENEMY_EDGE_MARGIN);
-      const enemy = this.initEnemy({ x: px, y: py, type: fx.enemyType });
+    spawnEnemyAt(x, y, fx) {
+      const enemy = this.initEnemy({ x, y, type: fx.enemyType, triggerId: fx.triggerId || null });
       enemy.frozen = true;
       fx.spawnedEnemies.push(enemy);
       this.enemies.push(enemy);
+    }
+
+    spawnAtVertex(fx, i, total) {
+      const step = Math.PI * 2 / total;
+      const baseAngle = fx.startAngle + (i / total) * Math.PI * 2;
+      // 理想顶点 → 其余顶点轮转（允许一个顶点承载多个敌人）→ 半径/角度抖动
+      for (let k = 0; k < total; k++) {
+        const a = baseAngle + k * step;
+        for (const s of [1, 0.85, 1.15]) {
+          const x = fx.cx + Math.cos(a) * fx.radius * s;
+          const y = fx.cy + Math.sin(a) * fx.radius * s;
+          if (this.canSpawnAt(x, y, fx.enemyType)) {
+            this.spawnEnemyAt(x, y, fx);
+            return;
+          }
+        }
+      }
+      // 全部顶点都被障碍阻挡：玩家附近找连线无障碍点兜底
+      const fb = this.findClearSpawnNearPlayer(fx.enemyType);
+      if (fb) this.spawnEnemyAt(fb.x, fb.y, fx);
     }
 
     updateSpawnEffects(dt) {
@@ -2551,8 +2814,12 @@ export function createGameScene(ctx) {
       this.lockEffects = this.lockEffects.filter(fx => {
         fx.t += dt;
         if (fx.t >= fx.duration) {
-          const enemy = this.initEnemy({ x: fx.x, y: fx.y, type: fx.enemyType });
-          this.enemies.push(enemy);
+          // 生成前再校验一次连线无障碍；失效则玩家附近兜底，仍无解跳过
+          let p = this.canSpawnAt(fx.x, fx.y, fx.enemyType) ? fx : this.findClearSpawnNearPlayer(fx.enemyType);
+          if (p) {
+            const enemy = this.initEnemy({ x: p.x, y: p.y, type: fx.enemyType, triggerId: fx.triggerId || null });
+            this.enemies.push(enemy);
+          }
           return false;
         }
         return true;
@@ -2646,33 +2913,165 @@ export function createGameScene(ctx) {
     }
 
     fireTrigger(t) {
-      if (t.action === 'spawnEnemy') {
-        this.triggerSpawnEnemy(t);
-        return;
+      const st = this.triggerState.get(t.id) || { inside: false, lastFire: -1e9, waveIndex: 0 };
+      for (const ev of (t.events || [])) {
+        if (ev.when === 'enemiesCleared') {
+          // 异步事件：等待本触发器召唤的敌人被全部击败后触发
+          const pending = st.pendingClearEvents || (st.pendingClearEvents = []);
+          if (!pending.includes(ev)) pending.push(ev);
+        } else {
+          this.dispatchTriggerEvent(t, ev);
+        }
       }
-      if (t.action === 'switchLevel') {
-        this.beginSwitch(t);
-        return;
-      }
-      if (t.action === 'spawnGate') {
-        this.setGatesActive(t, true);
-        return;
-      }
-      if (t.action === 'removeGate') {
-        this.setGatesActive(t, false);
-        return;
-      }
-      this.state = 'end';
-      this.settleVictory();
+      this.triggerState.set(t.id, st);
     }
 
-    setGatesActive(t, activate) {
+    dispatchTriggerEvent(t, ev) {
+      if (ev.type === 'spawnEnemy') {
+        this.triggerSpawnEnemy(t, ev);
+      } else if (ev.type === 'switchLevel') {
+        this.beginSwitch(ev);
+      } else if (ev.type === 'spawnGate') {
+        this.setGatesActive(ev, true, t);
+      } else if (ev.type === 'removeGate') {
+        this.setGatesActive(ev, false, t);
+      } else if (ev.type === 'combat') {
+        this.setHudMode('combat');
+      } else if (ev.type === 'roomComplete') {
+        this.setHudMode('secure', { autoReturn: { mode: 'explore', delay: 1500 } });
+      } else if (ev.type === 'complete') {
+        this.state = 'end';
+        this.settleVictory();
+      }
+    }
+
+    // 本触发器是否还有未生成完的敌人波次
+    triggerHasPendingWaves(t) {
+      const spawnEv = (t.events || []).find(e => e.type === 'spawnEnemy');
+      if (!spawnEv) return false;
+      const waves = spawnEv.spawn?.waves || [];
+      if (!waves.length) return false;
+      const st = this.triggerState.get(t.id);
+      return (st?.waveIndex || 0) < waves.length;
+    }
+
+    // 检查异步事件：触发器已被进入且其召唤的敌人全部被击败时触发
+    checkAsyncTriggerEvents() {
+      const l = ctx.state.level;
+      for (const t of l.triggers) {
+        const st = this.triggerState.get(t.id);
+        const pending = st?.pendingClearEvents;
+        if (!pending || !pending.length) continue;
+        // 仍有未生成的波次，等待生成完毕
+        if (this.triggerHasPendingWaves(t)) continue;
+        // 仍有本触发器召唤的存活敌人，等待击杀
+        if (this.enemies.some(e => e.alive && e.triggerId === t.id)) continue;
+        // 仍有本触发器的生成锁定动画（屏幕内随机敌人尚未落地），等待生成完成
+        if (this.lockEffects.some(fx => fx.triggerId === t.id)) continue;
+        const events = pending.splice(0, pending.length);
+        for (const ev of events) this.dispatchTriggerEvent(t, ev);
+        this.spawnChestsForTrigger(t.id);
+        this.spawnPortalsForTrigger(t.id);
+      }
+    }
+
+    hudColor(mode) {
+      return HUD_STATES[mode]?.color || '#ffffff';
+    }
+
+    setHudMode(mode, opts = {}) {
+      const from = this.hudMode;
+      this.hudMode = mode;
+      this.hudAnim = {
+        fromColor: this.hudColor(from),
+        toColor: this.hudColor(mode),
+        fromText: HUD_STATES[from]?.label || '',
+        toText: HUD_STATES[mode]?.label || '',
+        t: 0,
+        dur: HUD_TRANSITION_MS,
+        phase: 'switch'
+      };
+      if (opts.autoReturn) {
+        this.time.delayedCall(opts.autoReturn.delay, () => this.setHudMode(opts.autoReturn.mode || 'explore'));
+      }
+    }
+
+    updateHud(dt) {
+      if (this.hudAnim) {
+        this.hudAnim.t += dt;
+        if (this.hudAnim.t >= this.hudAnim.dur) {
+          const phase = this.hudAnim.phase;
+          this.hudAnim = null;
+          // 脉冲第一段（当前色 → 黑）结束后接第二段（黑 → 当前色）
+          if (phase === 'idleBlack') {
+            this.hudAnim = {
+              fromColor: '#000000',
+              toColor: this.hudColor(this.hudMode),
+              fromText: HUD_STATES[this.hudMode]?.label || '',
+              toText: HUD_STATES[this.hudMode]?.label || '',
+              t: 0,
+              dur: HUD_TRANSITION_MS,
+              phase: 'idleBack'
+            };
+          }
+        }
+      }
+
+      if (this.state === 'playing' && !this.hudAnim) {
+        this.hudIdleClock -= dt;
+        if (this.hudIdleClock <= 0) {
+          this.hudIdleClock = HUD_IDLE_MS;
+          this.hudAnim = {
+            fromColor: this.hudColor(this.hudMode),
+            toColor: '#000000',
+            fromText: HUD_STATES[this.hudMode]?.label || '',
+            toText: HUD_STATES[this.hudMode]?.label || '',
+            t: 0,
+            dur: HUD_TRANSITION_MS,
+            phase: 'idleBlack'
+          };
+        }
+      } else if (this.state === 'playing') {
+        this.hudIdleClock = HUD_IDLE_MS;
+      }
+    }
+
+    drawHudIndicator() {
+      const g = this.uiG;
+      const st = HUD_STATES[this.hudMode] || HUD_STATES.explore;
+      let label = st.label;
+      let textColor = st.text || '#000000';
+
+      if (this.hudAnim) {
+        const p = Math.min(1, this.hudAnim.t / this.hudAnim.dur);
+        const w = HUD_RECT_W * p;   // 左到右：左半目标色，右半来源色
+        g.fillStyle(color(this.hudAnim.toColor), 1);
+        g.fillRect(HUD_RECT_X, HUD_RECT_Y, w, HUD_RECT_H);
+        g.fillStyle(color(this.hudAnim.fromColor), 1);
+        g.fillRect(HUD_RECT_X + w, HUD_RECT_Y, HUD_RECT_W - w, HUD_RECT_H);
+        label = this.hudAnim.toText;
+        if (this.hudAnim.toColor === '#000000') textColor = '#ffffff';
+      } else {
+        g.fillStyle(color(st.color), 1);
+        g.fillRect(HUD_RECT_X, HUD_RECT_Y, HUD_RECT_W, HUD_RECT_H);
+      }
+
+      if (this.hudIndicatorText) {
+        this.hudIndicatorText.setPosition(HUD_RECT_X + HUD_RECT_W / 2, HUD_RECT_Y + HUD_RECT_H / 2);
+        this.hudIndicatorText.setText(label || st.label);
+        this.hudIndicatorText.setColor(textColor);
+        this.hudIndicatorText.setVisible(true);
+      }
+    }
+
+    setGatesActive(ev, activate, trigger) {
       if (!this.gates?.length) return;
-      let targets = (Array.isArray(t.gateIds) ? t.gateIds : t.gateId ? [t.gateId] : [])
+      let targets = (Array.isArray(ev.gateIds) ? ev.gateIds : ev.gateId ? [ev.gateId] : [])
         .map(id => this.gates.find(gt => gt.id === id)).filter(Boolean);
       if (!targets.length) {
+        const ref = trigger || ev;
         const nearest = this.gates.reduce((best, gt) =>
-          !best || Math.hypot(gt.x - t.x, gt.y - t.y) < Math.hypot(best.x - t.x, best.y - t.y) ? gt : best, null);
+          !best || Math.hypot(gt.x - ref.x, gt.y - ref.y) < Math.hypot(best.x - ref.x, best.y - ref.y) ? gt : best, null);
         targets = nearest ? [nearest] : [];
       }
       for (const gate of targets) {
@@ -2692,8 +3091,8 @@ export function createGameScene(ctx) {
         .map(gt => ({ x: gt.x, y: gt.y, w: gt.w, h: gt.h * 1.42, shape: 'rect', rotation: gt.rotation || 0 }));
     }
 
-    triggerSpawnEnemy(t) {
-      const spawn = t.spawn || {};
+    triggerSpawnEnemy(t, ev) {
+      const spawn = ev.spawn || {};
       const waves = Array.isArray(spawn.waves) && spawn.waves.length ? spawn.waves : [];
       if (!waves.length) return;
 
@@ -2705,6 +3104,8 @@ export function createGameScene(ctx) {
       rt.waveIndex = startIndex;
       this.triggerState.set(t.id, rt);
 
+      // runTriggerWave/spawnInScreen/createSpawnEffect 仍从 t.spawn 读取波次配置
+      t.spawn = spawn;
       this.runTriggerWave(t, startIndex, waves[startIndex].preDelay || 0);
     }
 
@@ -2768,8 +3169,9 @@ export function createGameScene(ctx) {
     hasPendingSpawnWaves() {
       const l = ctx.state.level;
       for (const t of l.triggers) {
-        if (t.action !== 'spawnEnemy') continue;
-        const waves = t.spawn?.waves || [];
+        const spawnEv = (t.events || []).find(e => e.type === 'spawnEnemy');
+        if (!spawnEv) continue;
+        const waves = spawnEv.spawn?.waves || [];
         if (!waves.length) continue;
         const st = this.triggerState.get(t.id);
         const waveIndex = st?.waveIndex || 0;
@@ -2783,12 +3185,13 @@ export function createGameScene(ctx) {
       for (const t of l.triggers) {
         const inside = hitTrigger(t, this.player.x, this.player.y);
         const st = this.triggerState.get(t.id) || { inside: false, lastFire: -1e9, waveIndex: 0 };
+        const spawnEv = (t.events || []).find(e => e.type === 'spawnEnemy');
 
-        if (!inside && st.inside && t.action === 'spawnEnemy' && t.spawn?.stopOnExit) {
+        if (!inside && st.inside && spawnEv && spawnEv.spawn?.stopOnExit) {
           this.stopTriggerSpawn(t);
         }
 
-        if (t.action === 'switchLevel' || t.once !== false) {
+        if ((t.events || []).some(e => e.type === 'switchLevel') || t.once !== false) {
           if (this.triggered.has(t.id)) {
             st.inside = inside;
             this.triggerState.set(t.id, st);
@@ -2807,7 +3210,7 @@ export function createGameScene(ctx) {
           st.lastFire = this.time.now;
           this.fireTrigger(t);
         }
-        if (!inside && st.inside && t.action === 'spawnEnemy' && t.spawn?.resumeOnReturn === false) {
+        if (!inside && st.inside && spawnEv && spawnEv.spawn?.resumeOnReturn === false) {
           st.waveIndex = 0;
         }
         st.inside = inside;
@@ -2815,12 +3218,12 @@ export function createGameScene(ctx) {
       }
     }
 
-    beginSwitch(t) {
+    beginSwitch(ev) {
       this.transition = {
         phase: 'out',
         alpha: 0,
-        target: t.target,
-        spawnPoint: t.spawnPoint,
+        target: ev.target,
+        spawnPoint: ev.spawnPoint,
         switching: false
       };
       this.state = 'transition';
@@ -2864,7 +3267,11 @@ export function createGameScene(ctx) {
 
     pointerDown(p) {
       if (!this.editing) {
-        if (this.menuScreen) { this.onUIPointer(p); return; }
+        if (this.menuScreen) {
+          if (this.menuScreen === 'workshop' && this.handleWorkshopPointerDown()) return;
+          this.onUIPointer(p);
+          return;
+        }
         if (this.isMenuLevel()) {
           const up = this.uiPointer();
           for (const id in this.loginButtonRects) {
@@ -2876,6 +3283,15 @@ export function createGameScene(ctx) {
             }
           }
           return;
+        }
+        if (this.state === 'playing' && this.settingsButtonRect) {
+          const up = this.uiPointer();
+          const r = this.settingsButtonRect;
+          if (up.x >= r.x && up.x <= r.x + r.w && up.y >= r.y && up.y <= r.y + r.h) {
+            this.pressAnim('settingsBtn');
+            this.openSettingsOverlay();
+            return;
+          }
         }
         if (this.state === 'paused') { this.onUIPointer(p); return; }
         if (this.state === 'end' || this.state === 'fail') this.restart();
@@ -2903,9 +3319,12 @@ export function createGameScene(ctx) {
       const selectedGate = selected && l.gates.includes(selected);
       const selectedZone = selected && (l.spawnZones || []).includes(selected);
       const selectedVendor = selected && (l.vendors || []).includes(selected);
+      const selectedIdol = selected && (l.idols || []).includes(selected);
+      const selectedIcon = selected && (l.icons || []).includes(selected);
+      const selectedPortal = selected && (l.portals || []).includes(selected);
 
-      if (tool === 'select' && selected && (selectedWall || selectedTrigger || selectedImage || selectedGate || selectedZone || selectedVendor)) {
-        if ((selectedWall || selectedGate) && rotationHandleAt(selected, wp.x, wp.y)) {
+      if (tool === 'select' && selected && (selectedWall || selectedTrigger || selectedImage || selectedGate || selectedZone || selectedVendor || selectedIdol || selectedIcon || selectedPortal)) {
+        if ((selectedWall || selectedGate || selectedPortal) && rotationHandleAt(selected, wp.x, wp.y)) {
           this.drag = { mode: 'rotate', entity: selected };
           return;
         }
@@ -2945,6 +3364,12 @@ export function createGameScene(ctx) {
             l.gates = l.gates.filter(gt => gt !== hit.entity);
           } else if (hit.type === 'vendor') {
             l.vendors = l.vendors.filter(v => v !== hit.entity);
+          } else if (hit.type === 'idol') {
+            l.idols = l.idols.filter(v => v !== hit.entity);
+          } else if (hit.type === 'icon') {
+            l.icons = (l.icons || []).filter(v => v !== hit.entity);
+          } else if (hit.type === 'portal') {
+            l.portals = (l.portals || []).filter(v => v !== hit.entity);
           } else if (hit.type === 'spawnZone') {
             l.spawnZones = (l.spawnZones || []).filter(z => z !== hit.entity);
           } else if (hit.type === 'background') {
@@ -2957,6 +3382,9 @@ export function createGameScene(ctx) {
           && !l.images.includes(selected)
           && !l.gates.includes(selected)
           && !l.vendors.includes(selected)
+          && !l.idols.includes(selected)
+          && !(l.icons || []).includes(selected)
+          && !(l.portals || []).includes(selected)
           && !(l.spawnZones || []).includes(selected)
           && selected !== l.background) {
           ctx.state.selected = null;
@@ -2964,12 +3392,12 @@ export function createGameScene(ctx) {
       } else if (tool === 'wall') {
         l.walls.push({ id: `wall-${Date.now()}`, x, y, w: CELL * 4, h: CELL * 3, shape: 'rect', thickness: CELL, visible: true, color: DEFAULT_WALL_COLOR });
       } else if (tool === 'enemy') {
-        l.enemies.push(normalizeEnemy({ x, y }, l.enemies.length));
+        l.enemies.push(normalizeEnemy({ x, y, id: `enemy-${Date.now()}` }, l.enemies.length));
       } else if (tool === 'spawn') {
         l.spawn = { ...l.spawn, x, y };
         ctx.state.selected = l.spawn;
       } else if (tool === 'trigger') {
-        l.triggers.push({ id: `trigger-${Date.now()}`, x, y, w: CELL * 3, h: CELL * 2, shape: 'rect', color: '#f3b63f', visible: true, action: 'complete', once: true, resumeOnReturn: true });
+        l.triggers.push({ id: `trigger-${Date.now()}`, x, y, w: CELL * 3, h: CELL * 2, shape: 'rect', color: '#f3b63f', visible: true, once: true, resumeOnReturn: true, events: [{ type: 'complete' }] });
       } else if (tool === 'gate') {
         const gate = { id: `gate-${Date.now()}`, x, y, w: CELL * 8, h: 45, label: 'Barrier Active', active: false, visible: true };
         l.gates.push(gate);
@@ -2978,16 +3406,28 @@ export function createGameScene(ctx) {
         const vendor = { id: `vendor-${Date.now()}`, x, y, w: 130, h: 96, interactRadius: 120, visible: true };
         (l.vendors || (l.vendors = [])).push(vendor);
         ctx.state.selected = vendor;
+      } else if (tool === 'idol') {
+        const idol = { id: `idol-${Date.now()}`, x, y, w: 110, h: 110, interactRadius: 130, visible: true };
+        (l.idols || (l.idols = [])).push(idol);
+        ctx.state.selected = idol;
+      } else if (tool === 'icon') {
+        const icon = { id: `icon-${Date.now()}`, x, y, w: 64, h: 64, src: '', interactRadius: 120, tipText: '按 F 交互', event: 'workshop', visible: true };
+        (l.icons || (l.icons = [])).push(icon);
+        ctx.state.selected = icon;
+      } else if (tool === 'portal') {
+        const portal = normalizePortal({ x, y }, (l.portals || []).length);
+        (l.portals || (l.portals = [])).push(portal);
+        ctx.state.selected = portal;
       } else if (tool === 'spawnzone') {
         const zone = { id: `spawnzone-${Date.now()}`, x, y, w: CELL * 10, h: CELL * 6, color: '#7ee787', visible: true };
         (l.spawnZones || (l.spawnZones = [])).push(zone);
         ctx.state.selected = zone;
       } else if (tool === 'crate') {
-        l.crates.push(normalizeCrate({ x, y }, l.crates.length));
+        l.crates.push(normalizeCrate({ x, y, id: `crate-${Date.now()}` }, l.crates.length));
       } else if (tool === 'barrel') {
-        l.barrels.push(normalizeBarrel({ x, y }, l.barrels.length));
+        l.barrels.push(normalizeBarrel({ x, y, id: `barrel-${Date.now()}` }, l.barrels.length));
       } else if (tool === 'chest') {
-        const chest = normalizeChest({ x, y }, l.chests.length);
+        const chest = normalizeChest({ x, y, id: `chest-${Date.now()}` }, l.chests.length);
         l.chests.push(chest);
         ctx.state.selected = chest;
       } else {
@@ -3005,7 +3445,13 @@ export function createGameScene(ctx) {
     }
 
     pointerMove(p) {
-      if (!this.editing) return;
+      if (!this.editing) {
+        if (this.menuScreen === 'workshop') {
+          this.updateWorkshopLongPress();
+          this.updateWorkshopScrollDrag();
+        }
+        return;
+      }
 
       if (this.panning) {
         const cam = this.cameras.main;
@@ -3041,8 +3487,36 @@ export function createGameScene(ctx) {
 
       ctx.redraw();
     }
+    updateEditorKeys() {
+      const sel = ctx.state.selected;
+      if (!sel || typeof sel.x !== 'number' || typeof sel.y !== 'number') return;
+
+      // 玩家正在侧边栏输入框打字时，不响应方向键，避免误移动实体
+      const el = document.activeElement;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA')) return;
+
+      let dx = 0, dy = 0;
+      if (Phaser.Input.Keyboard.JustDown(this.keys.LEFT)) dx = -CELL;
+      else if (Phaser.Input.Keyboard.JustDown(this.keys.RIGHT)) dx = CELL;
+      else if (Phaser.Input.Keyboard.JustDown(this.keys.UP)) dy = -CELL;
+      else if (Phaser.Input.Keyboard.JustDown(this.keys.DOWN)) dy = CELL;
+      else return;
+
+      ctx.pushUndo?.();
+      sel.x = snap(sel.x + dx);
+      sel.y = snap(sel.y + dy);
+      ctx.redraw?.();
+    }
     update(_, dt) {
-      if (this.editing) return this.draw();
+      if (this.editing) {
+        this.updateEditorKeys();
+        return this.draw();
+      }
+
+      if (this.menuScreen === 'workshop') {
+        this.updateWorkshopLongPress();
+        this.updateWorkshopScrollDrag();
+      }
 
       if (this.gates) {
         for (const gt of this.gates) {
@@ -3064,6 +3538,12 @@ export function createGameScene(ctx) {
       }
 
       if (this.keys.ESC && Phaser.Input.Keyboard.JustDown(this.keys.ESC)) {
+        if (this.settingsMode) {
+          if (this.settingsMode === 'confirm') this.settingsMode = 'menu';
+          else this.closeSettingsOverlay();
+          this.draw();
+          return;
+        }
         if (this.menuScreen) {
           this.closeMenuScreen();
           this.draw();
@@ -3197,6 +3677,7 @@ export function createGameScene(ctx) {
             this.bullets.push(s);
           }
           if (currentAmmo !== Infinity) this.player.ammo[wt] = currentAmmo - 1;
+          this.tryRefillWeapon(wt);
           const attackSpeed = this.player.combat?.attackSpeed ?? 1;
           let interval = this.player.weapon.fireInterval || 120;
           // 转速改件：射速 +50%（间隔缩为 2/3）
@@ -3333,6 +3814,7 @@ export function createGameScene(ctx) {
 
       this.updateDrops(dt);
       this.updateChests(dt);
+      this.updatePortals(dt);
       this.hitEffects = this.hitEffects.filter(h => (h.ttl -= dt) > 0);
 
       this.crateDebris = this.crateDebris.filter(d => {
@@ -3366,21 +3848,17 @@ export function createGameScene(ctx) {
         if (this.wheelAnim.t >= this.wheelAnim.dur) this.wheelAnim = null;
       }
 
+      this.updateHud(dt);
       this.updateTriggers();
+      this.checkAsyncTriggerEvents();
 
       this.updateNewbee(dt);
 
       this.updateHubInteract(dt);
       this.updateVendorInteract(dt);
-
-      if (this.state === 'playing' && !this.isNewbeeLevel() && !this.isHubLevel()
-        && this.enemies.length && this.enemies.every(e => !e.alive)
-        && !this.hasPendingSpawnWaves()) {
-        if (!this.isMenuLevel()) {
-          this.state = 'end';
-          this.settleVictory();
-        }
-      }
+      this.updateIdolInteract(dt);
+      this.updateIconInteract(dt);
+      this.updatePortalInteract(dt);
 
       this.updatePlayCamera(dt);
       this.syncUIState();
@@ -3765,6 +4243,431 @@ export function createGameScene(ctx) {
       }
     }
 
+    syncIdolSprites() {
+      if (!this.textures.exists(IDOL_TEX_KEY)) return;
+
+      const idols = this.editing ? (ctx.state.level.idols || []) : (this.idols || []);
+      const seen = new Set();
+      for (const v of idols) {
+        seen.add(v.id);
+        let img = this.idolSprites.get(v.id);
+        if (!img) {
+          img = this.add.image(v.x, v.y, IDOL_TEX_KEY).setOrigin(0.5).setDepth(9);
+          if (this.uiCam) this.uiCam.ignore(img);
+          this.idolSprites.set(v.id, img);
+        }
+        img.setPosition(v.x, v.y);
+        const tw = img.frame?.width || 1145;
+        const th = img.frame?.height || 1098;
+        img.setScale(Math.min(v.w / tw, v.h / th));
+        img.setVisible(v.visible !== false);
+      }
+
+      for (const [id, img] of this.idolSprites) {
+        if (!seen.has(id)) {
+          img.destroy();
+          this.idolSprites.delete(id);
+        }
+      }
+    }
+
+    syncIconSprites() {
+      const icons = this.editing ? (ctx.state.level.icons || []) : (this.icons || []);
+      for (const ic of icons) {
+        if (!ic.src) continue;
+        const key = `__icon_${ic.id}__`;
+        let sprite = this.iconSprites.get(ic.id);
+
+        if (sprite && sprite.getData('src') !== ic.src) {
+          sprite.destroy();
+          this.iconSprites.delete(ic.id);
+          if (this.textures.exists(key)) this.textures.remove(key);
+          sprite = null;
+        }
+
+        if (!sprite) {
+          if (this.textures.exists(key)) {
+            sprite = this.add.image(ic.x, ic.y, key).setOrigin(0.5).setDepth(9);
+            sprite.setData('src', ic.src);
+            if (this.uiCam) this.uiCam.ignore(sprite);
+            this.iconSprites.set(ic.id, sprite);
+          } else if (!this.iconLoading.has(key)) {
+            this.iconLoading.add(key);
+            this.load.once(`filecomplete-image-${key}`, () => {
+              this.iconLoading.delete(key);
+              this.syncIconSprites();
+            });
+            this.load.image(key, ic.src);
+            this.load.start();
+          }
+          continue;
+        }
+
+        sprite.setPosition(ic.x, ic.y);
+        sprite.setVisible(this.editing || ic.visible !== false);
+        const tw = sprite.frame?.width || ic.w;
+        const th = sprite.frame?.height || ic.h;
+        sprite.setScale(Math.min(ic.w / tw, ic.h / th));
+      }
+
+      const seen = new Set(icons.filter(i => i.src).map(i => i.id));
+      for (const [id, sprite] of this.iconSprites) {
+        if (!seen.has(id)) {
+          sprite.destroy();
+          this.iconSprites.delete(id);
+        }
+      }
+    }
+
+    // 无图标的可交互图标：世界图形占位（编辑与游戏均显示，src 为空时由 sprite 接管）
+    drawIcons(g) {
+      const icons = this.editing ? (ctx.state.level.icons || []) : (this.icons || []);
+      for (const ic of icons) {
+        if (!this.editing && ic.visible === false) continue;
+        if (ic.src) continue;
+        const r = Math.max(10, Math.min(ic.w || 64, ic.h || 64) / 2);
+        g.fillStyle(0x1b3a57, 0.92);
+        g.fillCircle(ic.x, ic.y, r);
+        g.lineStyle(2, 0x6fd3ff, 0.95);
+        g.strokeCircle(ic.x, ic.y, r);
+        g.fillStyle(0x6fd3ff, 1);
+        g.fillCircle(ic.x, ic.y - r * 0.35, Math.max(1.5, r * 0.12));
+        g.fillRect(ic.x - 1.5, ic.y - r * 0.05, 3, r * 0.55);
+      }
+    }
+
+    // 传送门文字标签（EVACUATION）：编辑态显示全部，游戏态仅显示已出现的
+    syncPortalSprites() {
+      const portals = this.editing
+        ? (ctx.state.level.portals || [])
+        : (this.portals || []).filter(p => p.spawned && p.visible !== false);
+
+      const seen = new Set();
+      for (const p of portals) {
+        seen.add(p.id);
+        let t = this.portalTexts.get(p.id);
+        if (!t) {
+          t = this.add.text(p.x, p.y, PORTAL_LABEL, {
+            fontFamily: FONT_TECH, fontSize: '12px', color: '#000000', fontStyle: 'bold'
+          }).setOrigin(0.5).setDepth(10).setAlpha(PORTAL_ALPHA);
+          if (this.uiCam) this.uiCam.ignore(t);
+          this.portalTexts.set(p.id, t);
+        }
+        t.setPosition(p.x, p.y);
+        t.setRotation(Phaser.Math.DegToRad(p.rotation || 0));
+        t.setFontSize(Math.max(10, Math.round(p.h * 0.26)));
+        t.setAlpha(PORTAL_ALPHA);
+        t.setVisible(true);
+      }
+
+      for (const [id, t] of this.portalTexts) {
+        if (!seen.has(id)) {
+          t.destroy();
+          this.portalTexts.delete(id);
+        }
+      }
+    }
+
+    // 神像：F 键互动（靠近显示提示，交互后弹出 3 张属性卡，选 1 生效且不可再用）
+    updateIdolInteract(dt) {
+      if (this.editing || this.state !== 'playing') {
+        this.idolNearest = null;
+        this.idolTipT = 0;
+        return;
+      }
+      const p = this.player;
+      if (!p) return;
+
+      let nearest = null, nearestDist = Infinity;
+      for (const v of (this.idols || [])) {
+        if (v.used || v.visible === false) continue;
+        const halfDiag = Math.hypot(v.w, v.h) / 2;
+        const reach = Math.max(v.interactRadius || 130, halfDiag + p.r + 40);
+        const d = Math.hypot(p.x - v.x, p.y - v.y);
+        if (d < reach && d < nearestDist) { nearestDist = d; nearest = v; }
+      }
+      this.idolNearest = nearest;
+      this.idolTipT = nearest ? Math.min(1, (this.idolTipT || 0) + dt / 180) : 0;
+
+      if (nearest && this.keys.F && Phaser.Input.Keyboard.JustDown(this.keys.F)) {
+        this.openIdolOffer(nearest);
+      }
+    }
+
+    // 可交互图标：F 键互动（靠近显示提示，按 F 打开对应菜单页）
+    updateIconInteract(dt) {
+      if (this.editing || this.state !== 'playing') {
+        this.iconNearest = null;
+        this.iconTipT = 0;
+        return;
+      }
+      const p = this.player;
+      if (!p) return;
+
+      let nearest = null, nearestDist = Infinity;
+      for (const v of (this.icons || [])) {
+        if (v.visible === false) continue;
+        const halfDiag = Math.hypot(v.w, v.h) / 2;
+        const reach = Math.max(v.interactRadius || 120, halfDiag + p.r + 40);
+        const d = Math.hypot(p.x - v.x, p.y - v.y);
+        if (d < reach && d < nearestDist) { nearestDist = d; nearest = v; }
+      }
+      this.iconNearest = nearest;
+      this.iconTipT = nearest ? Math.min(1, (this.iconTipT || 0) + dt / 180) : 0;
+
+      if (nearest && this.keys.F && Phaser.Input.Keyboard.JustDown(this.keys.F)) {
+        this.triggerIconEvent(nearest);
+      }
+    }
+
+    triggerIconEvent(icon) {
+      if (!icon) return;
+      if (icon.event === 'weapon') this.openMenuScreen('weapon');
+      else if (icon.event === 'battle') this.openMenuScreen('levelSelect');
+      else this.openMenuScreen('workshop');
+    }
+
+    // 传送门：F 键互动（靠近显示「撤离」提示，交互后触发整体通关）
+    updatePortalInteract(dt) {
+      if (this.editing || this.state !== 'playing') {
+        this.portalNearest = null;
+        this.portalTipT = 0;
+        return;
+      }
+      const p = this.player;
+      if (!p) return;
+
+      let nearest = null, nearestDist = Infinity;
+      for (const v of (this.portals || [])) {
+        if (!v.spawned || v.used || v.visible === false) continue;
+        const halfDiag = Math.hypot(v.w, v.h) / 2;
+        const reach = Math.max(v.interactRadius || 90, halfDiag + p.r + 40);
+        const d = Math.hypot(p.x - v.x, p.y - v.y);
+        if (d < reach && d < nearestDist) { nearestDist = d; nearest = v; }
+      }
+      this.portalNearest = nearest;
+      this.portalTipT = nearest ? Math.min(1, (this.portalTipT || 0) + dt / 180) : 0;
+
+      if (nearest && this.keys.F && Phaser.Input.Keyboard.JustDown(this.keys.F)) {
+        this.usePortal(nearest);
+      }
+    }
+
+    drawPortalUI(g) {
+      const alpha = this.portalTipT ?? 0;
+      if (alpha <= 0 || !this.portalNearest || this.editing || this.state !== 'playing') {
+        this.portalTipText?.setVisible(false);
+        return;
+      }
+
+      const p = this.player;
+      const nv = this.portalNearest;
+      const halfDiag = Math.hypot(nv.w, nv.h) / 2;
+      const reach = Math.max(nv.interactRadius || 90, halfDiag + p.r + 40);
+      g.lineStyle(2, 0xffd54f, 0.7 * alpha);
+      g.strokeCircle(nv.x, nv.y, reach);
+
+      const tx = p.x + 20, ty = p.y - 20;
+      const w = 200, h = 44, skew = 18;
+      g.fillStyle(0xffffff, 0.92 * alpha);
+      g.beginPath();
+      g.moveTo(tx + skew, ty - h / 2);
+      g.lineTo(tx + w, ty - h / 2);
+      g.lineTo(tx + w - skew, ty + h / 2);
+      g.lineTo(tx, ty + h / 2);
+      g.closePath();
+      g.fillPath();
+
+      if (!this.portalTipText) {
+        this.portalTipText = this.add.text(0, 0, '', {
+          fontFamily: FONT_TECH_SC, fontSize: '22px', color: '#000000'
+        }).setOrigin(0, 0.5).setDepth(13);
+        if (this.uiCam) this.uiCam.ignore(this.portalTipText);
+      }
+      const tip = this.portalTipText;
+      tip.setText('撤离');
+      tip.setPosition(tx + skew + 42, ty);
+      tip.setAlpha(alpha);
+      tip.setVisible(true);
+
+      const badge = this.getFKeyBadge();
+      if (badge) {
+        badge.setPosition(tx + skew + 21, ty);
+        badge.setAlpha(alpha);
+        badge.setVisible(true);
+      }
+    }
+
+    drawIdolUI(g) {
+      const alpha = this.idolTipT ?? 0;
+      if (alpha <= 0 || !this.idolNearest || this.editing || this.state !== 'playing') {
+        this.idolTipText?.setVisible(false);
+        return;
+      }
+
+      const p = this.player;
+      const nv = this.idolNearest;
+      const halfDiag = Math.hypot(nv.w, nv.h) / 2;
+      const reach = Math.max(nv.interactRadius || 130, halfDiag + p.r + 40);
+      g.lineStyle(2, 0xffd54f, 0.7 * alpha);
+      g.strokeCircle(nv.x, nv.y, reach);
+
+      const tx = p.x + 20, ty = p.y - 20;
+      const w = 200, h = 44, skew = 18;
+      g.fillStyle(0xffffff, 0.92 * alpha);
+      g.beginPath();
+      g.moveTo(tx + skew, ty - h / 2);
+      g.lineTo(tx + w, ty - h / 2);
+      g.lineTo(tx + w - skew, ty + h / 2);
+      g.lineTo(tx, ty + h / 2);
+      g.closePath();
+      g.fillPath();
+
+      if (!this.idolTipText) {
+        this.idolTipText = this.add.text(0, 0, '', {
+          fontFamily: FONT_TECH_SC, fontSize: '22px', color: '#000000'
+        }).setOrigin(0, 0.5).setDepth(13);
+        if (this.uiCam) this.uiCam.ignore(this.idolTipText);
+      }
+      const tip = this.idolTipText;
+      tip.setText('神像');
+      tip.setPosition(tx + skew + 42, ty);
+      tip.setAlpha(alpha);
+      tip.setVisible(true);
+
+      const badge = this.getFKeyBadge();
+      if (badge) {
+        badge.setPosition(tx + skew + 21, ty);
+        badge.setAlpha(alpha);
+        badge.setVisible(true);
+      }
+    }
+
+    drawIconUI(g) {
+      const alpha = this.iconTipT ?? 0;
+      if (alpha <= 0 || !this.iconNearest || this.editing || this.state !== 'playing') {
+        this.iconTipText?.setVisible(false);
+        return;
+      }
+
+      const p = this.player;
+      const nv = this.iconNearest;
+      const halfDiag = Math.hypot(nv.w, nv.h) / 2;
+      const reach = Math.max(nv.interactRadius || 120, halfDiag + p.r + 40);
+      g.lineStyle(2, 0xffd54f, 0.7 * alpha);
+      g.strokeCircle(nv.x, nv.y, reach);
+
+      const tx = p.x + 20, ty = p.y - 20;
+      const w = 200, h = 44, skew = 18;
+      g.fillStyle(0xffffff, 0.92 * alpha);
+      g.beginPath();
+      g.moveTo(tx + skew, ty - h / 2);
+      g.lineTo(tx + w, ty - h / 2);
+      g.lineTo(tx + w - skew, ty + h / 2);
+      g.lineTo(tx, ty + h / 2);
+      g.closePath();
+      g.fillPath();
+
+      if (!this.iconTipText) {
+        this.iconTipText = this.add.text(0, 0, '', {
+          fontFamily: FONT_TECH_SC, fontSize: '22px', color: '#000000'
+        }).setOrigin(0, 0.5).setDepth(13);
+        if (this.uiCam) this.uiCam.ignore(this.iconTipText);
+      }
+      const tip = this.iconTipText;
+      tip.setText(nv.tipText || '按 F 交互');
+      tip.setPosition(tx + skew + 42, ty);
+      tip.setAlpha(alpha);
+      tip.setVisible(true);
+
+      const badge = this.getFKeyBadge();
+      if (badge) {
+        badge.setPosition(tx + skew + 21, ty);
+        badge.setAlpha(alpha);
+        badge.setVisible(true);
+      }
+    }
+
+    // 打开神像祝福选择：随机 3 项基础属性加成
+    openIdolOffer(idol) {
+      if (this.idolOffer || !idol) return;
+      const pool = [...IDOL_BUFFS];
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+      this.idolOffer = { idol, cards: pool.slice(0, 3), animT: 0 };
+      if (this.state === 'playing') { this.prevState = 'playing'; this.state = 'paused'; }
+      this.syncUIState();
+    }
+
+    closeIdolOffer() {
+      if (!this.idolOffer) return;
+      this.idolOffer = null;
+      if (this.prevState === 'playing') { this.state = 'playing'; this.prevState = null; }
+      this.syncUIState();
+    }
+
+    chooseIdolBuff(index) {
+      const offer = this.idolOffer;
+      if (!offer) return;
+      const buff = offer.cards[index];
+      if (!buff) return;
+      this.player.combat = this.player.combat || {};
+      buff.apply(this);
+      offer.idol.used = true;
+      this.closeIdolOffer();
+    }
+
+    drawIdolOffer() {
+      const g = this.uiG;
+      const offer = this.idolOffer;
+      if (!offer) return;
+      this.idolOfferTexts = this.idolOfferTexts || new Map();
+      const ensure = (id, size, color) => {
+        let t = this.idolOfferTexts.get(id);
+        if (!t) {
+          t = this.add.text(0, 0, '', { fontFamily: FONT_TECH_SC, fontSize: size, color }).setDepth(1001);
+          this.cameras.main.ignore(t);
+          this.idolOfferTexts.set(id, t);
+        }
+        t.setVisible(true);
+        return t;
+      };
+
+      offer.animT = Math.min(1, (offer.animT ?? 0) + 0.016 * 5);
+      const ease = 1 - Math.pow(1 - offer.animT, 3);
+
+      g.fillStyle(0x000000, 0.65);
+      g.fillRect(0, 0, VIEW_W, VIEW_H);
+      ensure('idolTitle', '34px', '#ffffff').setOrigin(0.5).setPosition(VIEW_W / 2, 200).setText('选择一项祝福');
+
+      const cardW = 360, cardH = 300, gap = 48;
+      const totalW = cardW * 3 + gap * 2;
+      const startX = (VIEW_W - totalW) / 2;
+      const baseY = VIEW_H - 60 - cardH + (1 - ease) * 120;
+
+      for (let i = 0; i < 3; i++) {
+        const card = offer.cards[i];
+        if (!card) continue;
+        const cx = startX + i * (cardW + gap) + cardW / 2;
+        const cy = baseY + cardH / 2;
+        const hover = this.uiPointer();
+        const hov = hover.x >= cx - cardW / 2 && hover.x <= cx + cardW / 2 && hover.y >= baseY && hover.y <= baseY + cardH;
+
+        g.fillStyle(hov ? 0x1d3a57 : 0x12263d, 1);
+        g.fillRoundedRect(cx - cardW / 2, baseY, cardW, cardH, 14);
+        g.lineStyle(2, hov ? 0x6fd3ff : 0x31547a, 1);
+        g.strokeRoundedRect(cx - cardW / 2, baseY, cardW, cardH, 14);
+
+        ensure(`idolCard_${i}_name`, '28px', '#ffffff').setOrigin(0.5).setPosition(cx, baseY + 80).setText(card.name);
+        ensure(`idolCard_${i}_desc`, '20px', '#89a6c6').setOrigin(0.5).setPosition(cx, baseY + 150).setText(card.desc);
+        ensure(`idolCard_${i}_hint`, '16px', '#54708c').setOrigin(0.5).setPosition(cx, baseY + 230).setText('点击选择');
+
+        this.buttons.push({ id: `idolCard_${i}`, x: cx - cardW / 2, y: baseY, w: cardW, h: cardH });
+      }
+    }
+
     // 售货机：F 键互动（靠近显示提示，按 F 打开局内商店）
     updateVendorInteract(dt) {
       if (this.editing || this.state !== 'playing') {
@@ -3886,10 +4789,23 @@ export function createGameScene(ctx) {
       }
     }
 
+    // 传送门出现：复用宝箱的金色十字星特效
+    drawPortalEffects(g) {
+      if (this.editing) return;
+      for (const p of (this.portals || [])) {
+        if (!p.spawned || !p.fx || p.visible === false) continue;
+        const remaining = Math.max(0, p.fx.t);
+        const progress = 1 - remaining / CHEST_SPAWN_FX_MS; // 0..1
+        this.drawChestStar(g, p.x, p.y, progress, Math.max(p.w, p.h) * 1.6);
+      }
+    }
+
     draw() {
       const l = ctx.state.level;
       const g = this.g;
       const { w: ww, h: wh } = this.worldSize();
+
+      if (this.editing && this.hudIndicatorText) this.hudIndicatorText.setVisible(false);
 
       this.bgG.clear();
       this.bgG.fillStyle(color(l.backgroundColor));
@@ -3958,6 +4874,10 @@ export function createGameScene(ctx) {
 
       this.syncChestSprites();
       this.syncVendorSprites();
+      this.syncIdolSprites();
+      this.syncIconSprites();
+      this.drawIcons(g);
+      this.syncPortalSprites();
       const chests = this.editing ? (l.chests || []) : (this.chests || []).filter(c => c.spawned);
       if (this.editing) {
         chests.forEach(c => {
@@ -3968,6 +4888,36 @@ export function createGameScene(ctx) {
         });
       }
       this.drawChestEffects(g);
+
+      const portals = this.editing ? (l.portals || []) : (this.portals || []).filter(p => p.spawned && p.visible !== false);
+      portals.forEach(p => {
+        drawPortalShape(g, p.x, p.y, p.w, p.h, p.rotation || 0);
+        if (this.editing && ctx.state.selected === p) {
+          g.lineStyle(2, 0xffe083);
+          g.strokeCircle(p.x, p.y, p.interactRadius || 90);
+          const corners = wallCorners(p);
+          g.lineStyle(2, 0xffe083);
+          g.beginPath();
+          g.moveTo(corners[0].x, corners[0].y);
+          for (let i = 1; i < 4; i++) g.lineTo(corners[i].x, corners[i].y);
+          g.closePath();
+          g.strokePath();
+          for (const c of corners) {
+            g.fillStyle(0xffffff);
+            g.fillRect(c.x - 5, c.y - 5, 10, 10);
+          }
+          const r = wallRotationRad(p);
+          const cr = Math.cos(r), sr = Math.sin(r);
+          const off = ROTATE_HANDLE_OFFSET + p.h / 2;
+          const rhx = p.x + off * sr;
+          const rhy = p.y - off * cr;
+          g.lineStyle(1, 0xffffff, .8);
+          g.lineBetween(p.x, p.y, rhx, rhy);
+          g.fillStyle(0xffe083);
+          g.fillCircle(rhx, rhy, 6);
+        }
+      });
+      this.drawPortalEffects(g);
 
       drawGates(this, g, l, ctx.state.selected);
 
@@ -4049,7 +4999,7 @@ export function createGameScene(ctx) {
         this.drops.forEach(d => {
           if (d.type === 'gold') drawGoldHex(g, d.x, d.y);
           else {
-            g.fillStyle(d.type === 'charge' ? 0x3a7bff : 0xffffff);
+            g.fillStyle(d.type === 'charge' ? color(WEAPONS[d.weapon]?.ringColor || '#3a7bff') : 0xffffff);
             g.fillCircle(d.x, d.y, 3);
           }
         });
@@ -4063,6 +5013,9 @@ export function createGameScene(ctx) {
           this.drawNewbeeRects(g);
           this.drawHubUI(g);
           this.drawVendorUI(g);
+          this.drawIdolUI(g);
+          this.drawIconUI(g);
+          this.drawPortalUI(g);
           this.lasers.forEach(l => {
             g.lineStyle(l.width, color(l.color), 0.9);
             g.lineBetween(l.x0, l.y0, l.x1, l.y1);
@@ -4112,6 +5065,23 @@ export function createGameScene(ctx) {
         }
       }
 
+      if (this.editing && ctx.state.selected && (l.idols || []).includes(ctx.state.selected)) {
+        const v = ctx.state.selected;
+        g.lineStyle(2, 0x6fd3ff);
+        g.strokeRect(v.x - v.w / 2, v.y - v.h / 2, v.w, v.h);
+        for (const [hx, hy] of [
+          [v.x - v.w / 2, v.y - v.h / 2],
+          [v.x + v.w / 2, v.y - v.h / 2],
+          [v.x - v.w / 2, v.y + v.h / 2],
+          [v.x + v.w / 2, v.y + v.h / 2]
+        ]) {
+          g.fillStyle(0xffffff);
+          g.fillRect(hx - 5, hy - 5, 10, 10);
+        }
+        g.lineStyle(1, 0xffd54f, 0.5);
+        g.strokeCircle(v.x, v.y, v.interactRadius || 130);
+      }
+
       if (this.editing && ctx.state.selected && (l.vendors || []).includes(ctx.state.selected)) {
         const v = ctx.state.selected;
         g.lineStyle(2, 0x6fd3ff);
@@ -4127,6 +5097,23 @@ export function createGameScene(ctx) {
         }
         g.lineStyle(1, 0xffd54f, 0.5);
         g.strokeCircle(v.x, v.y, v.interactRadius || 120);
+      }
+
+      if (this.editing && ctx.state.selected && (l.icons || []).includes(ctx.state.selected)) {
+        const ic = ctx.state.selected;
+        g.lineStyle(2, 0x6fd3ff);
+        g.strokeRect(ic.x - ic.w / 2, ic.y - ic.h / 2, ic.w, ic.h);
+        for (const [hx, hy] of [
+          [ic.x - ic.w / 2, ic.y - ic.h / 2],
+          [ic.x + ic.w / 2, ic.y - ic.h / 2],
+          [ic.x - ic.w / 2, ic.y + ic.h / 2],
+          [ic.x + ic.w / 2, ic.y + ic.h / 2]
+        ]) {
+          g.fillStyle(0xffffff);
+          g.fillRect(hx - 5, hy - 5, 10, 10);
+        }
+        g.lineStyle(1, 0xffd54f, 0.5);
+        g.strokeCircle(ic.x, ic.y, ic.interactRadius || 120);
       }
 
       if (this.editing && ctx.state.selected && l.images.includes(ctx.state.selected)) {
@@ -4293,7 +5280,7 @@ export function createGameScene(ctx) {
       for (const item of HUB_INTERACTABLES) {
         const key = item.id;
         if (!this.hubIcons[key]) {
-          const spr = this.add.text(item.x, item.y, item.id === 'workshop' ? '⚒' : '🛒', {
+          const spr = this.add.text(item.x, item.y, ({ workshop: '⚒', weapon: '🛒', levelSelect: '🗺' })[item.id] || '🛒', {
             fontFamily: FONT_TECH_SC, fontSize: '48px'
           }).setOrigin(0.5).setDepth(12);
           if (this.uiCam) this.uiCam.ignore(spr);   // 仅主相机渲染（世界坐标），避免镜头层出现重复图标
@@ -4357,9 +5344,18 @@ export function createGameScene(ctx) {
       this.cameras.main.ignore(this.uiG);
       this.uiCam.ignore(this.g);
       this.uiCam.ignore(this.bgG);
+      this.workshopCardMaskG = this.add.graphics().setDepth(999);
+      this.workshopCardMaskG.fillStyle(0xffffff, 0);
+      this.workshopCardMaskG.fillRect(544, 120, 1312, 380);
+      this.workshopCardMask = new Phaser.Display.Masks.GeometryMask(this, this.workshopCardMaskG);
+      this.cameras.main.ignore(this.workshopCardMaskG);
       this.uiTexts = { battle: new Map(), interface: new Map(), login: new Map(), weapon: new Map(), workshop: new Map() };
       this.uiImages = { battle: new Map(), interface: new Map(), login: new Map(), weapon: new Map(), workshop: new Map() };
       this.workshopTexts = new Map();
+      this.settingsTexts = new Map();
+      this.settingsMode = null;
+      this.settingsPrev = null;
+      this.menuIconSprites = new Map();
       this.buttons = [];
 
       this.failTitle = this.add.text(VIEW_W / 2, VIEW_H / 2 - 40, '失败', {
@@ -4396,6 +5392,13 @@ export function createGameScene(ctx) {
         fontSize: '30px', color: '#ffffff', fontStyle: 'bold'
       }).setOrigin(0.5).setDepth(1001);
       this.cameras.main.ignore(this.ammoMax);
+
+      this.hudIndicatorText = this.add.text(0, 0, '', {
+        fontFamily: FONT_TECH,
+        fontSize: '34px', color: '#000000', fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(1001);
+      this.cameras.main.ignore(this.hudIndicatorText);
+      this.hudIndicatorText.setVisible(false);
 
       this.weaponIconImage = null;
       this.loadWeaponIcon();
@@ -4482,7 +5485,7 @@ export function createGameScene(ctx) {
       return !this.editing && ctx.state.mode === 'play';
     }
 
-    // 试玩模式：使用正式玩家存档数据，且改动会写回存档
+    // 试玩模式：与正式一致的实机流程，使用 state.player（试玩时该数据来自测试存档）
     isTrialMode() {
       return !this.editing && ctx.state.mode === 'trial';
     }
@@ -4514,11 +5517,13 @@ export function createGameScene(ctx) {
         exp: p.exp ?? 0,
         expToNext: p.expToNext ?? 100,
         gold: p.gold ?? 0,
-        charge: p.charge ?? 0,
         kills: this.kills,
         weaponLevel: p.weaponLevel ?? 1,
         weaponType: p.weaponType || 'radial',
         weapons: p.weapons || ['radial'],
+        loadout: p.loadout || ['radial'],
+        equipment: p.equipment || {},
+        items: p.items || { stacks: {}, uniques: [] },
         combat: p.combat || {},
         points: p.points || {},
         spendablePoints: p.spendablePoints ?? 0
@@ -4610,6 +5615,56 @@ export function createGameScene(ctx) {
       }
     }
 
+    // ---------- 选择关卡（levelSelect）：3 大关 + 每关 3 小关占位 ----------
+    drawLevelSelect() {
+      if (this.levelSelectOpen === undefined) this.levelSelectOpen = null;
+      const g = this.uiG;
+      this.levelSelectTexts = this.levelSelectTexts || new Map();
+      const ensure = (id, size, color) => {
+        let t = this.levelSelectTexts.get(id);
+        if (!t) {
+          t = this.add.text(0, 0, '', { fontFamily: FONT_TECH_SC, fontSize: size, color }).setDepth(1001);
+          this.cameras.main.ignore(t);
+          this.levelSelectTexts.set(id, t);
+        }
+        t.setVisible(true);
+        return t;
+      };
+
+      // 左侧：3 张大关卡卡
+      const bigW = 260, bigH = 420, gap = 40, startX = 300, topY = 300;
+      for (let n = 0; n < 3; n++) {
+        const big = n + 1;
+        const x = startX + n * (bigW + gap);
+        const y = topY;
+        const open = this.levelSelectOpen === n;
+        g.fillStyle(open ? 0x16324a : 0x0d1b2d, 1);
+        g.fillRoundedRect(x, y, bigW, bigH, 12);
+        g.lineStyle(2, open ? 0xffd54f : 0x6fd3ff, 1);
+        g.strokeRoundedRect(x, y, bigW, bigH, 12);
+        ensure(`big_${n}_title`, '34px', '#ffffff').setOrigin(0.5, 0).setPosition(x + bigW / 2, y + 26).setText(`Level ${big}`);
+        ensure(`big_${n}_num`, '20px', '#89a6c6').setOrigin(0.5).setPosition(x + bigW / 2, y + 150).setText(`${big}`);
+        ensure(`big_${n}_state`, '18px', '#54708c').setOrigin(0.5).setPosition(x + bigW / 2, y + bigH - 30).setText(open ? '点击收起' : '点击展开');
+        this.buttons.push({ id: `levelBig_${n}`, x, y, w: bigW, h: bigH, node: { n } });
+      }
+
+      // 右侧：展开后绘制 3 张小关卡卡
+      if (this.levelSelectOpen !== null && this.levelSelectOpen >= 0 && this.levelSelectOpen <= 2) {
+        const big = this.levelSelectOpen + 1;
+        const smallW = 260, smallH = 110, smallGap = 30, smallX = 1260, smallY = topY;
+        for (let s = 1; s <= 3; s++) {
+          const x = smallX;
+          const y = smallY + (s - 1) * (smallH + smallGap);
+          g.fillStyle(0x0d1b2d, 1);
+          g.fillRoundedRect(x, y, smallW, smallH, 10);
+          g.lineStyle(2, 0x6fd3ff, 1);
+          g.strokeRoundedRect(x, y, smallW, smallH, 10);
+          ensure(`small_${big}_${s}`, '24px', '#ffffff').setOrigin(0.5).setPosition(x + smallW / 2, y + smallH / 2).setText(`Scene ${s}`);
+          this.buttons.push({ id: `levelSmall_${big}_${s}`, x, y, w: smallW, h: smallH, node: { levelId: `Level${big}-Scene${s}` } });
+        }
+      }
+    }
+
     buyBuff(id) {
       const item = VENDOR_BUFFS.find(d => d.id === id);
       if (!item || !this.player || this.vendorBought.has(id)) return;
@@ -4623,25 +5678,23 @@ export function createGameScene(ctx) {
 
     drawWorkshopUI() {
       const g = this.uiG;
-      const s = this.uiState;
-      const combat = s.combat || {};
-      const points = s.points || {};
-      const spendable = s.spendablePoints ?? 0;
-
-      // 布局常量：左侧面板全屏高度，无白框
-      const leftW = 620;
-      const pad = 40;
-      const topY = 40;                 // 面板顶部
-      const panelH = VIEW_H - 80;       // 全屏高度（上下各留 40）
-      const cx = 80 + pad;
-
-      // 左侧面板背景（纯黑，无描边）
-      g.fillStyle(0x0a0a0a, 0.98);
-      g.fillRect(80, topY, leftW, panelH);
+      const source = this.saveSource() || {};
+      const progress = source.progress || {};
+      const level = progress.level ?? this.player?.level ?? 1;
+      const exp = progress.exp ?? 0;
+      const expToNext = progress.expToNext ?? 100;
+      const spendable = progress.points ?? 0;
+      const combat = source.combat || {};
+      const points = source.points || {};
+      const equipment = source.equipment || { weaponMods: {}, relics: [], pets: [] };
+      const items = source.items || { stacks: {}, uniques: [] };
+      const weaponsState = source.weapons || {};
+      const loadout = Array.isArray(source.loadout) ? source.loadout : ['radial'];
 
       if (!this.workshopTexts) this.workshopTexts = new Map();
       const labels = this.workshopTexts;
-      const ensure = (id, size, colorStr = '#ffffff', originY = 0) => {
+      for (const t of labels.values()) t.setVisible(false);
+      const ensure = (id, size, colorStr = '#ffffff') => {
         let t = labels.get(id);
         if (!t) {
           t = this.add.text(0, 0, '', {
@@ -4657,208 +5710,542 @@ export function createGameScene(ctx) {
         return t;
       };
 
-      // ===== 上半：玩家快照 =====
-      const snapTop = topY;
-      const snapH = panelH / 2;
-      const artCx = cx + 470, artCy = snapTop + snapH * 0.42;
-      const uiP = this.uiPointer();
-      const pointerAngle = Math.atan2(uiP.y - artCy, uiP.x - artCx);
-      const dynamicPlayer = {
-        x: artCx, y: artCy,
-        weapon: WEAPONS.radial,
-        scheme: 'hex-ring',
+      // 每帧重置命中区
+      this.workshopDropZones = [];
+      this.workshopItemRects = [];
+      this.workshopCardRects = [];
+      this.workshopScrollArea = { x: 544, y: 120, w: 1312, h: 380 };
+
+      // 属性条动画状态
+      const now = this.time.now;
+      if (this.statBarLast == null) this.statBarLast = now;
+      const dt = Math.max(0, now - this.statBarLast);
+      this.statBarLast = now;
+      this.statBars = this.statBars || {};
+
+      // ===== 左面板 =====
+      g.fillStyle(0x0a0a0a, 0.98);
+      g.fillRect(40, 40, 460, 1000);
+
+      // 左右分界
+      g.lineStyle(2, 0x2a2a2a, 1);
+      g.lineBetween(512, 40, 512, 1040);
+
+      // 快照：玩家美术方案（当前出战武器），居中、缩小 20%
+      const current = loadout[0] || 'radial';
+      const currentColor = WEAPONS[current]?.ringColor || '#ffa914';
+      drawHexRingPlayer(g, {
+        x: 254, y: 128,
+        weapon: { ringColor: currentColor },
+        scheme: WEAPONS[current]?.scheme || 'hex-ring',
+        weaponAngle: 0,
         moveLeanX: 0, moveLeanY: 0,
-        moveHexRadius: PLAYER_ART.hexagonRadius,
-        weaponAngle: pointerAngle
-      };
-      drawHexRingPlayer(g, dynamicPlayer, 2.2);
+        moveHexRadius: PLAYER_ART.hexagonRadius
+      }, 1.2);
 
-      // 左上角：金币 / 充能
-      ensure('gold', '20px', '#ffffff').setOrigin(0, 0).setPosition(cx, snapTop + 24).setText(`金币  ${s.gold ?? 0}`);
-      ensure('charge', '20px', '#ffffff').setOrigin(0, 0).setPosition(cx, snapTop + 58).setText(`充能  ${s.charge ?? 0}`);
+      // 右上角 3 个武器方案槽（竖排、小尺寸）
+      for (let i = 0; i < 3; i++) {
+        const sx = 400, sy = 64 + i * 46, sw = 36, sh = 36;
+        const slotWeapon = i === 0 ? 'radial' : loadout[i];
+        const unlocked = i === 0 ? true : level >= WEAPON_SLOT_LEVELS[i - 1];
+        if (!unlocked) {
+          g.fillStyle(0x555555, 1);
+          g.fillRoundedRect(sx, sy, sw, sh, 6);
+          drawLock(g, sx + sw / 2, sy + sh / 2, 12);
+        } else if (!slotWeapon) {
+          g.fillStyle(0xffffff, 1);
+          g.fillRoundedRect(sx, sy, sw, sh, 6);
+        } else {
+          const wc = WEAPONS[slotWeapon]?.ringColor || '#ffffff';
+          g.fillStyle(color(wc), 1);
+          g.fillRoundedRect(sx, sy, sw, sh, 6);
+          drawWeaponGlyph(g, sx + sw / 2, sy + sh / 2, slotWeapon, false, 12);
+          g.lineStyle(2, color(wc), 1);
+          g.strokeRoundedRect(sx, sy, sw, sh, 6);
+        }
+        if (i > 0) this.buttons.push({ id: `workshopSlot_${i}`, x: sx, y: sy, w: sw, h: sh });
+      }
 
-      // 左下角：Lv 数字 + 经验条（不显示"等级"字样）
-      const lvX = cx, lvY = snapTop + snapH - 96;
-      ensure('lv', '30px', '#ffffff').setOrigin(0, 0.5).setPosition(lvX, lvY).setText(`${s.level}`);
-      // 经验条背景 + 填充
-      const barX = lvX + 70, barY = lvY - 7, barW = leftW - pad * 2 - 70, barH = 14;
+      // 等级 / 经验条 / 可用点数
+      ensure('lv', '30px', '#ffffff').setOrigin(0, 0).setPosition(64, 226).setText(`Lv ${level}`);
       g.fillStyle(0x222222, 1);
-      g.fillRect(barX, barY, barW, barH);
-      const expRatio = s.expToNext > 0 ? Math.min(1, s.exp / s.expToNext) : 0;
-      g.fillStyle(0xffffff, 1);
-      g.fillRect(barX, barY, barW * expRatio, barH);
-      ensure('xp', '14px', '#888888').setOrigin(0, 0.5).setPosition(barX + barW + 12, lvY)
-        .setText(`${s.exp}/${s.expToNext}`);
+      g.fillRect(64, 262, 380, 12);
+      const expRatio = expToNext > 0 ? Math.min(1, exp / expToNext) : 0;
+      g.fillStyle(0x00e5ff, 1);
+      g.fillRect(64, 262, 380 * expRatio, 12);
+      ensure('xp', '14px', '#888888').setOrigin(1, 0.5).setPosition(444, 268).setText(`${exp}/${expToNext}`);
+      ensure('points', '22px', '#ffffff').setOrigin(0, 0).setPosition(64, 294).setText(`可用升级点数  ${spendable}`);
 
-      // 可用升级点数
-      ensure('points', '22px', '#ffffff').setOrigin(0, 0).setPosition(cx, snapTop + snapH - 34).setText(`可用升级点数  ${spendable}`);
+      // 分隔线
+      g.lineStyle(1, 0x333333, 1);
+      g.lineBetween(64, 330, 444, 330);
 
-      // ===== 下半：8 属性加点（含属性条） =====
-      const attrTop = snapTop + snapH;
-      const upgradeButtons = [];
+      // 4 属性行
       const keys = Object.keys(UPGRADE_STATS);
-      const attrRowH = (panelH - snapH) / keys.length;
-
       keys.forEach((key, i) => {
         const cfg = UPGRADE_STATS[key];
         const raw = combat[key] ?? 0;
         const spent = points[key] ?? 0;
         const filled = spent >= cfg.cap;
-        const rowY = attrTop + i * attrRowH;
+        const rowY = 346 + i * 72;
+        const target = Math.min(1, spent / cfg.cap);
+        let sb = this.statBars[key];
+        if (!sb) sb = this.statBars[key] = { cur: target, target };
+        sb.target = target;
+        sb.cur += (sb.target - sb.cur) * Math.min(1, dt / 300);
 
-        // 属性名 + 当前值
-        ensure(`up_${key}_l`, '20px', '#ffffff').setOrigin(0, 0.5).setPosition(cx, rowY + attrRowH / 2)
-          .setText(cfg.label);
-        ensure(`up_${key}_v`, '18px', '#ffffff').setOrigin(1, 0.5).setPosition(cx + 280, rowY + attrRowH / 2)
-          .setText(cfg.fmt(raw));
+        ensure(`up_${key}_l`, '20px', '#ffffff').setOrigin(0, 0).setPosition(64, rowY + 6).setText(cfg.label);
+        ensure(`up_${key}_v`, '18px', '#ffffff').setOrigin(0, 0).setPosition(64, rowY + 34).setText(cfg.fmt(raw));
 
-        // 属性条：以 已加点数/上限 为进度
-        const pbX = cx + 300, pbW = leftW - pad * 2 - 300 - 70, pbH = 10, pbY = rowY + attrRowH / 2 - pbH / 2;
+        const pbX = 64, pbW = 300, pbH = 10, pbY = rowY + 56;
         g.fillStyle(0x222222, 1);
         g.fillRect(pbX, pbY, pbW, pbH);
-        const ratio = Math.min(1, spent / cfg.cap);
         g.fillStyle(0xffffff, 1);
-        g.fillRect(pbX, pbY, pbW * ratio, pbH);
-        ensure(`up_${key}_p`, '14px', '#888888').setOrigin(0, 0.5).setPosition(pbX + pbW + 8, rowY + attrRowH / 2)
-          .setText(`${spent}/${cfg.cap}`);
+        g.fillRect(pbX, pbY, pbW * sb.cur, pbH);
 
-        // + 按钮：黑底白线，悬停白底黑线，点击缩小
-        const bx = 80 + leftW - pad - 44, by = rowY + (attrRowH - 44) / 2, bw = 44, bh = 44;
+        const bx = 412, by = rowY + 20, bw = 32, bh = 32;
         const up = this.uiPointer();
         const hover = !filled && up.x >= bx && up.x <= bx + bw && up.y >= by && up.y <= by + bh;
         const scl = this.pressScale(`upgrade_${key}`);
         const cw2 = bw * scl, ch2 = bh * scl;
         const cx2 = bx + (bw - cw2) / 2, cy2 = by + (bh - ch2) / 2;
-        g.fillStyle(hover ? 0xffffff : 0x000000, 1);
-        g.fillRoundedRect(cx2, cy2, cw2, ch2, 6);
-        g.lineStyle(1, hover ? 0x000000 : 0xffffff, 1);
-        g.strokeRoundedRect(cx2, cy2, cw2, ch2, 6);
         g.fillStyle(hover ? 0x000000 : 0xffffff, 1);
-        g.fillRect(cx2 + cw2 * 0.43, cy2 + ch2 * 0.18, cw2 * 0.14, ch2 * 0.64);
-        if (!filled) g.fillRect(cx2 + cw2 * 0.18, cy2 + ch2 * 0.43, cw2 * 0.64, ch2 * 0.14);
-        if (!filled) upgradeButtons.push({ id: `upgrade_${key}`, x: bx, y: by, w: bw, h: bh });
+        g.fillRoundedRect(cx2, cy2, cw2, ch2, 6);
+        g.lineStyle(1, hover ? 0xffffff : 0x000000, 1);
+        g.strokeRoundedRect(cx2, cy2, cw2, ch2, 6);
+        g.fillStyle(hover ? 0xffffff : 0x000000, 1);
+        g.fillRect(cx2 + cw2 * 0.18, cy2 + ch2 * 0.43, cw2 * 0.64, ch2 * 0.14);
+        if (!filled) {
+          g.fillRect(cx2 + cw2 * 0.43, cy2 + ch2 * 0.18, cw2 * 0.14, ch2 * 0.64);
+          this.buttons.push({ id: `upgrade_${key}`, x: bx, y: by, w: bw, h: bh });
+        }
       });
 
-      this.workshopUpgradeButtons = upgradeButtons;
-      for (const b of upgradeButtons) this.buttons.push({ ...b, node: { id: b.id } });
+      // 圣物槽
+      ensure('relicLabel', '18px', '#ffffff').setOrigin(0, 0.5).setPosition(64, 646).setText('圣物');
+      const relics = Array.isArray(equipment.relics) ? equipment.relics : [];
+      for (let i = 0; i < 3; i++) {
+        const sx = 204 + i * 56, sy = 626, sw = 40, sh = 40;
+        this.drawItemSlot(g, sx, sy, sw, sh, relics[i], `relic_${i}`, ensure);
+        this.workshopDropZones.push({ x: sx, y: sy, w: sw, h: sh, slotType: 'relic', index: i });
+      }
 
-      this.drawWorkshopModsUI();
-    }
+      // 宠物槽
+      ensure('petLabel', '18px', '#ffffff').setOrigin(0, 0.5).setPosition(64, 710).setText('宠物');
+      const pets = Array.isArray(equipment.pets) ? equipment.pets : [];
+      for (let i = 0; i < 2; i++) {
+        const sx = 260 + i * 56, sy = 690, sw = 40, sh = 40;
+        this.drawItemSlot(g, sx, sy, sw, sh, pets[i], `pet_${i}`, ensure);
+        this.workshopDropZones.push({ x: sx, y: sy, w: sw, h: sh, slotType: 'pet', index: i });
+      }
 
-    // 工坊右侧：武器与改件展示（读存档配置），支持装备/卸下改件
-    drawWorkshopModsUI() {
-      const g = this.uiG;
-      const source = this.saveSource();
-      const weapons = ['radial', 'yellow', 'green'];
-      const equipped = source?.mods || [];
-      const inventory = source?.modInventory || [];
-
-      this.workshopModsTexts = this.workshopModsTexts || new Map();
-      const ensure = (id, size, colorStr = '#ffffff') => {
-        let t = this.workshopModsTexts.get(id);
-        if (!t) {
-          t = this.add.text(0, 0, '', { fontFamily: FONT_TECH_SC, fontSize: size, color: colorStr }).setDepth(1002);
-          this.cameras.main.ignore(t);
-          this.workshopModsTexts.set(id, t);
-        }
-        t.setFontSize(size).setColor(colorStr).setVisible(true);
-        return t;
-      };
-
-      const panelX = 760, panelY = 40, panelW = 1120, panelH = 1000;
+      // ===== 右上面板：武器列表 =====
       g.fillStyle(0x0a0a0a, 0.98);
-      g.fillRect(panelX, panelY, panelW, panelH);
-      ensure('title', '24px', '#ffffff').setOrigin(0, 0.5).setPosition(panelX + 24, panelY + 40).setText('武器与改件');
+      g.fillRect(520, 40, 1360, 500);
+      ensure('weaponTitle', '24px', '#ffffff').setOrigin(0, 0.5).setPosition(544, 76).setText('武器');
 
-      // 武器行：3 把武器，展示解锁状态
-      let wy = panelY + 100;
-      for (const type of weapons) {
-        const unlocked = !!source?.weapons?.[type]?.unlocked;
-        const label = WEAPON_LABELS[type] || type;
-        const wFill = unlocked ? '#ffffff' : '#555555';
-        drawParallelogram(g, panelX + 24, wy, 180, 48, 20, 1, wFill, wFill);
-        drawWeaponGlyph(g, panelX + 66, wy + 24, type, !unlocked, 18);
-        ensure(`w_${type}`, '20px', unlocked ? '#ffffff' : '#888888').setOrigin(0, 0.5).setPosition(panelX + 110, wy + 24).setText(label);
-        wy += 70;
-      }
+      const cardW = 280, cardH = 344, cardGap = 24;
+      const viewW = 1312, contentW = 5 * (cardW + cardGap);
+      const maxScroll = Math.max(0, contentW - viewW);
+      if (this.workshopScroll == null) this.workshopScroll = 0;
+      this.workshopScroll = Phaser.Math.Clamp(this.workshopScroll, 0, maxScroll);
+      const cardTypes = ['radial', 'yellow', 'green', 'placeholder', 'placeholder'];
 
-      // 已装备改件
-      ensure('eqTitle', '20px', '#ffffff').setOrigin(0, 0.5).setPosition(panelX + 24, wy + 20).setText('已装备改件');
-      wy += 60;
-      for (const m of equipped) {
-        const def = MOD_DEFS[m.id];
-        if (!def) continue;
-        const where = def.weapon ? `·${WEAPON_LABELS[def.weapon] || def.weapon}` : '·通用';
-        ensure(`eq_${m.id}`, '18px', '#4fc3f7').setOrigin(0, 0.5).setPosition(panelX + 24, wy + 24).setText(`${def.name}${where}`);
-        const ubw = 70, ubh = 34, ubx = panelX + 300, uby = wy + 7;
-        g.fillStyle(0xffffff, 1);
-        g.fillRoundedRect(ubx, uby, ubw, ubh, 6);
-        ensure(`uq_${m.id}`, '14px', '#000000').setOrigin(0.5, 0.5).setPosition(ubx + ubw / 2, uby + ubh / 2).setText('卸下');
-        this.buttons.push({ id: `unequipMod_${m.id}`, x: ubx, y: uby, w: ubw, h: ubh, node: { id: m.id } });
-        wy += 52;
-      }
+      g.setMask(this.workshopCardMask);
+      for (let i = 0; i < cardTypes.length; i++) {
+        const type = cardTypes[i];
+        const cardX = 544 + i * (cardW + cardGap) - this.workshopScroll;
+        const cardY = 120;
+        if (cardX + cardW < 544 || cardX > 1856) continue;
 
-      // 改件库存：可装备到对应武器
-      ensure('invTitle', '20px', '#ffffff').setOrigin(0, 0.5).setPosition(panelX + 24, wy + 20).setText('改件库存');
-      wy += 60;
-      for (const id of inventory) {
-        const def = MOD_DEFS[id];
-        if (!def) continue;
-        const targets = def.weapon ? [def.weapon] : weapons;
-        ensure(`inv_${id}`, '18px', '#ffd54f').setOrigin(0, 0.5).setPosition(panelX + 24, wy + 24).setText(def.name);
-        let bx = panelX + 240;
-        for (const wt of targets) {
-          const unlocked = !!source?.weapons?.[wt]?.unlocked;
-          if (!unlocked) continue;
-          const bw = 120, bh = 34;
+        if (type === 'placeholder') {
           g.fillStyle(0xffffff, 1);
-          g.fillRoundedRect(bx, wy + 7, bw, bh, 6);
-          ensure(`equip_${id}_${wt}`, '14px', '#000000').setOrigin(0.5, 0.5).setPosition(bx + bw / 2, wy + 24).setText(`装备 ${WEAPON_LABELS[wt] || wt}`);
-          this.buttons.push({ id: `equipMod_${id}_${wt}`, x: bx, y: wy + 7, w: bw, h: bh, node: { id, weapon: wt } });
-          bx += bw + 12;
+          g.fillRoundedRect(cardX, cardY, cardW, cardH, 4);
+          g.lineStyle(2, 0xcccccc, 1);
+          g.strokeRoundedRect(cardX, cardY, cardW, cardH, 4);
+          g.fillStyle(0xe8e8e8, 1);
+          g.fillRoundedRect(cardX, cardY, cardW, 200, 4);
+          ensure(`card_ph_${i}`, '20px', '#999999').setMask(this.workshopCardMask).setOrigin(0.5, 0.5).setPosition(cardX + cardW / 2, cardY + 100).setText('即将开放');
+          continue;
         }
-        wy += 52;
+
+        const unlocked = !!weaponsState[type]?.unlocked;
+        const selected = loadout.includes(type);
+        const wc = WEAPONS[type]?.ringColor || '#ffffff';
+        this.workshopCardRects.push({ type, x: cardX, y: cardY, w: cardW, h: cardH });
+
+        g.fillStyle(0xffffff, 1);
+        g.fillRoundedRect(cardX, cardY, cardW, cardH, 4);
+        if (selected) {
+          g.lineStyle(3, color(wc), 1);
+          g.strokeRoundedRect(cardX, cardY, cardW, cardH, 4);
+        }
+
+        g.fillStyle(unlocked ? color(wc) : 0x555555, 1);
+        g.fillRoundedRect(cardX, cardY, cardW, 200, 4);
+        drawWeaponGlyph(g, cardX + cardW / 2, cardY + 100, type, !unlocked, 60);
+        if (!unlocked) drawLock(g, cardX + cardW / 2, cardY + 160, 20);
+
+        const modSlot = equipment.weaponMods?.[type] || { generic: [], dedicated: null };
+        const generic = Array.isArray(modSlot.generic) ? modSlot.generic : [];
+        const genericId = generic[0] || null;
+        const dedicatedId = modSlot.dedicated || null;
+        const gx = cardX + 68, dx = cardX + 148, sy = cardY + 216;
+        this.drawItemSlot(g, gx, sy, 64, 64, genericId, `wmod_${type}_g`, ensure, this.workshopCardMask);
+        this.drawItemSlot(g, dx, sy, 64, 64, dedicatedId, `wmod_${type}_d`, ensure, this.workshopCardMask);
+        this.workshopDropZones.push({ x: gx, y: sy, w: 64, h: 64, slotType: 'weaponGeneric', weapon: type });
+        this.workshopDropZones.push({ x: dx, y: sy, w: 64, h: 64, slotType: 'weaponDedicated', weapon: type });
+
+        ensure(`weapon_${type}`, '20px', '#000000').setMask(this.workshopCardMask).setOrigin(0.5, 0.5).setPosition(cardX + cardW / 2, cardY + 310).setText(WEAPON_LABELS[type] || type);
+        this.buttons.push({ id: `workshopCard_${type}`, x: cardX, y: cardY, w: cardW, h: cardH });
+      }
+      g.clearMask();
+
+      // ===== 右下仓库面板 =====
+      g.fillStyle(0x0a0a0a, 0.98);
+      g.fillRect(520, 560, 1360, 480);
+      this.workshopTab = this.workshopTab || 'mod';
+      const tabs = [['mod', '改件'], ['relic', '圣物'], ['pet', '宠物']];
+      for (let i = 0; i < tabs.length; i++) {
+        const [cat, label] = tabs[i];
+        const tx = 544 + i * 104, ty = 584, tw = 96, th = 32;
+        const sel = this.workshopTab === cat;
+        ensure(`tab_${cat}`, '20px', sel ? '#ffffff' : '#888888').setOrigin(0, 0).setPosition(tx, ty).setText(label);
+        if (sel) {
+          g.lineStyle(2, 0xffffff, 1);
+          g.lineBetween(tx, ty + 36, tx + tw, ty + 36);
+        }
+        this.buttons.push({ id: `workshopTab_${cat}`, x: tx, y: ty, w: tw, h: th });
+      }
+
+      const inv = this.workshopInventoryItems(source, this.workshopTab);
+      if (!inv.length) {
+        ensure('inventory_empty', '20px', '#888888').setOrigin(0.5, 0).setPosition(1200, 700).setText('暂无物品');
+      } else {
+        inv.forEach((it, idx) => {
+          const col = idx % 16, row = Math.floor(idx / 16);
+          const ix = 544 + col * 80, iy = 640 + row * 80;
+          this.drawItemCell(g, ix, iy, it, idx, ensure);
+          this.workshopItemRects.push({ id: it.id, def: it.def, stackable: it.def.stackable, category: it.def.category, count: it.count, x: ix, y: iy, w: 64, h: 64 });
+        });
+      }
+
+      // 拖拽图标 + 来源高亮
+      if (this.workshopDrag) {
+        const up = this.uiPointer();
+        const def = ITEM_DEFS[this.workshopDrag.itemId];
+        if (def) {
+          g.fillStyle(color(def.color || '#ffffff'), 0.9);
+          g.fillRoundedRect(up.x - 28, up.y - 28, 56, 56, 8);
+          ensure('drag_item', '18px', def.color || '#ffffff').setOrigin(0.5, 0.5).setPosition(up.x, up.y).setText(this.itemShortLabel(def.name));
+        }
+        const srcCell = (this.workshopItemRects || []).find(c => c.id === this.workshopDrag.itemId);
+        if (srcCell) {
+          g.lineStyle(2, 0xffffff, 0.9);
+          g.strokeRoundedRect(srcCell.x, srcCell.y, srcCell.w, srcCell.h, 6);
+        }
+      }
+
+      // 顶部提示
+      if (this.workshopTip && this.time.now < this.workshopTip.until) {
+        g.fillStyle(0xffffff, 1);
+        g.fillRoundedRect(710, 50, 500, 60, 8);
+        ensure('tip', '24px', '#000000').setOrigin(0.5, 0.5).setPosition(960, 80).setText(this.workshopTip.text);
+      } else if (labels.has('tip')) {
+        labels.get('tip').setVisible(false);
       }
     }
 
-    // 装备改件到武器：从库存移到装备列表并写回存档
-    equipMod(key) {
-      // key 形如 `${id}_${weaponType}`
-      const sep = key.lastIndexOf('_');
-      if (sep <= 0) return;
-      const id = key.slice(0, sep);
-      const weaponType = key.slice(sep + 1);
-      const def = MOD_DEFS[id];
+    // ---------- 工坊交互辅助 ----------
+    itemShortLabel(name) {
+      return String(name || '').slice(0, 2);
+    }
+
+    drawItemSlot(g, x, y, w, h, itemId, textId, ensure, mask) {
+      const t = ensure(textId, w >= 64 ? '16px' : '12px', '#000000');
+      if (mask) t.setMask(mask);
+      if (!itemId) {
+        g.fillStyle(0x555555, 1);
+        g.fillRoundedRect(x, y, w, h, 6);
+        t.setVisible(false);
+        return;
+      }
+      const def = ITEM_DEFS[itemId];
+      const fillC = def?.color || '#ffffff';
+      g.fillStyle(color(fillC), 1);
+      g.fillRoundedRect(x, y, w, h, 6);
+      g.lineStyle(1, 0x333333, 1);
+      g.strokeRoundedRect(x, y, w, h, 6);
+      const textC = this.isLightColor(fillC) ? '#000000' : '#ffffff';
+      t.setFontSize(w >= 64 ? 16 : 12).setColor(textC).setOrigin(0.5, 0.5).setPosition(x + w / 2, y + h / 2).setText(this.itemShortLabel(def?.name)).setVisible(true);
+    }
+
+    isLightColor(hex) {
+      const c = Phaser.Display.Color.HexStringToColor(hex || '#ffffff');
+      return (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) / 255 > 0.6;
+    }
+
+    drawItemCell(g, x, y, it, idx, ensure) {
+      g.fillStyle(0x1a1a1a, 1);
+      g.fillRoundedRect(x, y, 64, 64, 6);
+      const def = it.def;
+      g.fillStyle(color(def.color || '#ffffff'), 1);
+      g.fillRoundedRect(x + 4, y + 4, 56, 56, 4);
+      ensure(`inv_${idx}`, '18px', def.color || '#ffffff').setOrigin(0.5, 0.5).setPosition(x + 32, y + 32).setText(this.itemShortLabel(def.name));
+      if (def.stackable && it.count > 1) {
+        g.fillStyle(0xffffff, 1);
+        g.fillRoundedRect(x + 42, y + 42, 22, 22, 4);
+        ensure(`inv_${idx}_c`, '14px', '#000000').setOrigin(0.5, 0.5).setPosition(x + 53, y + 53).setText(String(it.count));
+      }
+    }
+
+    workshopInventoryItems(source, tab) {
+      const stacks = source?.items?.stacks || {};
+      const uniques = source?.items?.uniques || [];
+      const out = [];
+      if (tab === 'mod') {
+        for (const [id, count] of Object.entries(stacks)) {
+          const def = ITEM_DEFS[id];
+          if (def && def.category === 'mod' && def.weapon === '') out.push({ id, def, count });
+        }
+        for (const u of uniques) {
+          const def = ITEM_DEFS[u.itemId];
+          if (def && def.category === 'mod') out.push({ id: u.itemId, def, count: 1 });
+        }
+      } else if (tab === 'relic') {
+        for (const [id, count] of Object.entries(stacks)) {
+          const def = ITEM_DEFS[id];
+          if (def && def.category === 'relic') out.push({ id, def, count });
+        }
+      } else if (tab === 'pet') {
+        for (const u of uniques) {
+          const def = ITEM_DEFS[u.itemId];
+          if (def && def.category === 'pet') out.push({ id: u.itemId, def, count: 1 });
+        }
+      }
+      return out;
+    }
+
+    isValidWorkshopDrop(def, zone) {
+      if (!def || !zone) return false;
+      if (zone.slotType === 'weaponGeneric') return def.category === 'mod' && def.weapon === '';
+      if (zone.slotType === 'weaponDedicated') return def.category === 'mod' && def.weapon === zone.weapon;
+      if (zone.slotType === 'relic') return def.category === 'relic';
+      if (zone.slotType === 'pet') return def.category === 'pet';
+      return false;
+    }
+
+    workshopSlotContains(source, zone, itemId) {
+      if (zone.slotType === 'weaponGeneric') {
+        return (source?.equipment?.weaponMods?.[zone.weapon]?.generic || []).includes(itemId);
+      }
+      if (zone.slotType === 'weaponDedicated') {
+        return source?.equipment?.weaponMods?.[zone.weapon]?.dedicated === itemId;
+      }
+      if (zone.slotType === 'relic') {
+        return (source?.equipment?.relics || [])[zone.index] === itemId;
+      }
+      if (zone.slotType === 'pet') {
+        return (source?.equipment?.pets || [])[zone.index] === itemId;
+      }
+      return false;
+    }
+
+    workshopRemoveFromInventory(source, itemId) {
+      const def = ITEM_DEFS[itemId];
+      if (!def) return false;
+      source.items = source.items || { stacks: {}, uniques: [] };
+      if (def.stackable) {
+        const stacks = source.items.stacks || (source.items.stacks = {});
+        const n = stacks[itemId] || 0;
+        if (n <= 0) return false;
+        stacks[itemId] = n - 1;
+        if (stacks[itemId] <= 0) delete stacks[itemId];
+        return true;
+      }
+      const uniques = source.items.uniques || (source.items.uniques = []);
+      const idx = uniques.findIndex(u => u.itemId === itemId);
+      if (idx < 0) return false;
+      uniques.splice(idx, 1);
+      return true;
+    }
+
+    workshopAddToInventory(source, itemId) {
+      const def = ITEM_DEFS[itemId];
       if (!def) return;
+      source.items = source.items || { stacks: {}, uniques: [] };
+      if (def.stackable) {
+        const stacks = source.items.stacks || (source.items.stacks = {});
+        stacks[itemId] = (stacks[itemId] || 0) + 1;
+      } else {
+        const uniques = source.items.uniques || (source.items.uniques = []);
+        uniques.push({ uid: `u-${itemId}-${Date.now()}`, itemId });
+      }
+    }
+
+    workshopReplaceSlot(source, zone, itemId) {
+      const old = [];
+      source.equipment = source.equipment || { weaponMods: {}, relics: [], pets: [] };
+      const wm = source.equipment.weaponMods || (source.equipment.weaponMods = {});
+      if (zone.slotType === 'weaponGeneric') {
+        const slot = wm[zone.weapon] || (wm[zone.weapon] = { generic: [], dedicated: null });
+        const generic = Array.isArray(slot.generic) ? slot.generic : [];
+        for (const id of generic) if (id) old.push(id);
+        slot.generic = [itemId];
+      } else if (zone.slotType === 'weaponDedicated') {
+        const slot = wm[zone.weapon] || (wm[zone.weapon] = { generic: [], dedicated: null });
+        if (slot.dedicated) old.push(slot.dedicated);
+        slot.dedicated = itemId;
+      } else if (zone.slotType === 'relic') {
+        const relics = source.equipment.relics || (source.equipment.relics = []);
+        if (zone.index < relics.length) {
+          old.push(relics[zone.index]);
+          relics[zone.index] = itemId;
+        } else {
+          relics.push(itemId);
+        }
+      } else if (zone.slotType === 'pet') {
+        const pets = source.equipment.pets || (source.equipment.pets = []);
+        if (zone.index < pets.length) {
+          old.push(pets[zone.index]);
+          pets[zone.index] = itemId;
+        } else {
+          pets.push(itemId);
+        }
+      }
+      return old;
+    }
+
+    workshopEquipItem(drag, zone) {
       const source = this.saveSource();
-      if (!source) return;
-      const inv = source.modInventory || [];
-      if (!inv.includes(id)) return;
-      if (def.weapon && def.weapon !== weaponType) return;
-      if (!source.weapons?.[weaponType]?.unlocked) return;
-      // 从库存移除
-      source.modInventory = inv.filter(x => x !== id);
-      // 装备：替换同 id 已有项
-      const mods = source.mods || (source.mods = []);
-      const entry = { id, weapon: def.weapon ? weaponType : '' };
-      source.mods = [...mods.filter(m => m.id !== id), entry];
-      if (this.player) this.player.mods = [...source.mods];
+      if (!source || !drag) return;
+      const def = ITEM_DEFS[drag.itemId];
+      if (!this.isValidWorkshopDrop(def, zone)) return;
+      if (this.workshopSlotContains(source, zone, drag.itemId)) return;
+      if (!this.workshopRemoveFromInventory(source, drag.itemId)) return;
+      const old = this.workshopReplaceSlot(source, zone, drag.itemId);
+      for (const id of old) this.workshopAddToInventory(source, id);
+      if (this.player) {
+        this.player.items = source.items;
+        this.player.equipment = source.equipment;
+      }
       this.persistSave(source);
       this.drawUI();
     }
 
-    // 卸下改件：从装备列表移回库存并写回存档
-    unequipMod(id) {
+    toggleWorkshopWeapon(type) {
+      if (type === 'radial') return;
       const source = this.saveSource();
       if (!source) return;
-      const mods = source.mods || [];
-      if (!mods.some(m => m.id === id)) return;
-      source.mods = mods.filter(m => m.id !== id);
-      const inv = source.modInventory || (source.modInventory = []);
-      if (!inv.includes(id)) inv.push(id);
-      if (this.player) this.player.mods = [...source.mods];
+      if (!source.weapons?.[type]?.unlocked) return;
+      const level = source.progress?.level ?? 1;
+      const load = Array.isArray(source.loadout) ? [...source.loadout] : ['radial'];
+      while (load.length < 3) load.push('');
+      load[0] = 'radial';
+      const idx = load.indexOf(type);
+      if (idx >= 1) {
+        load[idx] = '';
+      } else {
+        let placed = false;
+        for (let i = 1; i <= 2; i++) {
+          if (level >= WEAPON_SLOT_LEVELS[i - 1] && !load[i]) {
+            load[i] = type;
+            placed = true;
+            break;
+          }
+        }
+        if (!placed) {
+          this.showWorkshopTip('出战槽已满');
+          return;
+        }
+      }
+      source.loadout = load;
+      if (this.player) this.player.loadout = [...load];
       this.persistSave(source);
       this.drawUI();
+    }
+
+    clickWorkshopSlot(n) {
+      const source = this.saveSource();
+      const level = source?.progress?.level ?? this.player?.level ?? 1;
+      const lv = WEAPON_SLOT_LEVELS[n - 1];
+      if (!lv) return;
+      if (level < lv) this.showWorkshopTip(`该槽位将在 ${lv} 级解锁`);
+    }
+
+    showWorkshopTip(text) {
+      this.workshopTip = { text, until: this.time.now + 2000 };
+    }
+
+    handleWorkshopPointerDown() {
+      const up = this.uiPointer();
+      const cells = this.workshopItemRects || [];
+      for (const c of cells) {
+        if (up.x >= c.x && up.x <= c.x + c.w && up.y >= c.y && up.y <= c.y + c.h) {
+          this.workshopPress = {
+            itemId: c.id,
+            category: c.def.category,
+            stackable: c.def.stackable,
+            t0: this.time.now,
+            x: up.x,
+            y: up.y
+          };
+          return true;
+        }
+      }
+      const area = this.workshopScrollArea;
+      if (area && up.x >= area.x && up.x <= area.x + area.w && up.y >= area.y && up.y <= area.y + area.h) {
+        const onCard = (this.workshopCardRects || []).some(r => up.x >= r.x && up.x <= r.x + r.w && up.y >= r.y && up.y <= r.y + r.h);
+        if (!onCard) {
+          this.workshopScrollDrag = { startX: up.x, scroll: this.workshopScroll || 0 };
+          return true;
+        }
+      }
+      return false;
+    }
+
+    updateWorkshopLongPress() {
+      if (this.menuScreen !== 'workshop' || !this.workshopPress || this.workshopDrag) return;
+      const up = this.uiPointer();
+      if (Math.hypot(up.x - this.workshopPress.x, up.y - this.workshopPress.y) > 24) {
+        this.workshopPress = null;
+        return;
+      }
+      if (this.time.now - this.workshopPress.t0 >= 100) {
+        this.workshopDrag = {
+          itemId: this.workshopPress.itemId,
+          category: this.workshopPress.category,
+          stackable: this.workshopPress.stackable
+        };
+        this.workshopPress = null;
+        this.drawUI();
+      }
+    }
+
+    updateWorkshopScrollDrag() {
+      if (!this.workshopScrollDrag) return;
+      const up = this.uiPointer();
+      const contentW = 5 * (280 + 24), viewW = 1312;
+      const maxScroll = Math.max(0, contentW - viewW);
+      this.workshopScroll = Phaser.Math.Clamp(this.workshopScrollDrag.scroll - (up.x - this.workshopScrollDrag.startX), 0, maxScroll);
+    }
+
+    handleWorkshopPointerUp() {
+      if (this.workshopDrag) {
+        const up = this.uiPointer();
+        let zone = null;
+        for (const z of this.workshopDropZones || []) {
+          if (up.x >= z.x && up.x <= z.x + z.w && up.y >= z.y && up.y <= z.y + z.h) {
+            zone = z;
+            break;
+          }
+        }
+        if (zone) this.workshopEquipItem(this.workshopDrag, zone);
+        this.workshopDrag = null;
+        this.drawUI();
+      }
+      this.workshopPress = null;
+      this.workshopScrollDrag = null;
     }
 
     drawUI() {
@@ -4868,14 +6255,14 @@ export function createGameScene(ctx) {
       for (const map of Object.values(this.uiTexts || {})) {
         for (const t of map.values()) t.setVisible(false);
       }
+      if (this.hudIndicatorText) this.hudIndicatorText.setVisible(false);
       for (const map of Object.values(this.uiImages || {})) {
         for (const s of map.values()) s.setVisible(false);
       }
+      if (this.menuIconSprites) for (const s of this.menuIconSprites.values()) s.setVisible(false);
+      if (this.settingsTexts) for (const t of this.settingsTexts.values()) t.setVisible(false);
       if (this.menuScreen !== 'workshop' && this.workshopTexts) {
         for (const t of this.workshopTexts.values()) t.setVisible(false);
-      }
-      if (this.menuScreen !== 'workshop' && this.workshopModsTexts) {
-        for (const t of this.workshopModsTexts.values()) t.setVisible(false);
       }
       if (this.menuScreen !== 'weapon' && this.weaponShopTexts) {
         for (const t of this.weaponShopTexts.values()) t.setVisible(false);
@@ -4883,8 +6270,17 @@ export function createGameScene(ctx) {
       if (this.menuScreen !== 'vendor' && this.vendorShopTexts) {
         for (const t of this.vendorShopTexts.values()) t.setVisible(false);
       }
+      if (!this.idolOffer && this.idolOfferTexts) {
+        for (const t of this.idolOfferTexts.values()) t.setVisible(false);
+      }
       if (this.menuScreen !== 'saveSelect' && this.saveSelectTexts) {
         for (const t of this.saveSelectTexts.values()) t.setVisible(false);
+      }
+      if (this.menuScreen !== 'levelSelect' && this.levelSelectTexts) {
+        for (const t of this.levelSelectTexts.values()) t.setVisible(false);
+      }
+      if (this.menuScreen !== 'levelSelect' && this.levelSelectOpen !== undefined) {
+        this.levelSelectOpen = null;
       }
       if (this.menuScreen && this.loginLabels) {
         for (const label of this.loginLabels.values()) label.setVisible(false);
@@ -4903,6 +6299,16 @@ export function createGameScene(ctx) {
 
       const ui = ctx.state.ui || {};
       const interfaceLevel = (ctx.state.level?.ui || 'battle') === 'interface';
+      if (this.idolOffer) {
+        this.hideHudOverlay();
+        this.drawIdolOffer();
+        return;
+      }
+      if (this.settingsMode) {
+        this.hideHudOverlay();
+        this.drawSettingsOverlay();
+        return;
+      }
       if (this.menuScreen) {
         this.hideHudOverlay();
         this.uiG.fillStyle(0x000000, 1);
@@ -4911,6 +6317,7 @@ export function createGameScene(ctx) {
         else if (this.menuScreen === 'workshop') this.drawWorkshopUI();
         else if (this.menuScreen === 'vendor') this.drawVendorShop();
         else if (this.menuScreen === 'saveSelect') this.drawSaveSelectUI();
+        else if (this.menuScreen === 'levelSelect') this.drawLevelSelect();
         // 右上角关闭按钮（黑底白线，悬停白底黑线）
         const bx0 = VIEW_W - 100, by0 = 40, bw0 = 64, bh0 = 48;
         const up0 = this.uiPointer();
@@ -4957,6 +6364,7 @@ export function createGameScene(ctx) {
       } else {
         renderGraph(this.uiG, ui.battle, this.uiState, BINDINGS, { texts: this.uiTexts?.battle, images: this.uiImages?.battle, buttons: this.buttons });
         if (this.player) this.drawHud();
+        this.drawHudIndicator();
       }
 
       if (this.transition) {
@@ -4979,6 +6387,46 @@ export function createGameScene(ctx) {
       drawWeaponIcon(g, p, this.wheelAnim);
       this.updateWeaponLabels();
       this.drawAmmo(g);
+      this.drawSettingsButton(g);
+      this.drawChargeBars(g);
+    }
+
+    drawChargeBars(g) {
+      const p = this.player;
+      if (!p?.weaponCharge) return;
+      const types = ['yellow', 'green'];
+      let y = 960;
+      for (const type of types) {
+        const c = p.weaponCharge[type];
+        if (!c) continue;
+        const x = 24, w = 180, h = 12;
+        g.fillStyle(0x222222, 1);
+        g.fillRect(x, y, w, h);
+        const ratio = c.need > 0 ? Math.min(1, c.have / c.need) : 0;
+        g.fillStyle(color(WEAPONS[type]?.ringColor || '#ffffff'), 1);
+        g.fillRect(x, y, w * ratio, h);
+        y -= 24;
+      }
+    }
+
+    drawSettingsButton(g) {
+      const bx = VIEW_W - 88, by = 28, bw = 64, bh = 64;
+      this.settingsButtonRect = { x: bx, y: by, w: bw, h: bh };
+      const up = this.uiPointer();
+      const hover = up.x >= bx && up.x <= bx + bw && up.y >= by && up.y <= by + bh;
+      const scl = this.pressScale('settingsBtn');
+      const cw = bw * scl, ch = bh * scl;
+      const cx = bx + (bw - cw) / 2, cy = by + (bh - ch) / 2;
+      g.fillStyle(hover ? 0xffffff : 0x000000, 0.55);
+      g.fillRoundedRect(cx, cy, cw, ch, 10);
+      g.lineStyle(2, 0xffffff, 1);
+      g.strokeRoundedRect(cx, cy, cw, ch, 10);
+      const spr = this.iconSprite('settings', ICON_SETTINGS);
+      if (spr) {
+        spr.setPosition(bx + bw / 2, by + bh / 2);
+        spr.setDisplaySize(40, 40);
+        spr.setVisible(true);
+      }
     }
 
     drawAmmo(g) {
@@ -5068,6 +6516,107 @@ export function createGameScene(ctx) {
       if (this.prevState === 'playing') { this.state = 'playing'; this.prevState = null; }
     }
 
+    // ---------- 战斗 HUD 设置菜单（暂停蒙层） ----------
+    openSettingsOverlay() {
+      if (this.editing || this.settingsMode) return;
+      this.settingsMode = 'menu';
+      if (this.state === 'playing') { this.settingsPrev = 'playing'; this.state = 'paused'; }
+      else this.settingsPrev = null;
+      this.drawUI();
+    }
+
+    closeSettingsOverlay() {
+      if (!this.settingsMode) return;
+      this.settingsMode = null;
+      if (this.settingsPrev === 'playing') { this.state = 'playing'; this.settingsPrev = null; }
+      this.drawUI();
+    }
+
+    retryBattle() {
+      this.closeSettingsOverlay();
+      this.restart();
+    }
+
+    exitToHome() {
+      this.settingsMode = null;
+      this.settingsPrev = null;
+      ctx.onOpenLevel?.('knight-home');
+    }
+
+    drawSettingsOverlay() {
+      const g = this.uiG;
+      g.fillStyle(0x000000, 0.82);
+      g.fillRect(0, 0, VIEW_W, VIEW_H);
+
+      const ensure = (id, size, color) => {
+        let t = this.settingsTexts.get(id);
+        if (!t) {
+          t = this.add.text(0, 0, '', { fontFamily: FONT_TECH_SC, fontSize: size, color }).setDepth(1002);
+          this.cameras.main.ignore(t);
+          this.settingsTexts.set(id, t);
+        }
+        t.setFontSize(size).setColor(color).setVisible(true);
+        return t;
+      };
+
+      if (this.settingsMode === 'confirm') {
+        const pw = 640, ph = 340, px = (VIEW_W - pw) / 2, py = (VIEW_H - ph) / 2;
+        g.fillStyle(0x0d1b2d, 0.98);
+        g.fillRoundedRect(px, py, pw, ph, 12);
+        g.lineStyle(2, 0x6fd3ff, 1);
+        g.strokeRoundedRect(px, py, pw, ph, 12);
+        ensure('tips1', '28px', '#ffffff').setOrigin(0.5).setPosition(VIEW_W / 2, py + 78).setText('确定退出吗？');
+        ensure('tips2', '22px', '#9fc3d8').setOrigin(0.5).setPosition(VIEW_W / 2, py + 150).setText('已经获得的钻石无法带出');
+
+        const bw = 200, bh = 60, gap = 60, by = py + 230;
+        const total = bw * 2 + gap;
+        const sx = (VIEW_W - total) / 2;
+        for (const [id, label] of [['cancel', '取消'], ['confirm', '确定']]) {
+          const i = id === 'cancel' ? 0 : 1;
+          const bx = sx + i * (bw + gap);
+          const scl = this.pressScale(`settings_${id}`);
+          const cw = bw * scl, ch = bh * scl;
+          const cx = bx + (bw - cw) / 2, cy = by + (bh - ch) / 2;
+          g.fillStyle(id === 'confirm' ? 0xffffff : 0x123047, 1);
+          g.fillRoundedRect(cx, cy, cw, ch, 8);
+          g.lineStyle(2, id === 'confirm' ? 0x000000 : 0x6fd3ff, 1);
+          g.strokeRoundedRect(cx, cy, cw, ch, 8);
+          ensure(`btn_${id}`, '24px', id === 'confirm' ? '#000000' : '#ffffff').setOrigin(0.5).setPosition(bx + bw / 2, by + bh / 2).setText(label);
+          this.buttons.push({ id: `settings_${id}`, x: bx, y: by, w: bw, h: bh });
+        }
+        return;
+      }
+
+      ensure('title', '38px', '#ffffff').setOrigin(0.5).setPosition(VIEW_W / 2, 220).setText('设置');
+      const items = [
+        { id: 'exit', label: '退出', src: ICON_EXIT },
+        { id: 'retry', label: '再来一次', src: ICON_RETRY },
+        { id: 'continue', label: '继续', src: ICON_CONTINUE }
+      ];
+      const bw = 230, bh = 260, gap = 80;
+      const total = bw * 3 + gap * 2;
+      const startX = (VIEW_W - total) / 2;
+      const by = 360;
+      items.forEach((item, i) => {
+        const bx = startX + i * (bw + gap);
+        const scl = this.pressScale(`settings_${item.id}`);
+        const cw = bw * scl, ch = bh * scl;
+        const cx = bx + (bw - cw) / 2, cy = by + (bh - ch) / 2;
+        g.fillStyle(0x0d1b2d, 0.9);
+        g.fillRoundedRect(cx, cy, cw, ch, 12);
+        g.lineStyle(2, 0x6fd3ff, 1);
+        g.strokeRoundedRect(cx, cy, cw, ch, 12);
+        const spr = this.iconSprite(item.id, item.src);
+        if (spr) {
+          spr.setPosition(bx + bw / 2, by + 86);
+          spr.setDisplaySize(84, 84);
+          spr.setVisible(true);
+        }
+        ensure(`btn_${item.id}`, '28px', '#ffffff').setOrigin(0.5).setPosition(bx + bw / 2, by + 200).setText(item.label);
+        this.buttons.push({ id: `settings_${item.id}`, x: bx, y: by, w: bw, h: bh });
+      });
+    }
+
     onUIPointer(p) {
       const up = this.uiPointer();
       const px = up.x, py = up.y;
@@ -5075,13 +6624,26 @@ export function createGameScene(ctx) {
         if (px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) {
           if (b.id === 'menuClose') { this.pressAnim('menuClose'); this.closeMenuScreen(); }
           else if (b.id === 'close') this.toggleGrowth();
+          else if (b.id === 'settings_exit') { this.pressAnim(b.id); this.settingsMode = 'confirm'; this.drawUI(); }
+          else if (b.id === 'settings_retry') { this.pressAnim(b.id); this.retryBattle(); }
+          else if (b.id === 'settings_continue') { this.pressAnim(b.id); this.closeSettingsOverlay(); }
+          else if (b.id === 'settings_confirm') { this.pressAnim(b.id); this.exitToHome(); }
+          else if (b.id === 'settings_cancel') { this.pressAnim(b.id); this.settingsMode = 'menu'; this.drawUI(); }
           else if (b.id && b.id.startsWith('upgrade_')) { this.pressAnim(b.id); this.applyUpgrade(b.id.slice(8)); }
           else if (b.id && b.id.startsWith('buyWeapon_')) { this.pressAnim(b.id); this.buyWeapon(b.id.slice(10)); }
           else if (b.id && b.id.startsWith('buyMod_')) { this.pressAnim(b.id); this.buyMod(b.id.slice(7)); }
           else if (b.id && b.id.startsWith('buyBuff_')) { this.pressAnim(b.id); this.buyBuff(b.id.slice(8)); }
-          else if (b.id && b.id.startsWith('equipMod_')) { this.pressAnim(b.id); this.equipMod(b.id.slice(9)); }
-          else if (b.id && b.id.startsWith('unequipMod_')) { this.pressAnim(b.id); this.unequipMod(b.id.slice(12)); }
+          else if (b.id && b.id.startsWith('idolCard_')) { this.pressAnim(b.id); this.chooseIdolBuff(Number(b.id.slice(9))); }
+          else if (b.id && b.id.startsWith('workshopCard_')) { this.pressAnim(b.id); this.toggleWorkshopWeapon(b.id.slice(13)); }
+          else if (b.id && b.id.startsWith('workshopTab_')) { this.pressAnim(b.id); this.workshopTab = b.id.slice(12); this.drawUI(); }
+          else if (b.id && b.id.startsWith('workshopSlot_')) { this.pressAnim(b.id); this.clickWorkshopSlot(Number(b.id.slice(13))); }
           else if (b.id && b.id.startsWith('selectSave_')) { this.pressAnim(b.id); ctx.onSelectSave?.(b.id.slice(11)); }
+          else if (b.id && b.id.startsWith('levelBig_')) {
+            this.pressAnim(b.id);
+            const n = b.node?.n;
+            this.levelSelectOpen = this.levelSelectOpen === n ? null : n;
+          }
+          else if (b.id && b.id.startsWith('levelSmall_')) { this.pressAnim(b.id); ctx.onOpenLevel?.(b.node?.levelId); }
           else if (b.id === 'saveSelectBack') { this.pressAnim('saveSelectBack'); this.closeMenuScreen(); }
           return;
         }
@@ -5106,7 +6668,7 @@ export function createGameScene(ctx) {
     applyUpgrade(key) {
       const cfg = UPGRADE_STATS[key];
       if (!cfg || !this.menuScreen) return;
-      const source = this.isPreviewMode() ? ctx.state.previewPlayer : ctx.state.player;
+      const source = this.saveSource();
       const spendable = this.player.spendablePoints ?? 0;
       const spent = (this.player.points?.[key] ?? 0);
       if (spendable <= 0 || spent >= cfg.cap) return;
@@ -5122,20 +6684,22 @@ export function createGameScene(ctx) {
         source.combat = { ...this.player.combat };
         source.points = { ...this.player.points };
         source.progress = { ...(source.progress || {}), points: this.player.spendablePoints };
-        if (!this.isPreviewMode()) ctx.onPlayerSave?.(source);
+        this.persistSave(source);
       }
       this.syncUIState();
       this.drawUI();
     }
 
-    // 存档数据源：预览模式临时数据，试玩/正式用真实存档
+    // 存档数据源：预览用临时数据，试玩/正式用真实存档（试玩为测试存档）
     saveSource() {
-      return this.isPreviewMode() ? ctx.state.previewPlayer : ctx.state.player;
+      if (this.isPreviewMode()) return ctx.state.previewPlayer;
+      return ctx.state.player;
     }
 
-    // 非预览模式写回存档
+    // 预览模式不写回存档；编辑器不写玩家存档；试玩/正式写存档
     persistSave(source) {
-      if (!this.isPreviewMode() && source) ctx.onPlayerSave?.(source);
+      if (this.editing || this.isPreviewMode() || !source) return;
+      ctx.onPlayerSave?.(source);
     }
 
     // ---------- 武器商店页 ----------
@@ -5200,7 +6764,14 @@ export function createGameScene(ctx) {
       // 改件商店（右侧）
       const mods = Object.entries(MOD_DEFS);
       const modX = 1460, modY0 = 150;
-      const owned = new Set(source?.modInventory || []);
+      const owned = new Set();
+      for (const [id, itemDef] of Object.entries(ITEM_DEFS)) {
+        if (itemDef.category !== 'mod') continue;
+        const has = itemDef.stackable
+          ? (source?.items?.stacks?.[id] ?? 0) > 0
+          : (source?.items?.uniques || []).some(u => u.itemId === id);
+        if (has) owned.add(id);
+      }
       ensure('modTitle', '24px', '#ffffff').setOrigin(0, 0.5).setPosition(modX, modY0).setText('改件商店');
       let my = modY0 + 64;
       for (const [id, def] of mods) {
@@ -5250,13 +6821,24 @@ export function createGameScene(ctx) {
       const source = this.saveSource();
       const node = ctx.state.ui?.weapon || {};
       const price = (node.modPrices || {})[id];
-      if (price == null || !source) return;
+      const def = ITEM_DEFS[id];
+      if (price == null || !source || !def) return;
       if ((source.currency?.gold ?? 0) < price) return;
-      const inv = source.modInventory || (source.modInventory = []);
-      if (inv.includes(id)) return;
+      source.currency = source.currency || { gold: 0 };
+      source.items = source.items || { stacks: {}, uniques: [] };
+      if (def.stackable) {
+        const stacks = source.items.stacks || (source.items.stacks = {});
+        stacks[id] = (stacks[id] || 0) + 1;
+      } else {
+        const uniques = source.items.uniques || (source.items.uniques = []);
+        if (uniques.some(u => u.itemId === id)) return;
+        uniques.push({ uid: `u-${id}`, itemId: id });
+      }
       source.currency.gold -= price;
-      inv.push(id);
-      if (this.player) this.player.gold = source.currency.gold;
+      if (this.player) {
+        this.player.gold = source.currency.gold;
+        this.player.items = source.items;
+      }
       this.syncUIState();
       this.persistSave(source);
     }
@@ -5588,6 +7170,18 @@ export function createGameScene(ctx) {
 
     onWheel(px, py, deltaY) {
       if (!this.editing) {
+        if (this.menuScreen === 'workshop') {
+          const up = this.uiPointer();
+          const area = this.workshopScrollArea || { x: 544, y: 120, w: 1312, h: 380 };
+          if (up.x >= area.x && up.x <= area.x + area.w && up.y >= area.y && up.y <= area.y + area.h) {
+            const contentW = 5 * (280 + 24), viewW = 1312;
+            const maxScroll = Math.max(0, contentW - viewW);
+            if (this.workshopScroll == null) this.workshopScroll = 0;
+            this.workshopScroll = Phaser.Math.Clamp(this.workshopScroll + (deltaY > 0 ? 40 : -40), 0, maxScroll);
+            this.drawUI();
+          }
+          return;
+        }
         if (this.state === 'playing' && this.player?.weapons?.length > 1) {
           this.switchWeapon(deltaY > 0 ? 1 : -1);
         }

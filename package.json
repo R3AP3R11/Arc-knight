@@ -3,17 +3,51 @@
   "version": "1.0.0",
   "description": "Phaser PVE game and level editor MVP",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "node server.js",
-    "build": "vite build"
+    "build": "vite build",
+    "electron": "electron .",
+    "dist": "vite build",
+    "pack": "vite build && electron-builder --win"
   },
   "keywords": [],
-  "author": "",
+  "author": "ARC Engine",
   "license": "ISC",
-  "dependencies": {
-    "phaser": "^4.2.1"
-  },
   "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
+    "phaser": "^4.2.1",
     "vite": "^6.1.0"
+  },
+  "build": {
+    "appId": "com.arcengine.game",
+    "productName": "ARC Engine",
+    "asar": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*",
+      "server.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "data/levels",
+        "to": "data/levels"
+      },
+      {
+        "from": "data/ui",
+        "to": "data/ui"
+      }
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "signAndEditExecutable": false
+    }
   }
 }

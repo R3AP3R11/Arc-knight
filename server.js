@@ -1,10 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { createServer as createViteServer } from 'vite';
+import http from 'node:http';
+import { pathToFileURL } from 'node:url';
 
-const root=process.cwd(), dataDir=path.join(root,'data');
-const dirs={levels:path.join(dataDir,'levels'),ui:path.join(dataDir,'ui'),uploads:path.join(dataDir,'uploads'),players:path.join(dataDir,'players')};
-const legacy=path.join(dataDir,'level.json');
 const defaultLevel={backgroundColor:'#0b1b2b',gridColor:'#173a55',showGridInPlay:false,ui:'battle',walls:[{x:450,y:300,w:30,h:210}],enemies:[{x:730,y:130},{x:730,y:470},{x:180,y:460}],spawn:{x:130,y:300},triggers:[]};
 const templates={
  single:{name:'单箱庭关卡',level:{...defaultLevel,walls:[],enemies:[]}},
@@ -13,7 +11,6 @@ const templates={
   roomLayout:{mode:'multi',cols:4,rows:4,wallThickness:30,roadWidth:448,roadLength:560,cells:[{c:0,r:1},{c:1,r:1},{c:2,r:1}]}
  }}
 };
-await Promise.all([fs.mkdir(dirs.levels,{recursive:true}),fs.mkdir(dirs.ui,{recursive:true}),fs.mkdir(dirs.uploads,{recursive:true}),fs.mkdir(dirs.players,{recursive:true})]);
 const defaultUi={
  battle:{id:'battle',type:'battle',name:'战斗UI',nodes:[
   {id:'hpBar',type:'bar',x:40,y:40,w:360,h:28,fill:'#e84c5e',bg:'#3a1f2b',bind:{ratio:'hpRatio'}},
@@ -47,87 +44,293 @@ const defaultUi={
   {id:'version',type:'text',x:120,y:1010,size:20,color:'#9fc3d8',text:'v0.1.0'}
  ]}
 };
-for(const [id,value] of Object.entries(defaultUi)){
- const f=path.join(dirs.ui,`${id}.json`);
- try{await fs.access(f)}catch{await fs.writeFile(f,JSON.stringify(value,null,2))}
+const MIME={
+ '.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8',
+ '.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.svg':'image/svg+xml',
+ '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.gif':'image/gif',
+ '.ico':'image/x-icon','.woff':'font/woff','.woff2':'font/woff2','.ttf':'font/ttf'
+};
+
+export async function startServer(options = {}) {
+  const root = options.root || process.cwd();
+  const isPackaged = !!options.isPackaged;
+  const dataRoot = options.dataRoot || path.join(root, 'data');
+  const levelsDir = options.levelsDir || path.join(dataRoot, 'levels');
+  const uiDir = options.uiDir || path.join(dataRoot, 'ui');
+  const staticDir = options.staticDir || null;
+  const host = options.host;
+  const port = options.port ?? (isPackaged ? 0 : Number(process.env.PORT || 5173));
+  // 图标素材目录（编辑器下拉选择用），开发模式指向项目根下的「图标」文件夹
+  const iconsDir = options.iconsDir || path.join(root, '图标');
+
+  const dirs = {
+    levels: levelsDir,
+    ui: uiDir,
+    uploads: path.join(dataRoot, 'uploads'),
+    players: path.join(dataRoot, 'players'),
+    testPlayers: path.join(dataRoot, 'test-players')
+  };
+
+  // 打包模式：优先使用只读内置资源；若内置目录缺失则回退可写目录，保证进程仍可启动。
+  if (isPackaged) {
+    for (const key of ['levels', 'ui']) {
+      const preferred = key === 'levels' ? levelsDir : uiDir;
+      try {
+        const st = await fs.stat(preferred);
+        if (st.isDirectory()) dirs[key] = preferred;
+        else throw new Error('not a directory');
+      } catch {
+        dirs[key] = path.join(dataRoot, key);
+      }
+    }
+  }
+
+  const legacy = path.join(dataRoot, 'level.json');
+
+  await fs.mkdir(dirs.uploads, { recursive: true });
+  await fs.mkdir(dirs.players, { recursive: true });
+  await fs.mkdir(dirs.testPlayers, { recursive: true });
+
+  // 开发模式：levels/ui 属于项目 data/，可写且需要补齐默认内容。
+  // 打包模式：levels/ui 来自只读内置资源，不做任何写入与补齐。
+  if (!isPackaged) {
+    await fs.mkdir(dirs.levels, { recursive: true });
+    await fs.mkdir(dirs.ui, { recursive: true });
+    for (const [id, value] of Object.entries(defaultUi)) {
+      const f = path.join(dirs.ui, `${id}.json`);
+      try { await fs.access(f); } catch { await fs.writeFile(f, JSON.stringify(value, null, 2)); }
+    }
+    try {
+      const files = await fs.readdir(dirs.levels);
+      if (!files.length) {
+        let value = defaultLevel;
+        try { value = JSON.parse(await fs.readFile(legacy, 'utf8')); } catch {}
+        await fs.writeFile(path.join(dirs.levels, 'level-1.json'), JSON.stringify(value, null, 2));
+      }
+    } catch {}
+  }
+
+  const json = (res, value, status = 200) => {
+    res.statusCode = status;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify(value));
+  };
+  async function body(req) { let text = ''; for await (const c of req) text += c; return JSON.parse(text || '{}'); }
+  async function rawBody(req) { const chunks = []; for await (const c of req) chunks.push(c); return Buffer.concat(chunks); }
+  async function list(kind) { return (await fs.readdir(dirs[kind])).filter(x => x.endsWith('.json')).map(x => x.slice(0, -5)).sort(); }
+  async function file(kind, id) { return path.join(dirs[kind], `${id}.json`); }
+
+  const playersIndex = path.join(dirs.players, 'index.json');
+  async function readJson(f, fallback) { try { return JSON.parse(await fs.readFile(f, 'utf8')); } catch { return fallback ? structuredClone(fallback) : null; } }
+  async function writeJson(f, value) { await fs.writeFile(f, JSON.stringify(value, null, 2)); }
+  async function listPlayers() { return await readJson(playersIndex, []); }
+  async function savePlayers(slots) { await writeJson(playersIndex, slots); }
+
+  const testPlayersIndex = path.join(dirs.testPlayers, 'index.json');
+  async function listTestPlayers() { return await readJson(testPlayersIndex, []); }
+  async function saveTestPlayers(slots) { await writeJson(testPlayersIndex, slots); }
+
+  async function serveStatic(req, res, url) {
+    const rel = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\/+/, '');
+    const rootAbs = path.resolve(staticDir);
+    const full = path.resolve(rootAbs, rel);
+    if (full !== rootAbs && !full.startsWith(rootAbs + path.sep)) return json(res, { error: 'Invalid' }, 400);
+    try {
+      const stat = await fs.stat(full);
+      if (stat.isFile()) {
+        res.statusCode = 200;
+        res.setHeader('Content-Type', MIME[path.extname(full).toLowerCase()] || 'application/octet-stream');
+        res.setHeader('Content-Length', stat.size);
+        return res.end(await fs.readFile(full));
+      }
+    } catch {}
+    // SPA 回退：无扩展名路径（前端路由）回退到 index.html
+    if (!path.extname(rel)) {
+      try {
+        const index = path.join(rootAbs, 'index.html');
+        res.statusCode = 200;
+        res.setHeader('Content-Type', MIME['.html']);
+        return res.end(await fs.readFile(index));
+      } catch { return json(res, { error: 'Not found' }, 404); }
+    }
+    return json(res, { error: 'Not found' }, 404);
+  }
+
+  let vite = null;
+  if (!staticDir) {
+    const { createServer: createViteServer } = await import('vite');
+    vite = await createViteServer({ root, server: { middlewareMode: true } });
+  }
+
+  const server = http.createServer(async (req, res) => {
+    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const parts = url.pathname.split('/').filter(Boolean);
+
+    if (parts[0] === 'api') {
+      try {
+        // 打包模式：关卡/UI/流程配置只读，拒绝任何写入
+        const readOnlyDenied = isPackaged && (
+          (parts[1] === 'levels' && parts.length > 2 && (req.method === 'POST' || req.method === 'DELETE')) ||
+          (parts[1] === 'level' && req.method === 'POST') ||
+          (parts[1] === 'ui' && parts.length > 2 && req.method === 'POST') ||
+          (parts[1] === 'flow' && req.method === 'POST')
+        );
+        if (readOnlyDenied) return json(res, { error: 'Read-only in packaged mode' }, 403);
+
+        if (parts[1] === 'levels') {
+          if (parts.length === 2 && req.method === 'GET') return json(res, { levels: await list('levels') });
+          const id = parts[2]; if (!id || !/^[-\w]+$/.test(id)) return json(res, { error: 'Invalid id' }, 400);
+          if (req.method === 'GET') return json(res, JSON.parse(await fs.readFile(await file('levels', id), 'utf8')));
+          if (req.method === 'POST') { const value = await body(req); await fs.writeFile(await file('levels', id), JSON.stringify(value, null, 2)); return json(res, { ok: true }); }
+          if (req.method === 'DELETE') { await fs.rm(await file('levels', id), { force: true }); return json(res, { ok: true }); }
+        }
+        if (parts[1] === 'templates' && req.method === 'GET') return json(res, templates);
+        if (parts[1] === 'flow') {
+          if (req.method === 'GET') {
+            try { return json(res, JSON.parse(await fs.readFile(path.join(dataRoot, 'flow.json'), 'utf8'))); }
+            catch { return json(res, { version: 2, flows: { game: { name: '游戏流程', entry: '', nodes: [] }, tutorial: { name: '教程流程', entry: '', nodes: [] } } }); }
+          }
+          if (req.method === 'POST') { await fs.writeFile(path.join(dataRoot, 'flow.json'), JSON.stringify(await body(req), null, 2)); return json(res, { ok: true }); }
+        }
+        if (parts[1] === 'level') {
+          const id = parts[2] || 'level-1';
+          if (req.method === 'GET') return json(res, JSON.parse(await fs.readFile(await file('levels', id), 'utf8')));
+          if (req.method === 'POST') { await fs.writeFile(await file('levels', id), JSON.stringify(await body(req), null, 2)); return json(res, { ok: true }); }
+        }
+        if (parts[1] === 'ui') {
+          const id = parts[2];
+          if (!id || !/^[-\w]+$/.test(id)) return json(res, { error: 'Invalid id' }, 400);
+          const f = path.join(dirs.ui, `${id}.json`);
+          if (req.method === 'GET') { try { return json(res, JSON.parse(await fs.readFile(f, 'utf8'))); } catch { return json(res, defaultUi[id] || { id, name: id, nodes: [] }); } }
+          if (req.method === 'POST') { await fs.writeFile(f, JSON.stringify(await body(req), null, 2)); return json(res, { ok: true }); }
+        }
+        if (parts[1] === 'players') {
+          if (parts.length === 2 && req.method === 'GET') {
+            const slots = await listPlayers();
+            const metas = {};
+            for (const id of slots) { try { const p = await readJson(await file('players', id)); if (p) metas[id] = { name: p.meta?.name, updatedAt: p.meta?.updatedAt, level: p.progress?.level }; } catch {} }
+            return json(res, { slots, metas });
+          }
+          const id = parts[2]; if (!id || !/^[-\w]+$/.test(id)) return json(res, { error: 'Invalid id' }, 400);
+          if (req.method === 'GET') { const p = await readJson(await file('players', id)); if (!p) return json(res, { error: 'Not found' }, 404); return json(res, p); }
+          if (req.method === 'POST') {
+            const value = await body(req); const slots = await listPlayers();
+            if (!slots.includes(id)) slots.push(id);
+            await savePlayers(slots);
+            await writeJson(await file('players', id), value);
+            return json(res, { ok: true });
+          }
+          if (req.method === 'DELETE') {
+            await fs.rm(await file('players', id), { force: true });
+            const slots = (await listPlayers()).filter(x => x !== id);
+            await savePlayers(slots);
+            return json(res, { ok: true });
+          }
+        }
+        if (parts[1] === 'test-players') {
+          if (parts.length === 2 && req.method === 'GET') {
+            const slots = await listTestPlayers();
+            const metas = {};
+            for (const id of slots) { try { const p = await readJson(await file('testPlayers', id)); if (p) metas[id] = { name: p.meta?.name, updatedAt: p.meta?.updatedAt, level: p.progress?.level }; } catch {} }
+            return json(res, { slots, metas });
+          }
+          const id = parts[2]; if (!id || !/^[-\w]+$/.test(id)) return json(res, { error: 'Invalid id' }, 400);
+          if (req.method === 'GET') { const p = await readJson(await file('testPlayers', id)); if (!p) return json(res, { error: 'Not found' }, 404); return json(res, p); }
+          if (req.method === 'POST') {
+            const value = await body(req); const slots = await listTestPlayers();
+            if (!slots.includes(id)) slots.push(id);
+            await saveTestPlayers(slots);
+            await writeJson(await file('testPlayers', id), value);
+            return json(res, { ok: true });
+          }
+          if (req.method === 'DELETE') {
+            await fs.rm(await file('testPlayers', id), { force: true });
+            const slots = (await listTestPlayers()).filter(x => x !== id);
+            await saveTestPlayers(slots);
+            return json(res, { ok: true });
+          }
+        }
+        if (parts[1] === 'uploads' && req.method === 'POST') {
+          const buf = await rawBody(req);
+          const ct = (req.headers['content-type'] || '').toLowerCase();
+          const ext = ct.includes('png') ? 'png' : ct.includes('webp') ? 'webp' : ct.includes('gif') ? 'gif' : ct.includes('svg') ? 'svg' : 'jpg';
+          const name = `${Date.now()}-${Math.round(Math.random() * 1e6)}.${ext}`;
+          await fs.writeFile(path.join(dirs.uploads, name), buf);
+          return json(res, { path: `/uploads/${name}` });
+        }
+        if (parts[1] === 'icons' && req.method === 'GET') {
+          let names = [];
+          try {
+            names = (await fs.readdir(iconsDir))
+              .filter(n => /\.(png|jpe?g|webp|gif)$/i.test(n))
+              .sort();
+          } catch {}
+          return json(res, { icons: names.map(name => ({ name, url: `/icons/${encodeURIComponent(name)}` })) });
+        }
+        return json(res, { error: 'Not found' }, 404);
+      } catch (e) { console.error('[api error]', req.method, url.pathname, e); return json(res, { error: 'Not found' }, 404); }
+    }
+
+    if (parts[0] === 'uploads') {
+      const name = parts[1];
+      if (!name || !/^[\w.-]+$/.test(name)) return json(res, { error: 'Invalid' }, 400);
+      const ext = path.extname(name).slice(1).toLowerCase();
+      const types = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml' };
+      res.setHeader('Content-Type', types[ext] || 'application/octet-stream');
+      res.setHeader('Cache-Control', 'no-store');
+      try { return res.end(await fs.readFile(path.join(dirs.uploads, name))); } catch { return json(res, { error: 'Not found' }, 404); }
+    }
+
+    if (parts[0] === 'icons') {
+      const name = decodeURIComponent(parts[1] || '');
+      if (!name || name.includes('..') || name.includes('/') || name.includes('\\')) return json(res, { error: 'Invalid' }, 400);
+      const ext = path.extname(name).slice(1).toLowerCase();
+      const types = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml' };
+      res.setHeader('Content-Type', types[ext] || 'application/octet-stream');
+      res.setHeader('Cache-Control', 'no-store');
+      try { return res.end(await fs.readFile(path.join(iconsDir, name))); } catch { return json(res, { error: 'Not found' }, 404); }
+    }
+
+    if (staticDir) return serveStatic(req, res, url);
+    if (vite) return vite.middlewares(req, res);
+    return json(res, { error: 'Not found' }, 404);
+  });
+
+  await new Promise((resolve, reject) => {
+    const onError = error => {
+      if (error.code === 'EADDRINUSE') {
+        console.error(`Port ${port} is already in use. Stop existing dev server or run with PORT=5174 npm run dev`);
+        reject(error);
+      } else reject(error);
+    };
+    server.once('error', onError);
+    server.listen(port, host, () => {
+      server.off('error', onError);
+      resolve();
+    });
+  });
+
+  const actual = server.address();
+  const actualPort = typeof actual === 'object' && actual ? actual.port : port;
+  console.log(`${isPackaged ? 'Packaged game' : 'Editor'} running at http://${host || 'localhost'}:${actualPort}`);
+  return {
+    server,
+    port: actualPort,
+    host: host || '127.0.0.1',
+    close: async () => {
+      await new Promise(resolve => server.close(() => resolve()));
+      if (vite) await vite.close();
+    }
+  };
 }
-try{const files=await fs.readdir(dirs.levels);if(!files.length){let value=defaultLevel;try{value=JSON.parse(await fs.readFile(legacy,'utf8'))}catch{}await fs.writeFile(path.join(dirs.levels,'level-1.json'),JSON.stringify(value,null,2))}}catch{}
-const json=(res,value,status=200)=>{res.statusCode=status;res.setHeader('Content-Type','application/json');res.end(JSON.stringify(value))};
-async function body(req){let text='';for await(const c of req)text+=c;return JSON.parse(text||'{}')}
-async function rawBody(req){const chunks=[];for await(const c of req)chunks.push(c);return Buffer.concat(chunks)}
-async function list(kind){return (await fs.readdir(dirs[kind])).filter(x=>x.endsWith('.json')).map(x=>x.slice(0,-5)).sort()}
-async function file(kind,id){return path.join(dirs[kind],`${id}.json`)}
-const playersIndex=path.join(dirs.players,'index.json');
-async function readJson(f,fallback){try{return JSON.parse(await fs.readFile(f,'utf8'))}catch{return fallback?structuredClone(fallback):null}}
-async function writeJson(f,value){await fs.writeFile(f,JSON.stringify(value,null,2))}
-async function listPlayers(){return await readJson(playersIndex,[])}
-async function savePlayers(slots){await writeJson(playersIndex,slots)}
-const vite=await createViteServer({root,server:{middlewareMode:true}});
-const server=(await import('node:http')).createServer(async(req,res)=>{
- const url=new URL(req.url,`http://${req.headers.host||'localhost'}`), parts=url.pathname.split('/').filter(Boolean);
- if(parts[0]==='api'){
-  try{
-   if(parts[1]==='levels'){
-    if(parts.length===2&&req.method==='GET')return json(res,{levels:await list('levels')});
-    const id=parts[2]; if(!id||!/^[-\w]+$/.test(id))return json(res,{error:'Invalid id'},400);
-    if(req.method==='GET')return json(res,JSON.parse(await fs.readFile(await file('levels',id),'utf8')));
-    if(req.method==='POST'){const value=await body(req);await fs.writeFile(await file('levels',id),JSON.stringify(value,null,2));return json(res,{ok:true})}
-    if(req.method==='DELETE'){await fs.rm(await file('levels',id),{force:true});return json(res,{ok:true})}
-   }
-   if(parts[1]==='templates'&&req.method==='GET')return json(res,templates);
-   if(parts[1]==='flow'){if(req.method==='GET'){try{return json(res,JSON.parse(await fs.readFile(path.join(dataDir,'flow.json'),'utf8')))}catch{return json(res,{version:2,flows:{game:{name:'游戏流程',entry:'',nodes:[]},tutorial:{name:'教程流程',entry:'',nodes:[]}}})}}if(req.method==='POST'){await fs.writeFile(path.join(dataDir,'flow.json'),JSON.stringify(await body(req),null,2));return json(res,{ok:true})}}
-   if(parts[1]==='level'){const id=parts[2]||'level-1';if(req.method==='GET')return json(res,JSON.parse(await fs.readFile(await file('levels',id),'utf8')));if(req.method==='POST'){await fs.writeFile(await file('levels',id),JSON.stringify(await body(req),null,2));return json(res,{ok:true})}}
-   if(parts[1]==='ui'){
-    const id=parts[2];
-    if(!id||!/^[-\w]+$/.test(id))return json(res,{error:'Invalid id'},400);
-    const f=path.join(dirs.ui,`${id}.json`);
-    if(req.method==='GET'){try{return json(res,JSON.parse(await fs.readFile(f,'utf8')))}catch{return json(res,defaultUi[id]||{id,name:id,nodes:[]})}}
-    if(req.method==='POST'){await fs.writeFile(f,JSON.stringify(await body(req),null,2));return json(res,{ok:true})}
-   }
-   if(parts[1]==='players'){
-    if(parts.length===2&&req.method==='GET'){
-     const slots=await listPlayers();
-     const metas={};
-     for(const id of slots){try{const p=await readJson(await file('players',id));if(p)metas[id]={name:p.meta?.name,updatedAt:p.meta?.updatedAt,level:p.progress?.level}}catch{}}
-     return json(res,{slots,metas});
-    }
-    const id=parts[2]; if(!id||!/^[-\w]+$/.test(id))return json(res,{error:'Invalid id'},400);
-    if(req.method==='GET'){const p=await readJson(await file('players',id));if(!p)return json(res,{error:'Not found'},404);return json(res,p)}
-    if(req.method==='POST'){
-     const value=await body(req);const slots=await listPlayers();
-     if(!slots.includes(id))slots.push(id);
-     await savePlayers(slots);
-     await writeJson(await file('players',id),value);
-     return json(res,{ok:true});
-    }
-    if(req.method==='DELETE'){
-     await fs.rm(await file('players',id),{force:true});
-     const slots=(await listPlayers()).filter(x=>x!==id);
-     await savePlayers(slots);
-     return json(res,{ok:true});
-    }
-   }
-   if(parts[1]==='uploads'&&req.method==='POST'){    const buf=await rawBody(req);
-    const ct=(req.headers['content-type']||'').toLowerCase();
-    const ext=ct.includes('png')?'png':ct.includes('webp')?'webp':ct.includes('gif')?'gif':ct.includes('svg')?'svg':'jpg';
-    const name=`${Date.now()}-${Math.round(Math.random()*1e6)}.${ext}`;
-    await fs.writeFile(path.join(dirs.uploads,name),buf);
-    return json(res,{path:`/uploads/${name}`});
-   }
-   return json(res,{error:'Not found'},404);
-  }catch(e){console.error('[api error]',req.method,url.pathname,e);return json(res,{error:'Not found'},404)}
- }
- if(parts[0]==='uploads'){
-  const name=parts[1];
-  if(!name||!/^[\w.-]+$/.test(name))return json(res,{error:'Invalid'},400);
-  const ext=path.extname(name).slice(1).toLowerCase();
-  const types={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',gif:'image/gif',svg:'image/svg+xml'};
-  res.setHeader('Content-Type',types[ext]||'application/octet-stream');
-  res.setHeader('Cache-Control','no-store');
-  try{return res.end(await fs.readFile(path.join(dirs.uploads,name)))}catch{return json(res,{error:'Not found'},404)}
- }
- vite.middlewares(req,res);
-});
-const port=Number(process.env.PORT||5173);
-server.on('error',error=>{if(error.code==='EADDRINUSE'){console.error(`Port ${port} is already in use. Stop existing dev server or run with PORT=5174 npm run dev`);process.exit(1)}throw error});
-server.listen(port,()=>console.log(`Editor running at http://localhost:${port}`));
+
+// 直接以 `node server.js` 运行时启动开发服务器；被 Electron 动态 import 时跳过。
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+  try {
+    await startServer();
+  } catch (error) {
+    console.error(error);
+    process.exit(1);
+  }
+}

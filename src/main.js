@@ -1,7 +1,7 @@
 import './style.css';
 import Phaser from 'phaser';
-import { createState, normalizeLevel, clone, SCHEME_WEAPONS, ENEMY_TYPES, DROP_ITEMS, normalizeTrigger, WEAPON_LABELS, MOD_DEFS } from './state.js';
-import { get, remove, loadLevel, saveDraft, saveFormal, getUi, loadPlayer, savePlayer, listPlayers } from './api.js';
+import { createState, normalizeLevel, clone, SCHEME_WEAPONS, ENEMY_TYPES, DROP_ITEMS, WEAPON_LABELS, MOD_DEFS } from './state.js';
+import { get, remove, loadLevel, saveDraft, saveFormal, getUi, loadPlayer, savePlayer, listPlayers, loadTestPlayer, saveTestPlayer, listTestPlayers } from './api.js';
 import { getDom, setStatus, renderLevels, renderPreviewWeapons, renderPreviewMods } from './ui.js';
 import { createGameScene } from './game-scene.js';
 import { normalizePlayer } from './player-data.js';
@@ -9,13 +9,57 @@ import { renderUIConfigPage, saveUIConfigPage, addUINode } from './ui-config.js'
 import { generateRoomLayout, spawnInRooms, ROOM_SIZE, MIN_ROOM_SIZE, MAX_ROOM_SIZE, MIN_ROOM_THICKNESS, MAX_ROOM_THICKNESS, MAX_PANEL_SIZE, MIN_ROAD_WIDTH, MAX_ROAD_WIDTH, MIN_ROAD_LENGTH, MAX_ROAD_LENGTH } from './rooms.js';
 
 const W = 1920, H = 1080, state = createState();
+// 打包/纯游戏端：Electron 通过 ?packaged=1 或 preload 暴露 __APP_PACKAGED__ 标记
+const PACKAGED = (() => {
+  try {
+    return window.__APP_PACKAGED__ === true ||
+      new URLSearchParams(window.location.search).get('packaged') === '1';
+  } catch { return false; }
+})();
+const LAST_LEVEL_KEY = 'editor:lastLevelId';
+// 进入试玩/预览前的编辑器关卡快照；退出时恢复，保证试玩/预览不改变编辑器关卡数据
+let editorSnapshot = null;
+// 进入试玩前的编辑器玩家快照；试玩期间 state.player 切到测试存档，退出时恢复正式玩家内存数据
+let editorPlayerSnapshot = null;
+
+function rememberLevel(id) {
+  try { localStorage.setItem(LAST_LEVEL_KEY, id); } catch {}
+}
+
+function recallLevel() {
+  try { return localStorage.getItem(LAST_LEVEL_KEY); } catch { return null; }
+}
 state.player = normalizePlayer();
 state.playerId = 'save-1';
 state.hasAnySave = false;
+// 存档存储源：formal=正式 data/players，test=试玩 data/test-players
+state.saveStore = 'formal';
 // 预览临时玩家数据：仅在"游戏预览"模式生效；给初始升级点数便于体验加点
 state.previewPlayer = normalizePlayer();
 state.previewPlayer.progress.points = 5;
+state.previewPlayer.items = {
+  stacks: { 'multi-track': 2, 'relic-vitality': 1 },
+  uniques: [{ uid: 'u-ricochet', itemId: 'ricochet' }, { uid: 'u-pet-ember', itemId: 'pet-ember' }]
+};
+// 试玩临时玩家数据：读真实存档但不写回，避免试玩改变玩家存档
+state.trialPlayer = normalizePlayer();
+
+// 试玩模式（mode==='trial'）走测试存档 API，其余走正式存档 API
+function isTrialSaveStore() {
+  return state.saveStore === 'test';
+}
+function listStoreSaves() {
+  return isTrialSaveStore() ? listTestPlayers() : listPlayers();
+}
+function saveStorePlayer(id, player) {
+  return isTrialSaveStore() ? saveTestPlayer(id, player) : savePlayer(id, player);
+}
+function loadStorePlayer(id) {
+  return isTrialSaveStore() ? loadTestPlayer(id) : loadPlayer(id);
+}
 let dom;
+// 「图标」文件夹素材列表（可交互图标下拉选择）
+let iconChoices = [];
 
 // 编辑器撤销栈（Ctrl+Z）
 const MAX_UNDO = 60;
@@ -34,6 +78,57 @@ function undo() {
   state.game?.scene.scenes[0]?.draw?.();
   sync();
   saveFormal(state.levelId, state.level).catch(() => setStatus(dom, '保存失败', true));
+}
+
+// 编辑器复制/粘贴（Ctrl+C / Ctrl+V）
+let clipboard = null;
+
+function entityKind(l, entity) {
+  if (l.walls.includes(entity)) return 'walls';
+  if (l.enemies.includes(entity)) return 'enemies';
+  if (l.triggers.includes(entity)) return 'triggers';
+  if (l.crates.includes(entity)) return 'crates';
+  if (l.barrels.includes(entity)) return 'barrels';
+  if (l.chests.includes(entity)) return 'chests';
+  if (l.images.includes(entity)) return 'images';
+  if ((l.spawnZones || []).includes(entity)) return 'spawnZones';
+  if (l.gates.includes(entity)) return 'gates';
+  if (l.vendors.includes(entity)) return 'vendors';
+  if (l.idols.includes(entity)) return 'idols';
+  if ((l.icons || []).includes(entity)) return 'icons';
+  if ((l.portals || []).includes(entity)) return 'portals';
+  return '';
+}
+
+const COPY_ID_PREFIX = {
+  walls: 'wall', enemies: 'enemy', triggers: 'trigger', crates: 'crate',
+  barrels: 'barrel', chests: 'chest', images: 'image', spawnZones: 'spawnzone',
+  gates: 'gate', vendors: 'vendor', idols: 'idol', icons: 'icon', portals: 'portal'
+};
+
+function copySelected() {
+  const entity = state.selected;
+  if (!entity) { setStatus(dom, '未选择实体'); return; }
+  const kind = entityKind(state.level, entity);
+  if (!kind) { setStatus(dom, '该实体不可复制'); return; }
+  clipboard = { kind, data: clone(entity) };
+  setStatus(dom, '已复制');
+}
+
+function pasteClipboard() {
+  if (!clipboard) { setStatus(dom, '剪贴板为空'); return; }
+  const l = state.level;
+  const list = l[clipboard.kind];
+  if (!Array.isArray(list)) return;
+  const dup = clone(clipboard.data);
+  dup.id = `${COPY_ID_PREFIX[clipboard.kind]}-${Date.now()}`;
+  dup.x = (Number(dup.x) || 0) + 40;
+  dup.y = (Number(dup.y) || 0) + 40;
+  pushUndo();
+  list.push(dup);
+  state.selected = dup;
+  redraw();
+  setStatus(dom, '已粘贴');
 }
 
 function updateWall(field, value) {
@@ -181,7 +276,6 @@ function renderPreviewPlayer() {
   dom.pvExp.value = p.progress.exp;
   dom.pvPoints.value = p.progress.points ?? 0;
   dom.pvGold.value = p.currency.gold;
-  dom.pvCharge.value = p.currency.charge;
   dom.pvMoveSpeed.value = c.moveSpeed;
   dom.pvAttackPower.value = c.attackPower;
   dom.pvCritRate.value = c.critRate;
@@ -191,7 +285,7 @@ function renderPreviewPlayer() {
   dom.pvDamageReduction.value = c.damageReduction;
   dom.pvDodgeRate.value = c.dodgeRate;
   renderPreviewWeapons(dom, p.weapons);
-  renderPreviewMods(dom, p.mods, MOD_DEFS);
+  renderPreviewMods(dom, p.equipment.weaponMods, MOD_DEFS);
 }
 
 function renderTrialPlayer() {
@@ -202,7 +296,6 @@ function renderTrialPlayer() {
   dom.tpExp.value = p.progress.exp;
   dom.tpPoints.value = p.progress.points ?? 0;
   dom.tpGold.value = p.currency.gold;
-  dom.tpCharge.value = p.currency.charge;
   dom.tpMoveSpeed.value = c.moveSpeed;
   dom.tpAttackPower.value = c.attackPower;
   dom.tpCritRate.value = c.critRate;
@@ -212,7 +305,30 @@ function renderTrialPlayer() {
   dom.tpDamageReduction.value = c.damageReduction;
   dom.tpDodgeRate.value = c.dodgeRate;
   renderPreviewWeapons(dom, p.weapons, 'tpWeapons');
-  renderPreviewMods(dom, p.mods, MOD_DEFS, 'tpMods');
+  renderPreviewMods(dom, p.equipment.weaponMods, MOD_DEFS, 'tpMods');
+}
+
+function setModEquipped(player, id, equipped) {
+  const def = MOD_DEFS[id];
+  if (!def) return;
+  const eq = player.equipment && player.equipment.weaponMods;
+  if (!eq) return;
+  if (def.weapon) {
+    const slot = eq[def.weapon];
+    if (!slot) return;
+    slot.dedicated = equipped ? id : (slot.dedicated === id ? null : slot.dedicated);
+  } else {
+    for (const w of Object.keys(eq)) {
+      const slot = eq[w];
+      if (!slot) continue;
+      const arr = slot.generic || (slot.generic = []);
+      if (equipped) {
+        if (!arr.includes(id)) arr.push(id);
+      } else {
+        slot.generic = arr.filter(x => x !== id);
+      }
+    }
+  }
 }
 
 function getNested(obj, path) {
@@ -244,7 +360,10 @@ function renderEntityProperties() {
     : l.images.includes(entity) ? '场景图片'
     : (l.spawnZones || []).includes(entity) ? '生成区域'
     : l.gates.includes(entity) ? '能量门'
-    : l.vendors.includes(entity) ? '售货机' : '';
+    : l.vendors.includes(entity) ? '售货机'
+    : l.idols.includes(entity) ? '神像'
+    : (l.icons || []).includes(entity) ? '可交互图标'
+    : (l.portals || []).includes(entity) ? '传送门' : '';
 
   dom.entityProperties.hidden = state.mode !== 'editor' || !entity;
   dom.entityTitle.textContent = type ? `${type}属性` : '实体属性';
@@ -259,8 +378,10 @@ function renderEntityProperties() {
   const enemyTypeOptions = Object.entries(ENEMY_TYPES).map(([k, t]) => [k, t.name]);
   const levelOptions = state.levels.map(id => [id, id]);
   const weaponOptions = [...Object.entries(WEAPON_LABELS).map(([k, v]) => [k, v]), ['', '无']];
-  const actionOptions = [
-    ['complete', '通关标记'],
+  const eventTypeOptions = [
+    ['complete', '整体通关标记'],
+    ['roomComplete', '单房间通关标记'],
+    ['combat', '触发战斗'],
     ['spawnEnemy', '召唤敌人'],
     ['switchLevel', '切换关卡'],
     ['spawnGate', '生成能量门'],
@@ -309,65 +430,10 @@ function renderEntityProperties() {
       ['h', '高度', 'number'],
       ['shape', '几何形状', 'select', [['rect', '矩形'], ['circle', '圆形']]],
       ['color', '编辑器颜色', 'color'],
-      ['action', '事件类型', 'select', actionOptions],
       ['once', '一次性触发', 'boolean'],
       ['cooldown', '冷却(ms)', 'number'],
       ['visible', '可见', 'boolean']
     ];
-    if (entity.action === 'spawnEnemy') {
-      const zoneOptions = [...(state.level.spawnZones || []).map((z, i) => [z.id, `${i + 1}. ${z.id}`])];
-      if (zoneOptions.length) zoneOptions.unshift(['', '（无：用触发器自身范围）']);
-      fields.push(
-        ['spawn.spawnZoneId', '生成区域', 'select', zoneOptions],
-        ['spawn.stopOnExit', '离开触发器后停止生成', 'boolean'],
-        ['spawn.resumeOnReturn', '离开后重新进入：继续进度', 'boolean']
-      );
-      const waves = (entity.spawn || {}).waves || [];
-      fields.push(['__waveCount', `波数（当前 ${waves.length}）`, 'number']);
-      for (let i = 0; i < waves.length; i++) {
-        const no = i + 1;
-        const wave = entity.spawn.waves[i] || {};
-        const isSurroundCircle = wave.mode !== 'offscreen' && wave.mode !== 'inscreen' && wave.shape === 'circle';
-        fields.push(
-          [`spawn.waves.${i}.enemyType`, `第${no}波敌人类型`, 'select', enemyTypeOptions],
-          [`spawn.waves.${i}.mode`, `第${no}波生成方式`, 'select', [['surround', '周围生成'], ['offscreen', '屏幕外生成'], ['inscreen', '屏幕内随机']]],
-          [`spawn.waves.${i}.preDelay`, `第${no}波生成前等待(ms)`, 'number'],
-          [`spawn.waves.${i}.postDelay`, `第${no}波生成后等待(ms)`, 'number'],
-          [`spawn.waves.${i}.waitForClear`, `第${no}波是否等待清理（场上无敌人才生成）`, 'boolean']
-        );
-        if (wave.mode === 'inscreen') {
-          fields.push(
-            [`spawn.waves.${i}.count`, `第${no}波数量`, 'number'],
-            [`spawn.waves.${i}.playerMinRadius`, `第${no}波玩家安全半径`, 'number']
-          );
-        } else if (wave.mode !== 'offscreen') {
-          fields.push(
-            [`spawn.waves.${i}.shape`, `第${no}波生成形状`, 'select', [['polygon', '角形生成'], ['circle', '圆环生成']]],
-            [`spawn.waves.${i}.sides`, `第${no}波边数`, 'number'],
-            [`spawn.waves.${i}.radius`, `第${no}波半径`, 'number'],
-            [`spawn.waves.${i}.thickness`, `第${no}波边厚度`, 'number'],
-            [`spawn.waves.${i}.drawDuration`, `第${no}波绘制时长(ms)`, 'number'],
-            [`spawn.waves.${i}.fadeDuration`, `第${no}波消失时长(ms)`, 'number']
-          );
-          if (isSurroundCircle) {
-            fields.push(
-              [`spawn.waves.${i}.count`, `第${no}波数量`, 'number'],
-              [`spawn.waves.${i}.circleCount`, `第${no}波圆形数量`, 'number']
-            );
-          }
-        } else {
-          fields.push([`spawn.waves.${i}.count`, `第${no}波数量`, 'number']);
-        }
-      }
-    } else if (entity.action === 'switchLevel') {
-      fields.push(
-        ['target', '目标关卡', 'select', levelOptions],
-        ['spawnPoint.x', '出生点X', 'number'],
-        ['spawnPoint.y', '出生点Y', 'number']
-      );
-    } else if (entity.action === 'spawnGate' || entity.action === 'removeGate') {
-      fields.push(['gateIds', '目标能量门（多选）', 'multiselect', gateOptions]);
-    }
   } else if (entity === l.background) {
     if (entity.fx === 'wormhole') {
       fields = [
@@ -411,7 +477,6 @@ function renderEntityProperties() {
     ];
   } else if (l.gates.includes(entity)) {
     fields = [
-      ['id', '编号', 'text'],
       ['x', 'X 坐标', 'number'],
       ['y', 'Y 坐标', 'number'],
       ['w', '宽度', 'number'],
@@ -425,7 +490,6 @@ function renderEntityProperties() {
     ];
   } else if ((l.spawnZones || []).includes(entity)) {
     fields = [
-      ['id', '编号', 'text'],
       ['x', 'X 坐标', 'number'],
       ['y', 'Y 坐标', 'number'],
       ['w', '宽度', 'number'],
@@ -438,6 +502,56 @@ function renderEntityProperties() {
       ['y', 'Y 坐标', 'number'],
       ['w', '宽度', 'number'],
       ['h', '高度', 'number'],
+      ['interactRadius', '交互半径', 'number'],
+      ['visible', '可见', 'boolean']
+    ];
+  } else if (l.idols.includes(entity)) {
+    fields = [
+      ['x', 'X 坐标', 'number'],
+      ['y', 'Y 坐标', 'number'],
+      ['w', '宽度', 'number'],
+      ['h', '高度', 'number'],
+      ['interactRadius', '交互半径', 'number'],
+      ['visible', '可见', 'boolean']
+    ];
+  } else if ((l.icons || []).includes(entity)) {
+    const iconSrcOptions = [
+      ['', '（无）'],
+      ...iconChoices.map(a => [a.url, a.name])
+    ];
+    if (entity.src && !iconSrcOptions.some(([v]) => v === entity.src)) {
+      iconSrcOptions.unshift([entity.src, entity.src]);
+    }
+    fields = [
+      ['x', 'X 坐标', 'number'],
+      ['y', 'Y 坐标', 'number'],
+      ['w', '宽度', 'number'],
+      ['h', '高度', 'number'],
+      ['interactRadius', '交互范围', 'number'],
+      ['tipText', 'Tip 文字', 'text'],
+      ['event', '交互事件', 'select', [
+        ['workshop', '打开工坊页面'],
+        ['weapon', '打开武器页面'],
+        ['battle', '打开战斗页面']
+      ]],
+      ['src', '图标', 'select', iconSrcOptions],
+      ['visible', '游戏中显示', 'boolean']
+    ];
+  } else if ((l.portals || []).includes(entity)) {
+    fields = [
+      ['x', 'X 坐标', 'number'],
+      ['y', 'Y 坐标', 'number'],
+      ['w', '宽度', 'number'],
+      ['h', '高度', 'number'],
+      ['rotation', '旋转角度(°)', 'number'],
+      ['trigger', '出现方式', 'select', [
+        ['start', '游戏开始即存在'],
+        ['trigger', '触发器触发（清敌后出现）']
+      ]],
+      ['triggerId', '触发器', 'select', [
+        ['', '（无）'],
+        ...l.triggers.map((t, i) => [t.id, `${i + 1}. ${t.id}`])
+      ]],
       ['interactRadius', '交互半径', 'number'],
       ['visible', '可见', 'boolean']
     ];
@@ -458,11 +572,15 @@ function renderEntityProperties() {
       ['y', 'Y 坐标', 'number'],
       ['trigger', '出现方式', 'select', [
         ['start', '游戏开始即存在'],
-        ['clearEnemies', '清理全部敌人后出现'],
-        ['trigger', '触发器触发（预留）']
+        ['trigger', '触发器触发（清敌后出现）']
+      ]],
+      ['triggerId', '触发器', 'select', [
+        ['', '（无）'],
+        ...l.triggers.map((t, i) => [t.id, `${i + 1}. ${t.id}`])
       ]],
       ['openRadius', '打开判定半径', 'number']
     ];
+    fields.unshift(['id', '编号', 'text']);
     dom.entityFields.innerHTML = fields.map(([key, label, inputType, options]) => {
       const value = getNested(entity, key) ?? '';
       if (inputType === 'select') {
@@ -546,6 +664,227 @@ function renderEntityProperties() {
     ];
   }
 
+  function triggerEventParamsHtml(ev, i) {
+    const type = ev.type || 'complete';
+
+    if (type === 'spawnEnemy') {
+      const spawn = ev.spawn || (ev.spawn = {});
+      const zoneOptions = [...(state.level.spawnZones || []).map((z, zi) => [z.id, `${zi + 1}. ${z.id}`])];
+      if (zoneOptions.length) zoneOptions.unshift(['', '（无：用触发器自身范围）']);
+      const waves = Array.isArray(spawn.waves) ? spawn.waves : (spawn.waves = []);
+      let html = `
+        <label class="te-check"><input type="checkbox" data-event-i="${i}" data-event-field="spawn.stopOnExit" ${spawn.stopOnExit ? 'checked' : ''}/>离开触发器后停止生成</label>
+        <label class="te-check"><input type="checkbox" data-event-i="${i}" data-event-field="spawn.resumeOnReturn" ${spawn.resumeOnReturn !== false ? 'checked' : ''}/>离开后重新进入：继续进度</label>
+        <label>波数<input data-event-i="${i}" data-event-wavecount="${i}" type="number" min="1" value="${waves.length}"/></label>`;
+
+      for (let w = 0; w < waves.length; w++) {
+        const wave = waves[w] || {};
+        const no = w + 1;
+        const isSurroundCircle = wave.mode !== 'offscreen' && wave.mode !== 'inscreen' && wave.shape === 'circle';
+        html += `
+          <label>第${no}波敌人类型
+            <select data-event-i="${i}" data-event-field="spawn.waves.${w}.enemyType">
+              ${enemyTypeOptions.map(([v, name]) => `<option value="${v}" ${(wave.enemyType || 'basic1') === v ? 'selected' : ''}>${name}</option>`).join('')}
+            </select>
+          </label>
+          <label>第${no}波生成方式
+            <select data-event-i="${i}" data-event-field="spawn.waves.${w}.mode">
+              ${[['surround', '周围生成'], ['offscreen', '屏幕外生成'], ['inscreen', '屏幕内随机']].map(([v, name]) => `<option value="${v}" ${(wave.mode || 'surround') === v ? 'selected' : ''}>${name}</option>`).join('')}
+            </select>
+          </label>
+          <label>第${no}波生成前等待(ms)<input data-event-i="${i}" data-event-field="spawn.waves.${w}.preDelay" type="number" value="${wave.preDelay ?? 0}"/></label>
+          <label>第${no}波生成后等待(ms)<input data-event-i="${i}" data-event-field="spawn.waves.${w}.postDelay" type="number" value="${wave.postDelay ?? 1000}"/></label>
+          <label class="te-check"><input type="checkbox" data-event-i="${i}" data-event-field="spawn.waves.${w}.waitForClear" ${wave.waitForClear ? 'checked' : ''}/>第${no}波等待清理</label>`;
+
+        if (wave.mode === 'inscreen') {
+          html += `
+            <label>第${no}波生成区域
+              <select data-event-i="${i}" data-event-field="spawn.waves.${w}.zoneId">
+                ${zoneOptions.map(([v, name]) => `<option value="${v}" ${(wave.zoneId || '') === v ? 'selected' : ''}>${name}</option>`).join('')}
+              </select>
+            </label>
+            <label>第${no}波数量<input data-event-i="${i}" data-event-field="spawn.waves.${w}.count" type="number" value="${wave.count ?? 5}"/></label>
+            <label>第${no}波玩家安全半径<input data-event-i="${i}" data-event-field="spawn.waves.${w}.playerMinRadius" type="number" value="${wave.playerMinRadius ?? 200}"/></label>`;
+        } else if (wave.mode !== 'offscreen') {
+          html += `
+            <label>第${no}波生成形状
+              <select data-event-i="${i}" data-event-field="spawn.waves.${w}.shape">
+                ${[['polygon', '角形生成'], ['circle', '圆环生成']].map(([v, name]) => `<option value="${v}" ${(wave.shape || 'polygon') === v ? 'selected' : ''}>${name}</option>`).join('')}
+              </select>
+            </label>
+            <label>第${no}波边数<input data-event-i="${i}" data-event-field="spawn.waves.${w}.sides" type="number" value="${wave.sides ?? 6}"/></label>
+            <label>第${no}波半径<input data-event-i="${i}" data-event-field="spawn.waves.${w}.radius" type="number" value="${wave.radius ?? 120}"/></label>
+            <label>第${no}波边厚度<input data-event-i="${i}" data-event-field="spawn.waves.${w}.thickness" type="number" value="${wave.thickness ?? 10}"/></label>
+            <label>第${no}波绘制时长(ms)<input data-event-i="${i}" data-event-field="spawn.waves.${w}.drawDuration" type="number" value="${wave.drawDuration ?? 500}"/></label>
+            <label>第${no}波消失时长(ms)<input data-event-i="${i}" data-event-field="spawn.waves.${w}.fadeDuration" type="number" value="${wave.fadeDuration ?? 500}"/></label>`;
+          if (isSurroundCircle) {
+            html += `
+              <label>第${no}波数量<input data-event-i="${i}" data-event-field="spawn.waves.${w}.count" type="number" value="${wave.count ?? 5}"/></label>
+              <label>第${no}波圆形数量<input data-event-i="${i}" data-event-field="spawn.waves.${w}.circleCount" type="number" value="${wave.circleCount ?? 8}"/></label>`;
+          }
+        } else {
+          html += `<label>第${no}波数量<input data-event-i="${i}" data-event-field="spawn.waves.${w}.count" type="number" value="${wave.count ?? 5}"/></label>`;
+        }
+      }
+      return html;
+    }
+
+    if (type === 'switchLevel') {
+      const sp = ev.spawnPoint || (ev.spawnPoint = { x: 0, y: 0 });
+      return `
+        <label>目标关卡
+          <select data-event-i="${i}" data-event-field="target">
+            ${levelOptions.map(([v, name]) => `<option value="${v}" ${(ev.target || '') === v ? 'selected' : ''}>${name}</option>`).join('')}
+          </select>
+        </label>
+        <label>出生点X<input data-event-i="${i}" data-event-field="spawnPoint.x" type="number" value="${sp.x ?? 0}"/></label>
+        <label>出生点Y<input data-event-i="${i}" data-event-field="spawnPoint.y" type="number" value="${sp.y ?? 0}"/></label>`;
+    }
+
+    if (type === 'spawnGate' || type === 'removeGate') {
+      const arr = Array.isArray(ev.gateIds) ? ev.gateIds : (ev.gateIds = []);
+      return `<div class="field-multiselect"><span class="ms-title">目标能量门（多选）</span><div class="ms-list">
+        ${gateOptions.map(([v, name]) => `<label class="ms-item"><input type="checkbox" data-event-i="${i}" data-ms="events.${i}.gateIds" value="${v}" ${arr.includes(v) ? 'checked' : ''}/>${name}</label>`).join('')}
+      </div></div>`;
+    }
+
+    return '<p class="hint">该事件无参数</p>';
+  }
+
+  function renderTriggerEvents(entity) {
+    const wrap = document.createElement('div');
+    wrap.className = 'trigger-events';
+    wrap.innerHTML = `
+      <h3>事件列表</h3>
+      <div class="trigger-event-list"></div>
+      <button type="button" id="triggerEventAdd">添加事件</button>`;
+    dom.entityFields.appendChild(wrap);
+
+    const list = wrap.querySelector('.trigger-event-list');
+    const saveQuiet = () => saveDraft(state.levelId, state.level).catch(() => setStatus(dom, '保存失败', true));
+
+    const render = () => {
+      const events = entity.events || (entity.events = []);
+      if (!events.length) events.push({ type: 'complete' });
+      list.innerHTML = events.map((ev, i) => `
+        <div class="trigger-event-row">
+          <div class="te-head">
+            <label>事件类型
+              <select data-event-i="${i}" data-event-type="${i}">
+                ${eventTypeOptions.map(([v, name]) => `<option value="${v}" ${(ev.type || 'complete') === v ? 'selected' : ''}>${name}</option>`).join('')}
+              </select>
+            </label>
+            <label>触发时机
+              <select data-event-i="${i}" data-event-when="${i}">
+                <option value="enter" ${(ev.when || 'enter') === 'enter' ? 'selected' : ''}>进入即触发</option>
+                <option value="enemiesCleared" ${ev.when === 'enemiesCleared' ? 'selected' : ''}>击败本触发器召唤敌人后</option>
+              </select>
+            </label>
+            <button type="button" data-event-del="${i}" title="删除此事件">删除</button>
+          </div>
+          <div class="te-params">${triggerEventParamsHtml(ev, i)}</div>
+        </div>`).join('');
+    };
+    render();
+
+    wrap.addEventListener('focusin', e => {
+      if (e.target.matches('input,select')) pushUndo();
+    });
+
+    wrap.querySelector('#triggerEventAdd').onclick = () => {
+      pushUndo();
+      const events = entity.events || (entity.events = []);
+      events.push({ type: 'complete' });
+      render();
+      saveQuiet();
+    };
+
+    list.addEventListener('click', e => {
+      const del = e.target.dataset.eventDel;
+      if (del != null) {
+        pushUndo();
+        const events = entity.events || (entity.events = []);
+        events.splice(Number(del), 1);
+        render();
+        saveQuiet();
+      }
+    });
+
+    list.addEventListener('change', e => {
+      const el = e.target;
+      if (el.dataset.eventWhen != null) {
+        const i = Number(el.dataset.eventWhen);
+        const ev = entity.events[i];
+        if (!ev) return;
+        ev.when = el.value === 'enemiesCleared' ? 'enemiesCleared' : 'enter';
+        saveQuiet();
+        return;
+      }
+      if (el.dataset.eventType != null) {
+        const i = Number(el.dataset.eventType);
+        const ev = entity.events[i];
+        if (!ev) return;
+        ev.type = el.value;
+        delete ev.spawn;
+        delete ev.target;
+        delete ev.spawnPoint;
+        delete ev.gateIds;
+        if (ev.type === 'spawnEnemy') {
+          ev.spawn = { stopOnExit: false, resumeOnReturn: true, waves: [] };
+        } else if (ev.type === 'switchLevel') {
+          ev.target = state.levels[0] || '';
+          ev.spawnPoint = { x: 0, y: 0 };
+        } else if (ev.type === 'spawnGate' || ev.type === 'removeGate') {
+          ev.gateIds = [];
+        }
+        render();
+        saveQuiet();
+        return;
+      }
+      if (el.dataset.ms != null) {
+        const i = Number(el.dataset.eventI);
+        const ev = entity.events[i];
+        if (!ev) return;
+        ev.gateIds = [...list.querySelectorAll(`input[data-ms="events.${i}.gateIds"]:checked`)].map(x => x.value);
+        saveQuiet();
+        return;
+      }
+      const field = el.dataset.eventField;
+      const i = Number(el.dataset.eventI);
+      if (!field || !Number.isInteger(i) || !entity.events[i]) return;
+      const value = el.type === 'checkbox' ? el.checked
+        : el.type === 'number' ? Number(el.value) : el.value;
+      setNested(entity.events[i], field, value);
+      if (/^spawn\.waves\.\d+\.(mode|shape)$/.test(field)) render();
+      saveQuiet();
+    });
+
+    list.addEventListener('input', e => {
+      const el = e.target;
+      if (el.dataset.eventWavecount != null) {
+        const i = Number(el.dataset.eventWavecount);
+        const ev = entity.events[i];
+        if (!ev) return;
+        const spawn = ev.spawn || (ev.spawn = {});
+        const target = Math.max(1, Math.floor(Number(el.value) || 1));
+        const waves = spawn.waves || (spawn.waves = []);
+        while (waves.length < target) waves.push({});
+        while (waves.length > target) waves.pop();
+        render();
+        return;
+      }
+      const field = el.dataset.eventField;
+      const i = Number(el.dataset.eventI);
+      if (!field || !Number.isInteger(i) || !entity.events[i]) return;
+      const value = el.type === 'checkbox' ? el.checked
+        : el.type === 'number' ? Number(el.value) : el.value;
+      setNested(entity.events[i], field, value);
+      if (/^spawn\.waves\.\d+\.(mode|shape)$/.test(field)) render();
+      saveQuiet();
+    });
+  }
+
+  fields.unshift(['id', '编号', 'text']);
   dom.entityFields.innerHTML = fields.map(([key, label, inputType, options]) => {
     const value = key === '__waveCount'
       ? ((entity.spawn || {}).waves || []).length
@@ -571,6 +910,41 @@ function renderEntityProperties() {
   }).join('');
 
   bindEntityFieldInputs(entity);
+
+  if ((l.icons || []).includes(entity)) {
+    const uploadBtn = document.createElement('button');
+    uploadBtn.type = 'button';
+    uploadBtn.textContent = '上传图标';
+    uploadBtn.onclick = () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = async () => {
+        const file = input.files[0];
+        if (!file) return;
+        pushUndo();
+        try {
+          const res = await fetch('/api/uploads', {
+            method: 'POST',
+            headers: { 'Content-Type': file.type || 'application/octet-stream' },
+            body: file
+          });
+          if (!res.ok) throw new Error(`上传失败 ${res.status}`);
+          const data = await res.json();
+          entity.src = data.path;
+          state.game?.scene.scenes[0]?.draw?.();
+          saveDraft(state.levelId, state.level).catch(() => setStatus(dom, '保存失败', true));
+          renderEntityProperties();
+        } catch (err) {
+          setStatus(dom, `图标上传失败：${err.message}`, true);
+        }
+      };
+      input.click();
+    };
+    dom.entityFields.appendChild(uploadBtn);
+  }
+
+  if (l.triggers.includes(entity)) renderTriggerEvents(entity);
 }
 
 function bindEntityFieldInputs(entity) {
@@ -604,15 +978,6 @@ function bindEntityFieldInputs(entity) {
         }
       }
       if (field === 'scheme') entity.weaponType = SCHEME_WEAPONS[value];
-      if (field === 'action') {
-        if (value === 'spawnEnemy' && !entity.spawn) {
-          entity.spawn = normalizeTrigger(entity, 0).spawn;
-        } else if (value === 'switchLevel' && !entity.target) {
-          entity.target = state.levels[0] || '';
-        }
-        renderEntityProperties();
-        return;
-      }
       if (field === 'spawn.mode' || /^spawn\.waves\.\d+\.(mode|shape)$/.test(field)) {
         const m = /^spawn\.waves\.(\d+)\.mode$/.exec(field);
         if (m) {
@@ -710,7 +1075,10 @@ function bindDropRules() {
 function redraw() {
   state.game?.scene.scenes[0].draw();
   sync();
-  saveDraft(state.levelId, state.level).catch(() => setStatus(dom, '保存失败', true));
+  // 仅编辑器模式落盘；试玩/预览中的指针事件（射击等）也会触发 redraw，绝不能写关卡文件
+  if (state.mode === 'editor') {
+    saveDraft(state.levelId, state.level).catch(() => setStatus(dom, '保存失败', true));
+  }
 }
 
 function renderFlows() {
@@ -730,12 +1098,26 @@ function startGame() {
       redraw,
       pushUndo,
       onSwitchLevel: (target, spawnPoint, done) => switchToLevel(target, spawnPoint, done),
-      onExitPreview: () => setMode('editor'),
+      onExitPreview: () => {
+        // 打包端无编辑器可退出：ESC 在暂停态时改为恢复游戏
+        if (PACKAGED) {
+          state.game?.scene.scenes[0]?.toggleGrowth?.();
+          return;
+        }
+        restoreEditorSnapshot();
+        setMode('editor');
+      },
       onStartNew: () => startNewGame(),
-      onListSaves: () => listPlayers(),
+      onListSaves: () => listStoreSaves(),
       onSelectSave: id => selectSave(id),
+      onOpenLevel: target => {
+        // 预览（play）模式下进入战斗关卡保持 play，继续使用 previewPlayer 临时数据；
+        // 试玩/正式流程仍走 trial（存档读写由 saveStore 决定）。
+        const keepPreview = state.mode === 'play';
+        fadeAndSwitch(() => selectLevel(target, false, false).then(() => setMode(keepPreview ? 'play' : 'trial')));
+      },
       onSettings: () => {},
-      onPlayerSave: player => savePlayer(state.playerId, player).catch(() => {})
+      onPlayerSave: player => saveStorePlayer(state.playerId, player).catch(() => {})
     }),
     scale: { mode: Phaser.Scale.NONE, width: W, height: H }
   });
@@ -766,9 +1148,9 @@ function fadeAndSwitch(callback) {
 }
 
 function startNewGame() {
-  // 新游戏：重置正式玩家存档，固定进入新手教学关卡
+  // 新游戏：重置玩家存档，固定进入新手教学关卡；试玩走测试存档，正式走正式存档
   state.player = normalizePlayer();
-  savePlayer(state.playerId, state.player).catch(() => {});
+  saveStorePlayer(state.playerId, state.player).catch(() => {});
   state.hasAnySave = true;
   const target = state.levels.includes('newbee')
     ? 'newbee'
@@ -778,24 +1160,27 @@ function startNewGame() {
     state.level = normalizeLevel(value);
     state.levelId = target;
     state.selected = null;
-    setMode('play');
+    // 实机游戏模式统一用 trial（saveStore 决定读写测试/正式存档）；play 仅用于"游戏预览"临时数据
+    setMode('trial');
     sync();
   });
 }
 
-// 选择存档栏位：读取该存档并进入骑士之家家园关卡
+// 选择存档栏位：读取该存档并进入骑士之家家园关卡；试玩走测试存档，正式走原存档
 async function selectSave(id) {
   try {
-    const player = normalizePlayer(await loadPlayer(id));
+    const trial = isTrialSaveStore();
+    const player = normalizePlayer(await loadStorePlayer(id));
     state.player = player;
     state.playerId = id;
     state.hasAnySave = true;
+    state.trialPlayer = clone(player);
     const target = state.levels.includes('knight-home')
       ? 'knight-home'
       : (player.levels?.current && state.levels.includes(player.levels.current)
         ? player.levels.current
         : (state.levels.find(x => x !== 'login') || state.levels[0]));
-    fadeAndSwitch(() => selectLevel(target).then(() => setMode('trial')));
+    fadeAndSwitch(() => selectLevel(target, false, false).then(() => setMode('trial')));
   } catch (error) {
     setStatus(dom, `读取存档失败：${error.message}`, true);
   }
@@ -805,8 +1190,9 @@ function setMode(mode) {
   state.mode = mode;
   document.body.classList.remove('ui-config-mode');
   document.body.classList.toggle('play-mode', mode !== 'editor');
-  dom.editorPanel.hidden = mode !== 'editor';
-  dom.editorPanel.style.display = mode === 'editor' ? '' : 'none';
+  const editorVisible = !PACKAGED && mode === 'editor';
+  dom.editorPanel.hidden = !editorVisible;
+  dom.editorPanel.style.display = editorVisible ? '' : 'none';
 
   if (mode !== 'editor') {
     dom.entityProperties.hidden = true;
@@ -821,11 +1207,28 @@ function setMode(mode) {
   renderEntityProperties();
 }
 
-async function selectLevel(id, formalOnly = false) {
+// 从试玩/预览退出回编辑器时恢复进入前快照，抹除游戏内切关对编辑器数据的污染
+function restoreEditorSnapshot() {
+  if (!editorSnapshot) return;
+  state.level = editorSnapshot.level;
+  state.levelId = editorSnapshot.levelId;
+  editorSnapshot = null;
+  // 退出试玩/预览回到编辑器后，恢复正式玩家内存数据并切回正式存档存储源
+  if (editorPlayerSnapshot) {
+    state.player = editorPlayerSnapshot.player;
+    state.playerId = editorPlayerSnapshot.playerId;
+    state.hasAnySave = editorPlayerSnapshot.hasAnySave;
+    editorPlayerSnapshot = null;
+  }
+  state.saveStore = 'formal';
+}
+
+async function selectLevel(id, formalOnly = false, remember = true) {
   const value = formalOnly ? await get(`/levels/${id}`) : await loadLevel(id);
   if (!value || typeof value !== 'object') throw new Error(`Level ${id} unavailable`);
   state.level = normalizeLevel(value);
   state.levelId = id;
+  if (remember) rememberLevel(id);
   state.selected = null;
   setMode('editor');
   sync();
@@ -847,18 +1250,31 @@ async function refreshLevels() {
   return true;
 }
 
-// 试玩：读取正式玩家存档，进入当前正在编辑的关卡
+// 试玩：进入登录主页（login 关卡），后续“开始游戏/继续游戏/存档选择”与正式流程一致，
+// 但所有玩家存档读写均走测试存档 API（data/test-players/），与正式存档完全隔离。
 async function startTrial() {
   try {
     await saveDraft(state.levelId, state.level);
-    // 确保玩家存档已加载（进入试玩前刷新一次）
+    editorSnapshot = { level: clone(state.level), levelId: state.levelId };
+    editorPlayerSnapshot = { player: clone(state.player), playerId: state.playerId, hasAnySave: state.hasAnySave };
+    state.saveStore = 'test';
+    // 试玩登录主页与后续游戏只使用测试存档数据，先放一个空测试玩家，避免携带编辑器里的正式玩家数据
+    state.player = normalizePlayer();
+    state.playerId = 'save-1';
+    // 登录主页的“继续游戏”按钮依赖是否存在测试存档，此处只读测试存档索引，不碰正式存档
     try {
-      state.player = normalizePlayer(await loadPlayer(state.playerId));
+      const { metas } = await listTestPlayers();
+      state.hasAnySave = Object.keys(metas || {}).length > 0;
     } catch {
-      state.player = normalizePlayer();
+      state.hasAnySave = false;
     }
-    setMode('trial');
+    const target = state.levels.includes('login')
+      ? 'login'
+      : (state.levels.find(id => id !== 'login') || state.levels[0]);
+    if (!target) throw new Error('暂无关卡');
+    fadeAndSwitch(() => selectLevel(target, false, false).then(() => setMode('trial')));
   } catch (error) {
+    restoreEditorSnapshot();
     setStatus(dom, `试玩启动失败：${error.message}`, true);
   }
 }
@@ -924,6 +1340,7 @@ function bind() {
       const data = await res.json();
 
       state.level.background = {
+        id: 'background',
         src: data.path,
         x: Math.round(state.level.world.width / 2),
         y: Math.round(state.level.world.height / 2),
@@ -1072,7 +1489,6 @@ function bind() {
   dom.pvExp.oninput = e => { const n = Number(e.target.value); if (n >= 0) state.previewPlayer.progress.exp = Math.floor(n); };
   dom.pvPoints.oninput = e => { const n = Number(e.target.value); if (n >= 0) state.previewPlayer.progress.points = Math.floor(n); };
   dom.pvGold.oninput = e => { const n = Number(e.target.value); if (n >= 0) state.previewPlayer.currency.gold = Math.floor(n); };
-  dom.pvCharge.oninput = e => { const n = Number(e.target.value); if (n >= 0) state.previewPlayer.currency.charge = Math.floor(n); };
   dom.pvMoveSpeed.oninput = e => { const n = Number(e.target.value); if (n >= 0.1) state.previewPlayer.combat.moveSpeed = n; };
   dom.pvAttackPower.oninput = e => { const n = Number(e.target.value); if (n >= 0) state.previewPlayer.combat.attackPower = n; };
   dom.pvCritRate.oninput = e => { const n = Number(e.target.value); if (n >= 0 && n <= 1) state.previewPlayer.combat.critRate = n; };
@@ -1095,10 +1511,7 @@ function bind() {
     if (input.type !== 'checkbox') return;
     const id = input.dataset.mod;
     if (!id || !MOD_DEFS[id]) return;
-    const mods = state.previewPlayer.mods || (state.previewPlayer.mods = []);
-    state.previewPlayer.mods = input.checked
-      ? [...mods.filter(m => m.id !== id), { id, weapon: MOD_DEFS[id].weapon }]
-      : mods.filter(m => m.id !== id);
+    setModEquipped(state.previewPlayer, id, input.checked);
   });
 
   // 试玩存档面板：直接编辑正式玩家存档 state.player
@@ -1106,7 +1519,6 @@ function bind() {
   dom.tpExp.oninput = e => { const n = Number(e.target.value); if (n >= 0) state.player.progress.exp = Math.floor(n); };
   dom.tpPoints.oninput = e => { const n = Number(e.target.value); if (n >= 0) state.player.progress.points = Math.floor(n); };
   dom.tpGold.oninput = e => { const n = Number(e.target.value); if (n >= 0) state.player.currency.gold = Math.floor(n); };
-  dom.tpCharge.oninput = e => { const n = Number(e.target.value); if (n >= 0) state.player.currency.charge = Math.floor(n); };
   dom.tpMoveSpeed.oninput = e => { const n = Number(e.target.value); if (n >= 0.1) state.player.combat.moveSpeed = n; };
   dom.tpAttackPower.oninput = e => { const n = Number(e.target.value); if (n >= 0) state.player.combat.attackPower = n; };
   dom.tpCritRate.oninput = e => { const n = Number(e.target.value); if (n >= 0 && n <= 1) state.player.combat.critRate = n; };
@@ -1128,10 +1540,7 @@ function bind() {
     if (input.type !== 'checkbox') return;
     const id = input.dataset.mod;
     if (!id || !MOD_DEFS[id]) return;
-    const mods = state.player.mods || (state.player.mods = []);
-    state.player.mods = input.checked
-      ? [...mods.filter(m => m.id !== id), { id, weapon: MOD_DEFS[id].weapon }]
-      : mods.filter(m => m.id !== id);
+    setModEquipped(state.player, id, input.checked);
   });
   dom.tpSave.onclick = () => {
     state.player.meta.updatedAt = Date.now();
@@ -1168,9 +1577,10 @@ function bind() {
     }
   };
 
-  dom.editorMode.onclick = () => setMode('editor');
+  dom.editorMode.onclick = () => { restoreEditorSnapshot(); setMode('editor'); };
   dom.playMode.onclick = async () => {
     await saveDraft(state.levelId, state.level);
+    editorSnapshot = { level: clone(state.level), levelId: state.levelId };
     setMode('play');
   };
   dom.trialPlay.onclick = () => startTrial();
@@ -1202,6 +1612,7 @@ function bind() {
     const id = prompt('关卡 ID', `level-${state.levels.length + 1}`);
     if (!id) return;
     state.levelId = id;
+    rememberLevel(id);
     state.level = normalizeLevel(state.templates[dom.template.value]?.level);
     if (state.level.roomLayout) applyRooms();
     await saveFormal(id, state.level);
@@ -1258,12 +1669,32 @@ function bind() {
       .then(() => setStatus(dom, 'UI 配置已保存'))
       .catch(e => setStatus(dom, `UI 保存失败：${e.message}`, true));
 
-  // Ctrl+Z 撤销（仅编辑器模式）
+  // Ctrl+Z 撤销 / Ctrl+C 复制 / Ctrl+V 粘贴（仅编辑器模式）
   document.addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
-      if (state.mode !== 'editor') return;
+    const mod = e.ctrlKey || e.metaKey;
+    if (state.mode !== 'editor') return;
+    if (mod && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
       e.preventDefault();
       undo();
+    } else if (mod && !e.shiftKey && (e.key === 'c' || e.key === 'C')) {
+      e.preventDefault();
+      copySelected();
+    } else if (mod && !e.shiftKey && (e.key === 'v' || e.key === 'V')) {
+      e.preventDefault();
+      pasteClipboard();
+    }
+  });
+
+  // 刷新/关闭前兜底保存：防止最后一次异步 saveDraft 尚未落盘导致实体丢失
+  // 仅当初始化完成（已加载真实关卡）后才保存，避免把默认空关卡写入 level-1 覆盖原内容
+  window.addEventListener('beforeunload', () => {
+    if (!state.ready || state.mode !== 'editor' || !state.levelId) return;
+    const url = `/api/levels/${state.levelId}`;
+    const body = JSON.stringify(state.level);
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
+    } else {
+      fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true });
     }
   });
 }
@@ -1273,18 +1704,60 @@ function showUIConfig(show) {
   if (show) renderUIConfigPage(dom, state);
 }
 
+async function loadPackagedUi() {
+  try {
+    state.ui = { battle: await getUi('battle'), interface: await getUi('interface'), login: await getUi('login'), weapon: await getUi('weapon'), workshop: await getUi('workshop') };
+  } catch {
+    state.ui = { battle: null, interface: null, login: null, weapon: null, workshop: null };
+  }
+}
+
+// 打包端：正式存档进入登录主页（login 关卡），后续新游戏/继续游戏走正式流程
+async function enterPackagedLogin() {
+  state.saveStore = 'formal';
+  const target = state.levels.includes('login')
+    ? 'login'
+    : (state.levels.find(id => id !== 'login') || state.levels[0]);
+  if (!target) throw new Error('暂无关卡');
+  await selectLevel(target, false, false);
+  setMode('trial');
+}
+
+async function initializePackaged() {
+  state.templates = null;
+  state.player = normalizePlayer();
+  state.playerId = 'save-1';
+  state.saveStore = 'formal';
+  await loadPackagedUi();
+  try {
+    const { metas } = await listPlayers();
+    state.hasAnySave = Object.keys(metas || {}).length > 0;
+  } catch {
+    state.hasAnySave = false;
+  }
+  if (!await refreshLevels()) return;
+  await enterPackagedLogin();
+  state.ready = true;
+  setStatus(dom, '初始化完成');
+}
+
 async function initialize() {
   try {
     dom = getDom();
     bind();
+    if (PACKAGED) {
+      await initializePackaged();
+      return;
+    }
     dom.editorPanel.hidden = false;
     dom.editorPanel.style.display = '';
     state.templates = await get('/templates');
     try {
-      state.ui = { battle: await getUi('battle'), interface: await getUi('interface'), login: await getUi('login'), weapon: await getUi('weapon'), workshop: await getUi('workshop') };
+      iconChoices = (await get('/icons')).icons || [];
     } catch {
-      state.ui = { battle: null, interface: null, login: null, weapon: null, workshop: null };
+      iconChoices = [];
     }
+    await loadPackagedUi();
     try {
       state.player = normalizePlayer(await loadPlayer(state.playerId));
     } catch {
@@ -1297,8 +1770,11 @@ async function initialize() {
       state.hasAnySave = false;
     }
     if (!await refreshLevels()) return;
-    await selectLevel(state.levelId);
+    // 打开编辑器固定加载空关卡 level-1，不恢复上次编辑的关卡，避免自动加载真实关卡导致误覆盖
+    const defaultId = state.levels.includes('level-1') ? 'level-1' : state.levels[0];
+    await selectLevel(defaultId, false, false);
     startGame();
+    state.ready = true;
     setStatus(dom, '初始化完成');
   } catch (error) {
     if (dom) setStatus(dom, `初始化失败：${error.message}`, true);

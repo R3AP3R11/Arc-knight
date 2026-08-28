@@ -41,7 +41,8 @@
     "weapons": [
       "radial",
       "yellow"
-    ]
+    ],
+    "id": "spawn"
   },
   "dropRules": {
     "basic1": [
@@ -68,8 +69,12 @@
   "crates": [],
   "barrels": [],
   "chests": [],
+  "portals": [],
+  "vendors": [],
+  "idols": [],
   "background": {
     "src": "/bg/newbee.png",
+    "id": "background",
     "x": 795.6845248323841,
     "y": 795.928626299057,
     "w": 1602.2938954667175,

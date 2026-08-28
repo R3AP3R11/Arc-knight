@@ -25,16 +25,21 @@
     "gold": 0,
     "weapons": [
       "radial"
-    ]
+    ],
+    "id": "spawn"
   },
   "dropRules": {},
   "triggers": [],
   "crates": [],
   "barrels": [],
   "chests": [],
+  "portals": [],
   "vendors": [],
+  "idols": [],
+  "icons": [],
   "background": {
     "fx": "wormhole",
+    "id": "background",
     "x": 1600,
     "y": 260,
     "radius": 850,

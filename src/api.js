@@ -31,3 +31,9 @@ export const listPlayers = () => get('/players');
 export const loadPlayer = id => get(`/players/${id}`);
 export const savePlayer = (id, player) => post(`/players/${id}`, player);
 export const deletePlayer = id => remove(`/players/${id}`);
+
+// 试玩测试存档 API（data/test-players/，与正式存档完全隔离）
+export const listTestPlayers = () => get('/test-players');
+export const loadTestPlayer = id => get(`/test-players/${id}`);
+export const saveTestPlayer = (id, player) => post(`/test-players/${id}`, player);
+export const deleteTestPlayer = id => remove(`/test-players/${id}`);

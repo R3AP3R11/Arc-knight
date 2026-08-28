@@ -13,10 +13,10 @@ const ids = [
   'uiNodeAdd', 'uiConfigSave', 'uiNodeList', 'uiPreviewCanvas', 'levelUi', 'dropRulesEditor',
   'roomPanel', 'roomCols', 'roomRows', 'roomThickness', 'roomWallColor', 'roomRoadWidth', 'roomRoadLength', 'roomGrid',
   'roomCellPopup', 'roomCellPopupTitle', 'roomCellPopupClose', 'roomCellSize',
-  'pvLevel', 'pvExp', 'pvPoints', 'pvGold', 'pvCharge', 'pvWeapons', 'pvMods',
+  'pvLevel', 'pvExp', 'pvPoints', 'pvGold', 'pvWeapons', 'pvMods',
   'pvMoveSpeed', 'pvAttackPower', 'pvCritRate', 'pvAttackSpeed',
   'pvMaxHp', 'pvMaxShield', 'pvDamageReduction', 'pvDodgeRate',
-  'tpLevel', 'tpExp', 'tpPoints', 'tpGold', 'tpCharge', 'tpWeapons', 'tpMods',
+  'tpLevel', 'tpExp', 'tpPoints', 'tpGold', 'tpWeapons', 'tpMods',
   'tpMoveSpeed', 'tpAttackPower', 'tpCritRate', 'tpAttackSpeed',
   'tpMaxHp', 'tpMaxShield', 'tpDamageReduction', 'tpDodgeRate',
   'tpSlot', 'tpSave', 'tpReload'
@@ -64,8 +64,13 @@ export function renderPreviewWeapons(dom, assets, targetId = 'pvWeapons') {
     .join('');
 }
 
-export function renderPreviewMods(dom, mods, modDefs, targetId = 'pvMods') {
-  const equipped = new Set((mods || []).map(m => m.id));
+export function renderPreviewMods(dom, equipment, modDefs, targetId = 'pvMods') {
+  const equipped = new Set();
+  for (const w of Object.keys(equipment || {})) {
+    const slot = equipment[w] || {};
+    (slot.generic || []).forEach(id => equipped.add(id));
+    if (slot.dedicated) equipped.add(slot.dedicated);
+  }
   dom[targetId].innerHTML = Object.entries(modDefs)
     .map(([id, def]) => {
       const tag = def.weapon ? `专属·${WEAPON_LABELS[def.weapon] || def.weapon}` : '通用';

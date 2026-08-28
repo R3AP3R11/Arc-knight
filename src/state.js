@@ -10,26 +10,44 @@ export const ENEMY_TYPES = {
   advanced2: { name: '进阶敌人2', hp: 100, damage: 15 }
 };
 
-export const DEFAULT_DROPS = { gold: 1, exp: 1, charge: 0 };
+export const DEFAULT_DROPS = { gold: 1, exp: 1 };
 
-export const DROP_ITEMS = { gold: '金币', exp: '经验', charge: '充能' };
+export const DROP_ITEMS = { gold: '金币', exp: '经验', charge: '充能球' };
 
 export const WEAPON_TYPES = ['radial', 'yellow', 'green'];
 export const WEAPON_LABELS = { radial: '基础', yellow: '散射', green: '激光' };
 
-// 改件定义：通用改件 weapon 为空，专属改件 weapon 指定武器
-export const MOD_DEFS = {
-  // 通用改件
-  'multi-track': { name: '多轨改件', weapon: '' },
-  'spin':        { name: '转速改件', weapon: '' },
-  'triple':      { name: '三发改件', weapon: '' },
-  // 黄色武器专属
-  'ricochet':    { name: '反弹改件', weapon: 'yellow' },
-  'split':       { name: '分裂改件', weapon: 'yellow' },
-  // 绿色武器专属
-  'capacity':    { name: '容量改件', weapon: 'green' },
-  'pierce':      { name: '穿透改件', weapon: 'green' }
+// 统一物品定义：改件 / 圣物 / 宠物
+// category: mod=改件（装备到武器槽）、relic=圣物（装备到玩家，最多3）、pet=宠物（装备到玩家，最多2）
+// stackable: true=可堆叠（进 items.stacks），false=不可堆叠（进 items.uniques）
+// weapon: 改件专属武器，空字符串表示通用
+// color: 图标着色
+export const ITEM_DEFS = {
+  // 通用改件（可堆叠）
+  'multi-track': { name: '多轨改件', category: 'mod', stackable: true, weapon: '', color: '#ffffff' },
+  'spin':        { name: '转速改件', category: 'mod', stackable: true, weapon: '', color: '#ffffff' },
+  'triple':      { name: '三发改件', category: 'mod', stackable: true, weapon: '', color: '#ffffff' },
+  // 黄色武器专属改件（不可堆叠）
+  'ricochet':    { name: '反弹改件', category: 'mod', stackable: false, weapon: 'yellow', color: '#feed34' },
+  'split':       { name: '分裂改件', category: 'mod', stackable: false, weapon: 'yellow', color: '#feed34' },
+  // 绿色武器专属改件（不可堆叠）
+  'capacity':    { name: '容量改件', category: 'mod', stackable: false, weapon: 'green', color: '#42d978' },
+  'pierce':      { name: '穿透改件', category: 'mod', stackable: false, weapon: 'green', color: '#42d978' },
+  // 圣物（可堆叠）
+  'relic-vitality': { name: '生命圣物', category: 'relic', stackable: true, weapon: '', color: '#ffd54f' },
+  'relic-power':    { name: '力量圣物', category: 'relic', stackable: true, weapon: '', color: '#ffd54f' },
+  'relic-haste':    { name: '迅捷圣物', category: 'relic', stackable: true, weapon: '', color: '#ffd54f' },
+  // 宠物（不可堆叠）
+  'pet-ember':   { name: '焰尾', category: 'pet', stackable: false, weapon: '', color: '#4fc3f7' },
+  'pet-moss':    { name: '苔团', category: 'pet', stackable: false, weapon: '', color: '#4fc3f7' }
 };
+
+// 改件定义（由 ITEM_DEFS 派生，保持旧字段形态：{ id: { name, weapon } }）
+export const MOD_DEFS = Object.fromEntries(
+  Object.entries(ITEM_DEFS)
+    .filter(([, def]) => def.category === 'mod')
+    .map(([id, def]) => [id, { name: def.name, weapon: def.weapon }])
+);
 
 export function normalizeWeapons(weapons) {
   const list = (Array.isArray(weapons) ? weapons : ['radial'])
@@ -50,8 +68,7 @@ export function normalizeEnemy(enemy, index) {
     damage: Number(enemy?.damage ?? def.damage),
     drops: {
       gold: Math.max(0, Number(enemy?.drops?.gold ?? DEFAULT_DROPS.gold)),
-      exp: Math.max(0, Number(enemy?.drops?.exp ?? DEFAULT_DROPS.exp)),
-      charge: Math.max(0, Number(enemy?.drops?.charge ?? DEFAULT_DROPS.charge))
+      exp: Math.max(0, Number(enemy?.drops?.exp ?? DEFAULT_DROPS.exp))
     }
   };
 }
@@ -66,7 +83,8 @@ export function normalizeDropRules(value) {
     const entries = list.map(r => ({
       item: DROP_ITEMS[r?.item] ? r.item : 'gold',
       count: Math.max(0, Math.floor(Number(r?.count) || 0)),
-      chance: Math.min(100, Math.max(0, Number(r?.chance) ?? 100))
+      chance: Math.min(100, Math.max(0, Number(r?.chance) ?? 100)),
+      weapon: r?.item === 'charge' && WEAPON_TYPES.includes(r?.weapon) ? r.weapon : ''
     }));
     if (entries.length) rules[type] = entries;
   }
@@ -80,6 +98,7 @@ export function normalizeWave(w, def) {
       : w?.mode === 'inscreen' ? 'inscreen' : 'surround',
     count: Math.max(1, Number(w?.count ?? def?.count) || 5),
     playerMinRadius: Math.max(0, Number(w?.playerMinRadius ?? 200) || 0),
+    zoneId: w?.zoneId || '',
     waitForClear: w?.waitForClear === true,
     shape: (w?.shape ?? def?.shape) === 'circle' ? 'circle' : 'polygon',
     sides: Math.max(3, Number(w?.sides ?? def?.sides) || 6),
@@ -132,13 +151,29 @@ export function normalizeChest(chest, index) {
     id: chest?.id || `chest-${index + 1}`,
     x: Number(chest?.x) || 0,
     y: Number(chest?.y) || 0,
-    // 出现方式：start=游戏开始即存在；clearEnemies=清理全部敌人后出现；trigger=触发器触发（预留）
-    trigger: chest?.trigger === 'clearEnemies' ? 'clearEnemies'
-      : chest?.trigger === 'trigger' ? 'trigger' : 'start',
+    // 出现方式：start=游戏开始即存在；trigger=触发器触发（清敌后出现）
+    trigger: chest?.trigger === 'trigger' ? 'trigger' : 'start',
     triggerId: chest?.triggerId || '',
     // 打开判定半径（无碰撞体积）
     openRadius: Math.max(20, Number(chest?.openRadius) || 50),
     rewards: normalizeRewardList(chest?.rewards)
+  };
+}
+
+export function normalizePortal(portal, index) {
+  return {
+    id: portal?.id || `portal-${index + 1}`,
+    x: Number(portal?.x) || 0,
+    y: Number(portal?.y) || 0,
+    w: Math.max(30, Number(portal?.w) || 120),
+    h: Math.max(20, Number(portal?.h) || 60),
+    rotation: Number(portal?.rotation) || 0,
+    // 出现方式：start=游戏开始即存在；trigger=触发器触发（清敌后出现）
+    trigger: portal?.trigger === 'trigger' ? 'trigger' : 'start',
+    triggerId: portal?.triggerId || '',
+    // 交互判定半径（无碰撞体积）
+    interactRadius: Math.max(40, Number(portal?.interactRadius) || 90),
+    visible: portal?.visible !== false
   };
 }
 
@@ -154,6 +189,100 @@ export function normalizeVendor(vendor, index) {
   };
 }
 
+export function normalizeIdol(idol, index) {
+  return {
+    id: idol?.id || `idol-${index + 1}`,
+    x: Number(idol?.x) || 0,
+    y: Number(idol?.y) || 0,
+    w: Math.max(20, Number(idol?.w) || 110),
+    h: Math.max(20, Number(idol?.h) || 110),
+    interactRadius: Math.max(40, Number(idol?.interactRadius) || 130),
+    visible: idol?.visible !== false
+  };
+}
+
+export function normalizeIcon(icon, index) {
+  return {
+    id: icon?.id || `icon-${index + 1}`,
+    x: Number(icon?.x) || 0,
+    y: Number(icon?.y) || 0,
+    w: Math.max(20, Number(icon?.w) || 64),
+    h: Math.max(20, Number(icon?.h) || 64),
+    src: icon?.src || '',
+    interactRadius: Math.max(40, Number(icon?.interactRadius) || 120),
+    tipText: icon?.tipText ?? '按 F 交互',
+    event: ['workshop', 'weapon', 'battle'].includes(icon?.event) ? icon.event : 'workshop',
+    visible: icon?.visible !== false
+  };
+}
+
+export const EVENT_TYPES = ['complete', 'roomComplete', 'combat', 'spawnEnemy', 'switchLevel', 'spawnGate', 'removeGate'];
+
+function normalizeSpawnWaves(s) {
+  const def = {
+    enemyType: ENEMY_TYPES[s?.enemyType] ? s?.enemyType : 'basic1',
+    mode: 'surround',
+    count: Math.max(1, Number(s?.count) || 5),
+    playerMinRadius: 200,
+    shape: 'polygon',
+    sides: 6,
+    radius: 120,
+    thickness: 10,
+    circleCount: 8,
+    drawDuration: 500,
+    fadeDuration: 500,
+    preDelay: 0,
+    postDelay: 1000
+  };
+  const rawWaves = Array.isArray(s?.waves) && s.waves.length ? s.waves : [{ ...s, mode: s?.mode, count: s?.count }];
+  const legacyZoneId = s?.spawnZoneId || '';
+  return rawWaves.map(w => normalizeWave({ ...w, zoneId: w?.zoneId || legacyZoneId }, def));
+}
+
+function normalizeTriggerEvent(ev, trigger) {
+  if (!ev || typeof ev !== 'object') return null;
+  const type = EVENT_TYPES.includes(ev.type) ? ev.type : null;
+  if (!type) return null;
+  // 触发时机：enter=进入即触发（默认）；enemiesCleared=击败本触发器召唤的敌人后触发
+  const when = ev.when === 'enemiesCleared' ? 'enemiesCleared' : 'enter';
+
+  if (type === 'complete' || type === 'roomComplete' || type === 'combat') {
+    return { type, when };
+  }
+
+  if (type === 'spawnEnemy') {
+    const s = ev.spawn || trigger?.spawn || {};
+    return {
+      type,
+      when,
+      spawn: {
+        stopOnExit: s.stopOnExit === true,
+        resumeOnReturn: s.resumeOnReturn !== false,
+        waves: normalizeSpawnWaves(s)
+      }
+    };
+  }
+
+  if (type === 'switchLevel') {
+    const rawPoint = ev.spawnPoint || trigger?.spawnPoint;
+    return {
+      type,
+      when,
+      target: ev.target || trigger?.target || '',
+      spawnPoint: rawPoint
+        ? { x: Number(rawPoint.x) || 0, y: Number(rawPoint.y) || 0 }
+        : null
+    };
+  }
+
+  // spawnGate | removeGate
+  const raw = Array.isArray(ev.gateIds) ? ev.gateIds
+    : ev.gateId ? [ev.gateId]
+    : Array.isArray(trigger?.gateIds) ? trigger.gateIds
+    : trigger?.gateId ? [trigger.gateId] : [];
+  return { type, when, gateIds: raw.filter(Boolean) };
+}
+
 export function normalizeTrigger(trigger, index) {
   const base = {
     id: trigger?.id || `trigger-${index + 1}`,
@@ -164,49 +293,20 @@ export function normalizeTrigger(trigger, index) {
     shape: trigger?.shape === 'circle' ? 'circle' : 'rect',
     color: trigger?.color || '#f3b63f',
     visible: trigger?.visible !== false,
-    action: trigger?.action || 'complete',
     once: trigger?.once !== false,
     cooldown: Math.max(0, Number(trigger?.cooldown) || 0),
     resumeOnReturn: trigger?.resumeOnReturn !== false
   };
 
-  if (base.action === 'spawnEnemy') {
-    const s = trigger?.spawn || {};
-    const def = {
-      enemyType: ENEMY_TYPES[s.enemyType] ? s.enemyType : 'basic1',
-      mode: 'surround',
-      count: Math.max(1, Number(s.count) || 5),
-      playerMinRadius: 200,
-      shape: 'polygon',
-      sides: 6,
-      radius: 120,
-      thickness: 10,
-      circleCount: 8,
-      drawDuration: 500,
-      fadeDuration: 500,
-      preDelay: 0,
-      postDelay: 1000
-    };
-    const rawWaves = Array.isArray(s.waves) && s.waves.length ? s.waves : [{ ...s, mode: s.mode, count: s.count }];
-    base.spawn = {
-      stopOnExit: s.stopOnExit === true,
-      spawnZoneId: s.spawnZoneId || '',
-      waves: rawWaves.map(w => normalizeWave(w, def))
-    };
+  let events;
+  if (Array.isArray(trigger?.events) && trigger.events.length) {
+    events = trigger.events.map(ev => normalizeTriggerEvent(ev, trigger)).filter(Boolean);
+  } else {
+    const action = trigger?.action || 'complete';
+    events = [normalizeTriggerEvent({ type: action }, trigger)].filter(Boolean);
   }
-
-  if (base.action === 'switchLevel') {
-    base.target = trigger?.target || '';
-    base.spawnPoint = trigger?.spawnPoint
-      ? { x: Number(trigger.spawnPoint.x) || 0, y: Number(trigger.spawnPoint.y) || 0 }
-      : null;
-  }
-
-  if (base.action === 'spawnGate' || base.action === 'removeGate') {
-    const raw = Array.isArray(trigger?.gateIds) ? trigger.gateIds
-      : trigger?.gateId ? [trigger.gateId] : [];
-    base.gateIds = raw.filter(Boolean);
-  }
+  if (!events.length) events = [{ type: 'complete' }];
+  base.events = events;
 
   return base;
 }
@@ -239,7 +339,10 @@ export const DEFAULT_LEVEL = {
   crates: [],
   barrels: [],
   chests: [],
+  portals: [],
   vendors: [],
+  idols: [],
+  icons: [],
   background: null,
   images: [],
   gates: []
@@ -252,6 +355,7 @@ function normalizeBackground(value) {
   if (value.fx === 'wormhole') {
     return {
       fx: 'wormhole',
+      id: value.id || 'background',
       x: Number(value.x) || 1600,
       y: Number(value.y) || 240,
       radius: Math.max(40, Number(value.radius) || 250),
@@ -279,6 +383,7 @@ function normalizeBackground(value) {
   const h = Math.max(1, Number(value.h) || 540);
   return {
     src: value.src,
+    id: value.id || 'background',
     x: Number(value.x) || 0,
     y: Number(value.y) || 0,
     w,
@@ -362,8 +467,11 @@ export function normalizeLevel(value) {
     crates: (Array.isArray(data.crates) ? data.crates : []).map(normalizeCrate),
     barrels: (Array.isArray(data.barrels) ? data.barrels : []).map(normalizeBarrel),
     chests: (Array.isArray(data.chests) ? data.chests : []).map(normalizeChest),
+    portals: (Array.isArray(data.portals) ? data.portals : []).map(normalizePortal),
     vendors: (Array.isArray(data.vendors) ? data.vendors : []).map(normalizeVendor),
-    spawn: { ...clone(DEFAULT_LEVEL.spawn), ...(data.spawn || {}), weapons: normalizeWeapons(data.spawn?.weapons) },
+    idols: (Array.isArray(data.idols) ? data.idols : []).map(normalizeIdol),
+    icons: (Array.isArray(data.icons) ? data.icons : []).map(normalizeIcon),
+    spawn: { ...clone(DEFAULT_LEVEL.spawn), ...(data.spawn || {}), id: data.spawn?.id || 'spawn', weapons: normalizeWeapons(data.spawn?.weapons) },
     dropRules: normalizeDropRules(data.dropRules),
     background: normalizeBackground(data.background),
     images: (Array.isArray(data.images) ? data.images : []).map(normalizeImage).filter(Boolean),
@@ -383,6 +491,7 @@ export function createState() {
     tool: 'select',
     selected: null,
     showGridInEditor: true,
+    ready: false,
     ui: {
       battle: null,
       interface: null,

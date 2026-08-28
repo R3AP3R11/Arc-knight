@@ -25,15 +25,58 @@
     "gold": 0,
     "weapons": [
       "radial"
-    ]
+    ],
+    "id": "spawn"
   },
   "dropRules": {},
   "triggers": [],
   "crates": [],
   "barrels": [],
   "chests": [],
+  "portals": [],
+  "vendors": [],
+  "idols": [],
+  "icons": [
+    {
+      "id": "icon-1787807593468",
+      "x": 300,
+      "y": 1050,
+      "w": 264,
+      "h": 264,
+      "src": "/icons/%E6%88%98%E6%96%97.png",
+      "interactRadius": 120,
+      "tipText": "按 F 交互",
+      "event": "battle",
+      "visible": true
+    },
+    {
+      "id": "icon-1787812104430",
+      "x": 870,
+      "y": 510,
+      "w": 164,
+      "h": 164,
+      "src": "/icons/%E5%95%86%E5%9F%8E.png",
+      "interactRadius": 120,
+      "tipText": "按 F 交互",
+      "event": "weapon",
+      "visible": true
+    },
+    {
+      "id": "icon-1787812137913",
+      "x": 1560,
+      "y": 930,
+      "w": 164,
+      "h": 164,
+      "src": "/icons/%E5%B7%A5%E5%9D%8A.png",
+      "interactRadius": 120,
+      "tipText": "按 F 交互",
+      "event": "workshop",
+      "visible": true
+    }
+  ],
   "background": {
     "src": "/bg/knight-home.png",
+    "id": "background",
     "x": 964.7540854752749,
     "y": 976.0089513214223,
     "w": 2164.172048133425,
@@ -43,5 +86,6 @@
   },
   "images": [],
   "gates": [],
-  "roomLayout": null
+  "roomLayout": null,
+  "spawnZones": []
 }

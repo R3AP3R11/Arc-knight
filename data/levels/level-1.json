@@ -1,51 +1,22 @@
 {
-  "backgroundColor": "#000000",
-  "gridColor": "#d9d9d9",
+  "backgroundColor": "#0b1b2b",
+  "gridColor": "#173a55",
   "showGridInPlay": false,
   "ui": "battle",
   "world": {
-    "width": 1440,
-    "height": 900
+    "width": 1920,
+    "height": 1080
   },
   "camera": {
-    "width": 1400,
-    "mode": "center"
+    "width": 1920,
+    "mode": "deadzone"
   },
-  "walls": [
-    {
-      "x": 450,
-      "y": 300,
-      "w": 30,
-      "h": 210,
-      "id": "wall-1",
-      "color": "#60758b",
-      "rotation": 0,
-      "shape": "rect",
-      "visible": true,
-      "startAngle": 0,
-      "endAngle": 360,
-      "thickness": 30
-    }
-  ],
-  "enemies": [
-    {
-      "id": "enemy-1",
-      "x": 690,
-      "y": 90,
-      "type": "advanced2",
-      "hp": 100,
-      "damage": 15,
-      "drops": {
-        "gold": 1,
-        "exp": 1,
-        "charge": 0
-      }
-    }
-  ],
+  "walls": [],
+  "enemies": [],
   "spawn": {
-    "x": 270,
-    "y": 480,
-    "scheme": "green",
+    "x": 960,
+    "y": 540,
+    "scheme": "default",
     "hp": 100,
     "maxHp": 100,
     "level": 1,
@@ -53,60 +24,22 @@
     "expToNext": 100,
     "gold": 0,
     "weapons": [
-      "radial",
-      "yellow"
+      "radial"
     ],
-    "weaponType": "green"
+    "id": "spawn"
   },
   "dropRules": {},
-  "triggers": [
-    {
-      "id": "trigger-1787225321697",
-      "x": 240,
-      "y": 270,
-      "w": 90,
-      "h": 60,
-      "shape": "rect",
-      "color": "#f3b63f",
-      "visible": true,
-      "action": "spawnGate",
-      "once": false,
-      "cooldown": 0,
-      "resumeOnReturn": true,
-      "gateIds": []
-    }
-  ],
+  "triggers": [],
   "crates": [],
   "barrels": [],
   "chests": [],
-  "vendors": [
-    {
-      "id": "vendor-1787630908294",
-      "x": 450,
-      "y": 540,
-      "w": 288.98120224373207,
-      "h": 237.62168628109782,
-      "interactRadius": 120,
-      "visible": true
-    }
-  ],
+  "portals": [],
+  "vendors": [],
+  "idols": [],
+  "icons": [],
   "background": null,
   "images": [],
-  "gates": [
-    {
-      "id": "gate-1787466522615",
-      "x": 60,
-      "y": 210,
-      "w": 264.15865218230795,
-      "h": 42.296928663361484,
-      "rotation": 270,
-      "label": "",
-      "color1": "#ffb338",
-      "color2": "#ffe224",
-      "active": false,
-      "visible": true
-    }
-  ],
-  "roomLayout": null,
-  "spawnZones": []
+  "gates": [],
+  "spawnZones": [],
+  "roomLayout": null
 }
