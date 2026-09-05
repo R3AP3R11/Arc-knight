@@ -1,0 +1,259 @@
+{
+  "id": "asset-1788349008776",
+  "name": "三发改件图标",
+  "bgColor": "#ffffff",
+  "center": {
+    "x": 0,
+    "y": 0
+  },
+  "scale": 1,
+  "elements": [
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 20,
+      "sides": 6,
+      "lineWidth": 4,
+      "color": "#000000",
+      "fill": "#000000",
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "points": [
+        {
+          "x": -15.796260526620152,
+          "y": 68.18229721232917
+        },
+        {
+          "x": -3.9231848685369286,
+          "y": 3.9307005775627744
+        },
+        {
+          "x": -38.36428939503232,
+          "y": -7.849259701981779
+        },
+        {
+          "x": 10.578342434844366,
+          "y": -93.93338358956298
+        },
+        {
+          "x": 64.05265210578474,
+          "y": -89.40265303498124
+        },
+        {
+          "x": -2.110501561959346,
+          "y": -25.972212339124738
+        },
+        {
+          "x": 28.705236351380883,
+          "y": 6.649138910311834
+        }
+      ],
+      "closed": true,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 20,
+      "sides": 6,
+      "lineWidth": 4,
+      "color": "#000000",
+      "fill": "#000000",
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "points": [
+        {
+          "x": -65.55459984445676,
+          "y": 105.41936918835394
+        },
+        {
+          "x": -64.64822776578768,
+          "y": 31.115144742685246
+        },
+        {
+          "x": -109.05912090384012,
+          "y": 0.30608571508135185
+        },
+        {
+          "x": -92.74491029388122,
+          "y": -77.62269275543666
+        },
+        {
+          "x": -42.89596723609602,
+          "y": -66.74890900562447
+        },
+        {
+          "x": -77.33707176259139,
+          "y": -5.13079095041671
+        },
+        {
+          "x": -37.45791731636324,
+          "y": 17.522922660124024
+        }
+      ],
+      "closed": true,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 20,
+      "sides": 6,
+      "lineWidth": 4,
+      "color": "#000000",
+      "fill": "#000000",
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "points": [
+        {
+          "x": 6.046603743020093,
+          "y": 89.10867835422762
+        },
+        {
+          "x": 53.17649141555862,
+          "y": 38.36437446764809
+        },
+        {
+          "x": 41.39401949742402,
+          "y": -0.6000603958349728
+        },
+        {
+          "x": 81.27317394365215,
+          "y": -40.47061095141835
+        },
+        {
+          "x": 112.08891185699238,
+          "y": -11.473844145647163
+        },
+        {
+          "x": 72.20975741076418,
+          "y": 9.367577243060865
+        },
+        {
+          "x": 80.36686271574362,
+          "y": 49.238127798644214
+        }
+      ],
+      "closed": true,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "arc",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 165,
+      "sides": 6,
+      "lineWidth": 10,
+      "color": "#000000",
+      "fill": null,
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 360,
+      "points": [],
+      "closed": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "arc",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 145,
+      "sides": 6,
+      "lineWidth": 12,
+      "color": "#ffb61a",
+      "fill": null,
+      "rotSpeed": 0.5,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 360,
+      "points": [],
+      "closed": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "arc",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 185,
+      "sides": 6,
+      "lineWidth": 18,
+      "color": "#ffb81f",
+      "fill": null,
+      "rotSpeed": 0.5,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 80,
+      "points": [],
+      "closed": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "arc",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 185,
+      "sides": 6,
+      "lineWidth": 18,
+      "color": "#ffb81f",
+      "fill": null,
+      "rotSpeed": 0.5,
+      "phase": 2.0943951023931953,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 80,
+      "points": [],
+      "closed": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "arc",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 185,
+      "sides": 6,
+      "lineWidth": 18,
+      "color": "#ffb81f",
+      "fill": null,
+      "rotSpeed": 0.5,
+      "phase": 4.1887902047863905,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 80,
+      "points": [],
+      "closed": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    }
+  ]
+}

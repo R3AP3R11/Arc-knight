@@ -1,0 +1,63 @@
+{
+  "id": "default-enemy-advanced1",
+  "name": "进阶敌人1",
+  "center": {
+    "x": 0,
+    "y": 0
+  },
+  "scale": 1,
+  "elements": [
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 1,
+      "sides": 3,
+      "lineWidth": 6,
+      "color": "#ffffff",
+      "fill": null,
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "points": [
+        {
+          "x": -16.799999999999997,
+          "y": -16.799999999999997
+        },
+        {
+          "x": 16.799999999999997,
+          "y": 16.799999999999997
+        }
+      ],
+      "closed": false
+    },
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 1,
+      "sides": 3,
+      "lineWidth": 6,
+      "color": "#ffffff",
+      "fill": null,
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "points": [
+        {
+          "x": -16.799999999999997,
+          "y": 16.799999999999997
+        },
+        {
+          "x": 16.799999999999997,
+          "y": -16.799999999999997
+        }
+      ],
+      "closed": false
+    }
+  ]
+}

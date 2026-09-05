@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { interactProgress, blend } from './ui-interact.js';
 
 export function drawParallelogram(g, x, y, w, h, skew, fill, alpha = 1) {
   g.fillStyle(color(fill), alpha);
@@ -89,30 +90,48 @@ function color(value) {
   return Phaser.Display.Color.HexStringToColor(value).color;
 }
 
-export function drawPanel(g, node) {
-  const { x, y, w, h } = node;
-  const fill = node.fill || UI_COLORS.panelBg;
-  const stroke = node.stroke || UI_COLORS.panelStroke;
-  const radius = node.radius ?? 8;
-  const alpha = node.alpha ?? 0.9;
-  g.fillStyle(color(fill), alpha);
-  g.fillRoundedRect(x, y, w, h, radius);
-  g.lineStyle(2, color(stroke), 1);
-  g.strokeRoundedRect(x, y, w, h, radius);
+function stOf(st) {
+  const over = st?.over;
+  const p = st?.p ?? 0;
+  const on = p > 0 && !!over;
+  return {
+    on,
+    dx: on ? (over.dx || 0) * p : 0,
+    dy: on ? (over.dy || 0) * p : 0,
+    scale: on && over.scale ? Phaser.Math.Linear(1, over.scale, p) : 1,
+    fill: over?.fill,
+    stroke: over?.stroke,
+    alpha: over?.alpha,
+    lineWidth: over?.lineWidth
+  };
 }
 
-export function drawBar(g, node, ratio) {
+export function drawPanel(g, node, st) {
+  const s = stOf(st);
+  const { x, y, w, h } = node;
+  const fill = blend(node.fill || UI_COLORS.panelBg, s.fill, st?.p ?? 0);
+  const stroke = blend(node.stroke || UI_COLORS.panelStroke, s.stroke, st?.p ?? 0);
+  const radius = node.radius ?? 8;
+  const alpha = blend(node.alpha ?? 0.9, s.alpha, st?.p ?? 0);
+  g.fillStyle(color(fill), alpha);
+  g.fillRoundedRect(x + s.dx, y + s.dy, w, h, radius);
+  g.lineStyle(2, color(stroke), 1);
+  g.strokeRoundedRect(x + s.dx, y + s.dy, w, h, radius);
+}
+
+export function drawBar(g, node, ratio, st) {
+  const s = stOf(st);
   const { x, y, w, h } = node;
   const bg = node.bg || UI_COLORS.hpBg;
-  const fill = node.fill || UI_COLORS.hpFill;
-  const stroke = node.stroke || UI_COLORS.panelStroke;
+  const fill = blend(node.fill || UI_COLORS.hpFill, s.fill, st?.p ?? 0);
+  const stroke = blend(node.stroke || UI_COLORS.panelStroke, s.stroke, st?.p ?? 0);
   const r = Math.max(0, Math.min(1, ratio));
   g.fillStyle(color(bg), 1);
-  g.fillRect(x, y, w, h);
+  g.fillRect(x + s.dx, y + s.dy, w, h);
   g.fillStyle(color(fill), 1);
-  g.fillRect(x, y, w * r, h);
+  g.fillRect(x + s.dx, y + s.dy, w * r, h);
   g.lineStyle(1, color(stroke), 1);
-  g.strokeRect(x, y, w, h);
+  g.strokeRect(x + s.dx, y + s.dy, w, h);
 }
 
 export function drawCoinIcon(g, node) {
@@ -137,12 +156,13 @@ export function drawHeartIcon(g, node) {
   g.fillTriangle(x - r, y - r * 0.1, x + r, y - r * 0.1, x, y + r);
 }
 
-export function drawShape(g, node) {
-  const { x, y } = node;
-  const fill = node.fill || UI_COLORS.text;
-  const stroke = node.stroke || null;
-  const alpha = node.alpha ?? 1;
-  const lw = node.lineWidth ?? 1;
+export function drawShape(g, node, st) {
+  const s = stOf(st);
+  const x = node.x + s.dx, y = node.y + s.dy;
+  const fill = blend(node.fill || UI_COLORS.text, s.fill, st?.p ?? 0);
+  const stroke = blend(node.stroke, s.stroke, st?.p ?? 0);
+  const alpha = blend(node.alpha ?? 1, s.alpha, st?.p ?? 0);
+  const lw = blend(node.lineWidth ?? 1, s.lineWidth, st?.p ?? 0);
   g.fillStyle(color(fill), alpha);
   g.lineStyle(lw, color(stroke || fill), 1);
 
@@ -183,13 +203,37 @@ export function drawShape(g, node) {
   }
 }
 
-export function drawButton(g, node, disabled = false) {
+// 自定义几何：多边形点集（points 相对 node.x/y）
+export function drawPoly(g, node, st) {
+  const s = stOf(st);
+  const pts = node.points || [];
+  if (pts.length < 2) { g.lineStyle(2, color(0x444444), 1); g.strokeRect(node.x, node.y, node.w || 80, node.h || 40); return; }
+  const ox = node.x + s.dx, oy = node.y + s.dy;
+  const fill = blend(node.fill || UI_COLORS.text, s.fill, st?.p ?? 0);
+  const stroke = blend(node.stroke, s.stroke, st?.p ?? 0);
+  const alpha = blend(node.alpha ?? 1, s.alpha, st?.p ?? 0);
+  const lw = blend(node.lineWidth ?? 2, s.lineWidth, st?.p ?? 0);
+  g.fillStyle(color(fill), alpha);
+  g.lineStyle(lw, color(stroke || fill), 1);
+  g.beginPath();
+  g.moveTo(ox + pts[0].x, oy + pts[0].y);
+  for (let i = 1; i < pts.length; i++) g.lineTo(ox + pts[i].x, oy + pts[i].y);
+  if (node.closed !== false) g.closePath();
+  g.fillPath();
+  if (stroke) g.strokePath();
+}
+
+export function drawButton(g, node, disabled = false, st, pressScale = 1) {
+  const s = stOf(st);
+  const baseScale = pressScale * (s.on ? s.scale : 1);
   const { x, y, w, h } = node;
-  const fill = node.fill || (disabled ? '#1c3a4f' : UI_COLORS.button);
+  const dw = w * baseScale, dh = h * baseScale;
+  const dx = x + (w - dw) / 2 + s.dx, dy = y + (h - dh) / 2 + s.dy;
+  const fill = blend(node.fill || (disabled ? '#1c3a4f' : UI_COLORS.button), s.fill, st?.p ?? 0);
   g.fillStyle(color(fill), 1);
-  g.fillRoundedRect(x, y, w, h, 6);
-  g.lineStyle(1, color(UI_COLORS.panelStroke), 1);
-  g.strokeRoundedRect(x, y, w, h, 6);
+  g.fillRoundedRect(dx, dy, dw, dh, 6);
+  g.lineStyle(1, color(blend(UI_COLORS.panelStroke, s.stroke, st?.p ?? 0)), 1);
+  g.strokeRoundedRect(dx, dy, dw, dh, 6);
 }
 
 function drawCloseX(g, node) {
@@ -208,6 +252,27 @@ function resolve(bindKey, uiState, bindings, fallback) {
   return value === undefined || value === null ? fallback : value;
 }
 
+function resolveState(ctx, node) {
+  if (!node.interact?.hover) return null;
+  const hoverNow = ctx.hover?.(node.id) || false;
+  const now = ctx.now ?? 0;
+  const prog = interactProgress(node, hoverNow, now, ctx.anim);
+  return prog ? { p: prog.p, over: node.interact.hover } : null;
+}
+
+// 节点显隐：visible === false / show === false 直接隐藏；
+// hideWhen 为形如 "hasAnySave" 或 "!hasAnySave" 的条件，读 uiState 里该 key 的布尔值。
+export function nodeHidden(node, uiState) {
+  if (node.visible === false || node.show === false) return true;
+  if (node.hideWhen) {
+    const neg = node.hideWhen.startsWith('!');
+    const key = neg ? node.hideWhen.slice(1) : node.hideWhen;
+    const val = !!uiState?.[key];
+    return neg ? !val : val;
+  }
+  return false;
+}
+
 export function renderGraph(g, graph, uiState, bindings, ctx = {}) {
   const buttons = ctx.buttons || [];
   const texts = ctx.texts || null;
@@ -215,21 +280,23 @@ export function renderGraph(g, graph, uiState, bindings, ctx = {}) {
   const nodes = graph?.nodes || [];
 
   for (const node of nodes) {
-    if (node.visible === false) continue;
+    if (nodeHidden(node, uiState)) continue;
+    const st = resolveState(ctx, node);
 
     switch (node.type) {
       case 'panel':
-        drawPanel(g, node);
+        drawPanel(g, node, st);
         break;
       case 'bar':
-        drawBar(g, node, resolve(node.bind?.ratio, uiState, bindings, 0));
+        drawBar(g, node, resolve(node.bind?.ratio, uiState, bindings, 0), st);
         break;
       case 'icon':
         if (node.kind === 'coin') drawCoinIcon(g, node);
         else if (node.kind === 'heart') drawHeartIcon(g, node);
         break;
       case 'shape':
-        drawShape(g, node);
+        if (node.kind === 'poly') drawPoly(g, node, st);
+        else drawShape(g, node, st);
         break;
       case 'image': {
         const img = images?.get(node.id);
@@ -243,7 +310,7 @@ export function renderGraph(g, graph, uiState, bindings, ctx = {}) {
       }
       case 'button': {
         const disabled = !!node.disabled;
-        drawButton(g, node, disabled);
+        drawButton(g, node, disabled, st, ctx.press?.(node.id) || 1);
         if (node.label === '✕') drawCloseX(g, node);
         buttons.push({ id: node.id, x: node.x, y: node.y, w: node.w, h: node.h, disabled, node });
         break;

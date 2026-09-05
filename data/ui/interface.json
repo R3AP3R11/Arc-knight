@@ -8,7 +8,7 @@
     { "id": "levelRow", "type": "text", "x": 420, "y": 280, "size": 26, "color": "#eaf4fb", "bind": { "text": "level" } },
     { "id": "goldRow", "type": "text", "x": 420, "y": 340, "size": 26, "color": "#ffd54f", "bind": { "text": "gold" } },
     { "id": "killsRow", "type": "text", "x": 420, "y": 400, "size": 26, "color": "#eaf4fb", "bind": { "text": "kills" } },
-    { "id": "close", "type": "button", "x": 1460, "y": 180, "w": 64, "h": 64, "label": "✕" }
+    { "id": "close", "type": "button", "x": 1460, "y": 180, "w": 64, "h": 64, "label": "✕", "interact": { "hover": { "fill": "#4fc3f7", "stroke": "#7fe0ff", "dy": -3, "scale": 1.1, "animMs": 130 } } }
   ],
   "stats": [
     { "key": "level", "label": "等级" },

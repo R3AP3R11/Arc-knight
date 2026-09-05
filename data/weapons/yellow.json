@@ -1,0 +1,211 @@
+{
+  "id": "yellow",
+  "name": "散射",
+  "version": 1,
+  "baseDamage": 8,
+  "fireInterval": 150,
+  "maxAmmo": 45,
+  "chargeRequired": 5,
+  "purchasable": false,
+  "price": 0,
+  "unlockLevel": 1,
+  "slot": 2,
+  "maxGenericMods": 3,
+  "maxDedicatedMods": 1,
+  "isTemplate": false,
+  "appearance": {
+    "scale": 1,
+    "center": {
+      "x": 0,
+      "y": 0
+    },
+    "elements": [
+      {
+        "shape": "polygon",
+        "count": 1,
+        "orbitRadius": 0,
+        "radius": 8,
+        "sides": 3,
+        "lineWidth": 0,
+        "color": "#ffffff",
+        "fill": "#000000",
+        "rotSpeed": 1,
+        "dir": 1,
+        "phase": 0,
+        "offsetX": 4,
+        "offsetY": 4,
+        "offsetSpeed": 5,
+        "arcStart": 0,
+        "arcEnd": 360,
+        "points": [],
+        "closed": false
+      },
+      {
+        "shape": "polygon",
+        "count": 3,
+        "orbitRadius": 18,
+        "radius": 9,
+        "sides": 3,
+        "lineWidth": 3,
+        "color": "#ffffff",
+        "fill": null,
+        "rotSpeed": 1,
+        "dir": 1,
+        "phase": 0,
+        "offsetX": 3,
+        "offsetY": 3,
+        "offsetSpeed": 5,
+        "arcStart": 0,
+        "arcEnd": 360,
+        "points": [],
+        "closed": false
+      },
+      {
+        "shape": "polygon",
+        "count": 1,
+        "orbitRadius": 0,
+        "radius": 36,
+        "sides": 3,
+        "lineWidth": 4,
+        "color": "#fff700",
+        "fill": null,
+        "rotSpeed": -1,
+        "dir": 1,
+        "phase": 0,
+        "offsetX": 2,
+        "offsetY": 2,
+        "offsetSpeed": 5,
+        "arcStart": 0,
+        "arcEnd": 360,
+        "points": [],
+        "closed": false
+      },
+      {
+        "shape": "arc",
+        "count": 1,
+        "orbitRadius": 0,
+        "radius": 35,
+        "sides": 3,
+        "lineWidth": 3,
+        "color": "#ffffff",
+        "fill": null,
+        "rotSpeed": 0,
+        "dir": 1,
+        "phase": 0,
+        "offsetX": 2,
+        "offsetY": 2,
+        "offsetSpeed": 5,
+        "arcStart": 0,
+        "arcEnd": 360,
+        "points": [],
+        "closed": false
+      }
+    ]
+  },
+  "medium": {
+    "ringIndex": 0,
+    "angle": 0,
+    "radius": 45,
+    "size": 1,
+    "ringColor": "#feed34",
+    "ringWidth": 4,
+    "orbitSpeed": 180,
+    "fireSpeed": 20,
+    "elements": [
+      {
+        "shape": "polygon",
+        "count": 1,
+        "orbitRadius": 0,
+        "radius": 5,
+        "sides": 20,
+        "lineWidth": 0,
+        "color": "#feed34",
+        "fill": "#feed34",
+        "rotSpeed": 0,
+        "dir": 1,
+        "phase": 0,
+        "offsetX": 0,
+        "offsetY": 0,
+        "offsetSpeed": 1,
+        "arcStart": 0,
+        "arcEnd": 360,
+        "points": [],
+        "closed": false
+      }
+    ]
+  },
+  "bullet": {
+    "count": 3,
+    "spreadDeg": 30,
+    "baseAngleOffset": 0,
+    "range": 0,
+    "spreadRandom": 0,
+    "randomColor": false,
+    "shape": {
+      "scale": 1,
+      "center": {
+        "x": 0,
+        "y": 0
+      },
+      "elements": [
+        {
+          "shape": "polygon",
+          "count": 1,
+          "orbitRadius": 0,
+          "radius": 4.5,
+          "sides": 20,
+          "lineWidth": 0,
+          "color": "#ffffff",
+          "fill": "#ffffff",
+          "rotSpeed": 0,
+          "dir": 1,
+          "phase": 0,
+          "offsetX": 0,
+          "offsetY": 0,
+          "offsetSpeed": 1,
+          "arcStart": 0,
+          "arcEnd": 360,
+          "points": [],
+          "closed": false
+        }
+      ]
+    },
+    "size": 0.5,
+    "trail": {
+      "type": "snake",
+      "length": 200,
+      "width": 6,
+      "color": "#feed34",
+      "fade": 0.8,
+      "tailWidth": 0,
+      "midWidth": 0,
+      "midAt": 0.05,
+      "particleSize": 4,
+      "particleGap": 6,
+      "historyMax": 12
+    },
+    "trajectory": {
+      "kind": "vector",
+      "beam": {
+        "width": 10,
+        "color": "#feed34"
+      },
+      "vector": {
+        "speed": 500,
+        "angleOffset": 0,
+        "gravityX": 0,
+        "gravityY": 0,
+        "zigzag": {
+          "enabled": false,
+          "ampDeg": 15,
+          "wavelength": 40
+        },
+        "jitter": {
+          "enabled": false,
+          "amount": 0,
+          "freq": 10
+        }
+      }
+    }
+  }
+}

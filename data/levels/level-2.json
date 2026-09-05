@@ -11,7 +11,22 @@
     "width": 1440,
     "mode": "center"
   },
-  "walls": [],
+  "walls": [
+    {
+      "id": "wall-1788585423365",
+      "x": 270,
+      "y": 540,
+      "w": 120,
+      "h": 90,
+      "shape": "rect",
+      "thickness": 30,
+      "visible": true,
+      "color": "#60758b",
+      "rotation": 0,
+      "startAngle": 0,
+      "endAngle": 360
+    }
+  ],
   "enemies": [],
   "spawn": {
     "x": 130,
@@ -25,8 +40,7 @@
     "gold": 0,
     "weapons": [
       "radial",
-      "yellow",
-      "green"
+      "weapon-1788012926999"
     ],
     "weaponType": "yellow",
     "id": "spawn"
@@ -76,8 +90,34 @@
       ]
     }
   ],
-  "crates": [],
-  "barrels": [],
+  "crates": [
+    {
+      "id": "crate-1788585426725",
+      "x": 570,
+      "y": 270,
+      "w": 50,
+      "h": 50,
+      "hp": 1
+    },
+    {
+      "id": "crate-1788585435427",
+      "x": 630,
+      "y": 270,
+      "w": 50,
+      "h": 50,
+      "hp": 1
+    }
+  ],
+  "barrels": [
+    {
+      "id": "barrel-1788585500478",
+      "x": 360,
+      "y": 330,
+      "r": 30,
+      "hp": 1,
+      "explodeRadius": 150
+    }
+  ],
   "chests": [
     {
       "id": "chest-1",
@@ -86,6 +126,9 @@
       "trigger": "start",
       "triggerId": "",
       "openRadius": 50,
+      "guide": true,
+      "guideRange": 1600,
+      "guideIcon": "",
       "rewards": [
         {
           "item": "gold",
@@ -100,7 +143,24 @@
       ]
     }
   ],
-  "portals": [],
+  "portals": [
+    {
+      "id": "portal-1",
+      "x": 360,
+      "y": 450,
+      "w": 120,
+      "h": 60,
+      "rotation": 0,
+      "trigger": "start",
+      "triggerId": "",
+      "interactRadius": 90,
+      "visible": true,
+      "guide": true,
+      "guideRange": 1600,
+      "guideIcon": "",
+      "guideStopAfterUse": true
+    }
+  ],
   "vendors": [],
   "idols": [
     {
@@ -110,12 +170,31 @@
       "w": 743.112192709953,
       "h": 521.3093978042798,
       "interactRadius": 130,
+      "visible": true,
+      "guide": false,
+      "guideRange": 600,
+      "guideIcon": "",
+      "guideStopAfterUse": true
+    }
+  ],
+  "icons": [],
+  "background": null,
+  "images": [],
+  "gates": [
+    {
+      "id": "gate-1788585509027",
+      "x": 90,
+      "y": 450,
+      "w": 240,
+      "h": 45,
+      "rotation": 0,
+      "label": "Barrier Active",
+      "color1": "#FFE6BE",
+      "color2": "#FFCB85",
+      "active": false,
       "visible": true
     }
   ],
-  "background": null,
-  "images": [],
-  "gates": [],
   "roomLayout": null,
   "spawnZones": []
 }

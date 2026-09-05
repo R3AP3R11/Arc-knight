@@ -1,4 +1,7 @@
-import { WEAPON_LABELS } from './state.js';
+import { WEAPON_LABELS, ITEM_DEFS } from './state.js';
+import { weaponCatalog } from './player-data.js';
+import { getWeaponDef } from './systems/art/weapon-store.js';
+import { listPetDefs } from './systems/art/pet-store.js';
 
 const ids = [
   'status', 'editorPanel', 'backgroundColor', 'gridColor', 'showGridInPlay', 'showGridInEditor',
@@ -12,14 +15,32 @@ const ids = [
   'uiConfig', 'uiConfigPage', 'uiConfigBack', 'uiGraphSelect', 'uiNodeType',
   'uiNodeAdd', 'uiConfigSave', 'uiNodeList', 'uiPreviewCanvas', 'levelUi', 'dropRulesEditor',
   'roomPanel', 'roomCols', 'roomRows', 'roomThickness', 'roomWallColor', 'roomRoadWidth', 'roomRoadLength', 'roomGrid',
-  'roomCellPopup', 'roomCellPopupTitle', 'roomCellPopupClose', 'roomCellSize',
-  'pvLevel', 'pvExp', 'pvPoints', 'pvGold', 'pvWeapons', 'pvMods',
+  'roomCellPopup', 'roomCellPopupTitle', 'roomCellPopupClose', 'roomCellSize', 'roomCellMarkerType', 'roomCellMarkerIcon',
+  'pvLevel', 'pvExp', 'pvPoints', 'pvGold', 'pvWeapons', 'pvMods', 'pvPets',
   'pvMoveSpeed', 'pvAttackPower', 'pvCritRate', 'pvAttackSpeed',
   'pvMaxHp', 'pvMaxShield', 'pvDamageReduction', 'pvDodgeRate',
-  'tpLevel', 'tpExp', 'tpPoints', 'tpGold', 'tpWeapons', 'tpMods',
+  'tpLevel', 'tpExp', 'tpPoints', 'tpGold', 'tpWeapons', 'tpMods', 'tpPets',
   'tpMoveSpeed', 'tpAttackPower', 'tpCritRate', 'tpAttackSpeed',
   'tpMaxHp', 'tpMaxShield', 'tpDamageReduction', 'tpDodgeRate',
-  'tpSlot', 'tpSave', 'tpReload'
+  'tpSlot', 'tpSave', 'tpReload',
+  'artboard', 'artboardPage', 'artboardBack', 'artAssetSelect', 'artNew', 'artSave',
+  'artElementList', 'artElementAdd', 'artPreviewCanvas', 'artboardName', 'artDraw', 'artBgColor',
+  'artCopySelect', 'artCopyOther', 'artDrawBoard', 'artGenDefaults',
+  'drawBoardCanvas', 'drawSnap', 'drawUndo', 'drawClear', 'drawCancel', 'drawDone',
+  'drawToolAdd', 'drawToolSelect', 'drawToolFill', 'drawColor', 'drawLineWidth', 'drawFillColor',
+  'drawInsertShape', 'drawRefRadius', 'drawRefSides', 'drawRefArcDeg', 'drawRefUnderlay', 'drawRefToPoints',
+  'drawRefOutline', 'drawRefOutlineUnderlay', 'drawRefOutlineToPoints', 'drawRefOutlineDelete', 'drawRefClear',
+  'drawSelX', 'drawSelY', 'drawDelPoint', 'drawRotateDeg', 'drawScalePct', 'drawApplyTransform',
+  'drawOutlineName', 'drawSaveOutline', 'artOutlineSelect', 'artAddOutline', 'artDeleteOutline',
+  'weaponBoard', 'weaponPage', 'weaponBack', 'weaponName', 'weaponSelect', 'weaponNew',
+  'weaponTemplate', 'weaponSave', 'weaponForm', 'weaponPreviewCanvas',
+  'petBoard', 'petPage', 'petBack', 'petName', 'petSelect', 'petNew', 'petSave', 'petForm', 'petHint',
+  'uilibrary', 'uilibraryPage', 'uilibraryBack', 'uilibraryList', 'uilibraryCanvas',
+  'uilibraryForm', 'uilibraryHover', 'uilibraryHint',
+  'wireframe', 'wireframePage', 'wireframeBack', 'wireframeName', 'wireframeImport',
+  'wireframeSave', 'wireframeStatus', 'wireframeXml', 'wireframeList', 'wireframeNote', 'wireframeCanvas',
+  'wireframeSelect', 'wireframeLoad', 'wireframeRefresh', 'wireframeDelete',
+  'wireframePageSel', 'wireframePageImport'
 ];
 
 export function getDom() {
@@ -50,34 +71,56 @@ export function renderLevels(dom, levels) {
 
 // 预览玩家数据：武器列表 UI 渲染（targetId 用于区分预览面板/试玩面板）
 export function renderPreviewWeapons(dom, assets, targetId = 'pvWeapons') {
-  dom[targetId].innerHTML = Object.entries(assets)
-    .map(([id, w]) => {
-      const enhanceChecks = [0, 1, 2]
-        .map(i => `<label class="checkbox inline"><input type="checkbox" data-w="${id}" data-e="${i}" ${w.enhance[i] ? 'checked' : ''}/> 强化${i + 1}</label>`)
-        .join('');
+  dom[targetId].innerHTML = weaponCatalog().map(id => {
+    const w = (assets && assets[id]) || { unlocked: false, enhance: [0, 0, 0] };
+    const enhanceChecks = [0, 1, 2]
+      .map(i => `<label class="checkbox inline"><input type="checkbox" data-w="${id}" data-e="${i}" ${w.enhance[i] ? 'checked' : ''}/> 强化${i + 1}</label>`)
+      .join('');
+    return `<div class="pv-weapon-row">
+      <label class="checkbox inline"><input type="checkbox" data-w="${id}" data-u="1" ${w.unlocked ? 'checked' : ''}/> 已解锁</label>
+      <strong>${getWeaponDef(id)?.name || WEAPON_LABELS[id] || id}</strong>
+      ${enhanceChecks}
+    </div>`;
+  }).join('');
+}
+
+export function renderPreviewMods(dom, items, modDefs, targetId = 'pvMods') {
+  const stacks = (items && items.stacks) || {};
+  const uniques = (items && items.uniques) || [];
+  const ownedUnique = new Set(uniques.map(u => u.itemId));
+  dom[targetId].innerHTML = Object.entries(modDefs)
+    .map(([id, def]) => {
+      const tag = def.weapon ? `专属·${getWeaponDef(def.weapon)?.name || WEAPON_LABELS[def.weapon] || def.weapon}` : '通用';
+      // 专属改件：每种最多 1 个（进 items.uniques）；通用改件：数量无上限（进 items.stacks）
+      if (def.weapon) {
+        const checked = ownedUnique.has(id) ? 'checked' : '';
+        return `<div class="pv-weapon-row">
+          <label class="checkbox inline"><input type="checkbox" data-own="${id}" ${checked}/> ${def.name}</label>
+          <span class="hint">${tag}</span>
+        </div>`;
+      }
+      const count = stacks[id] || 0;
       return `<div class="pv-weapon-row">
-        <label class="checkbox inline"><input type="checkbox" data-w="${id}" data-u="1" ${w.unlocked ? 'checked' : ''}/> 已解锁</label>
-        <strong>${id}</strong>
-        ${enhanceChecks}
+        <span>${def.name}</span>
+        <input type="number" min="0" step="1" value="${count}" data-own="${id}"/>
+        <span class="hint">${tag}</span>
       </div>`;
     })
     .join('');
 }
 
-export function renderPreviewMods(dom, equipment, modDefs, targetId = 'pvMods') {
-  const equipped = new Set();
-  for (const w of Object.keys(equipment || {})) {
-    const slot = equipment[w] || {};
-    (slot.generic || []).forEach(id => equipped.add(id));
-    if (slot.dedicated) equipped.add(slot.dedicated);
-  }
-  dom[targetId].innerHTML = Object.entries(modDefs)
-    .map(([id, def]) => {
-      const tag = def.weapon ? `专属·${WEAPON_LABELS[def.weapon] || def.weapon}` : '通用';
-      return `<div class="pv-weapon-row">
-        <label class="checkbox inline"><input type="checkbox" data-mod="${id}" ${equipped.has(id) ? 'checked' : ''}/> ${def.name}</label>
-        <span class="hint">${tag}</span>
-      </div>`;
-    })
-    .join('');
+// 玩家数据面板：宠物「拥有 / 装备」配置（拥有进 items.uniques，装备进 equipment.pets 上限2）
+export function renderPreviewPets(dom, player, targetId, prefix = 'pv') {
+  const owned = new Set((player.items?.uniques || []).map(u => u.itemId));
+  const equipped = Array.isArray(player.equipment?.pets) ? player.equipment.pets : [];
+  dom[targetId].innerHTML = listPetDefs().map(def => {
+    const id = def.id;
+    const desc = ITEM_DEFS[id]?.effect || '';
+    return `<div class="pv-weapon-row">
+      <label class="checkbox inline"><input type="checkbox" data-${prefix}-pet-own="${id}" ${owned.has(id) ? 'checked' : ''}/> 拥有</label>
+      <label class="checkbox inline"><input type="checkbox" data-${prefix}-pet-eq="${id}" ${equipped.includes(id) ? 'checked' : ''}/> 装备</label>
+      <strong>${def.name}</strong>
+      <span class="hint">${desc}</span>
+    </div>`;
+  }).join('');
 }

@@ -1,17 +1,19 @@
 // 玩家存档数据模型：归一化 + 默认值
 // 存储位置：data/players/ 目录，每档一个 JSON 文件，index.json 记录槽位列表
 import { ITEM_DEFS } from './state.js';
+import { getWeaponCaps } from './systems/art/weapon-caps.js';
 
 export const PLAYER_VERSION = 1;
 
 // 每把武器的强化方向数量
 export const WEAPON_ENHANCE_DIRECTIONS = 3;
 
-// 武器列表（顺序即展示顺序）
-export const PLAYER_WEAPONS = ['radial', 'yellow', 'green'];
-
-// 初始已解锁的武器
-export const DEFAULT_UNLOCKED_WEAPONS = ['radial'];
+// 武器目录（叶子模块 weapon-registry 提供，避免与 state.js 成环）。
+// 基础 3 种里仅 radial 硬编码；yellow/green 与设计稿武器在启动时经 registerWeapon 注册进目录。
+import { weaponCatalog, registerWeaponId, isKnownWeapon, DEFAULT_UNLOCKED_WEAPONS, BASE_WEAPONS } from './systems/art/weapon-registry.js';
+export { weaponCatalog, registerWeaponId, isKnownWeapon, DEFAULT_UNLOCKED_WEAPONS };
+// 内置玩家武器集（顺序即展示顺序）：黄色/绿色为内置已知 id，行为由注册的设计稿驱动
+export const PLAYER_WEAPONS = BASE_WEAPONS;
 
 // 出战槽解锁等级：槽 0 默认解锁，槽 1 12 级解锁，槽 2 30 级解锁
 export const SLOT_UNLOCK_LEVELS = [12, 30];
@@ -29,11 +31,11 @@ export function grantLevelUp(player) {
   return player;
 }
 
-const emptyWeaponMods = () => ({
-  radial: { generic: [], dedicated: null },
-  yellow: { generic: [], dedicated: null },
-  green: { generic: [], dedicated: null }
-});
+const emptyWeaponMods = () => {
+  const out = {};
+  for (const w of weaponCatalog()) out[w] = { generic: [], dedicated: [] };
+  return out;
+};
 
 export const DEFAULT_PLAYER = {
   version: PLAYER_VERSION,
@@ -52,14 +54,11 @@ export const DEFAULT_PLAYER = {
   },
   // 货币
   currency: {
-    gold: 0
+    gold: 0,
+    gems: 0
   },
-  // 武器数据：是否获得 + 3 个强化方向（1/0，可共存）
-  weapons: {
-    radial: { unlocked: true, enhance: [0, 0, 0] },
-    yellow: { unlocked: false, enhance: [0, 0, 0] },
-    green: { unlocked: false, enhance: [0, 0, 0] }
-  },
+  // 武器数据：是否获得 + 3 个强化方向（1/0，可共存）；由运行时目录派生（yellow/green 启动后注册）
+  weapons: Object.fromEntries(weaponCatalog().map(w => [w, { unlocked: DEFAULT_UNLOCKED_WEAPONS.includes(w), enhance: [0, 0, 0] }])),
   // 出战槽数组（固定 3 槽：槽1 恒 radial，槽2/槽3 空槽用 '' 表示）
   loadout: ['radial', '', ''],
   // 是否参与过新手 newbee 关卡
@@ -131,12 +130,13 @@ function normalizeUniques(value) {
 }
 
 function normalizeLoadout(value) {
+  const cats = weaponCatalog();
   const out = ['radial', '', ''];
   if (!Array.isArray(value)) return out;
   const seen = new Set(['radial']);
   for (let i = 0; i < Math.min(value.length, 3); i++) {
     const w = String(value[i] || '');
-    if (!w || !PLAYER_WEAPONS.includes(w) || seen.has(w)) continue;
+    if (!w || !cats.includes(w) || seen.has(w)) continue;
     if (i === 0 && w !== 'radial') continue;
     seen.add(w);
     out[i] = w;
@@ -144,11 +144,25 @@ function normalizeLoadout(value) {
   return out;
 }
 
+// 归一化武器列表：仅保留已定义武器、去重；空则回退到初始武器 radial
+export function normalizeWeapons(value) {
+  const cats = weaponCatalog();
+  const arr = Array.isArray(value)
+    ? [...new Set(value.map(String).filter(w => cats.includes(w)))]
+    : [];
+  return arr.length ? arr : ['radial'];
+}
+
+function weaponCapsFor(w) {
+  return getWeaponCaps(w);
+}
+
 function normalizeWeaponMods(value) {
   const src = value && typeof value === 'object' ? value : {};
   const out = {};
-  for (const w of PLAYER_WEAPONS) {
+  for (const w of weaponCatalog()) {
     const slot = src[w] && typeof src[w] === 'object' ? src[w] : {};
+    const caps = weaponCapsFor(w);
     const generic = Array.isArray(slot.generic)
       ? [...new Set(
           slot.generic
@@ -157,13 +171,17 @@ function normalizeWeaponMods(value) {
               const def = ITEM_DEFS[id];
               return def && def.category === 'mod' && def.weapon === '';
             })
-        )]
+        )].slice(0, caps.generic)
       : [];
-    const dedicatedRaw = slot.dedicated == null ? null : String(slot.dedicated);
-    const dedicatedDef = dedicatedRaw ? ITEM_DEFS[dedicatedRaw] : null;
-    const dedicated = dedicatedDef && dedicatedDef.category === 'mod' && dedicatedDef.weapon === w
-      ? dedicatedRaw
-      : null;
+    const dedicatedRaw = Array.isArray(slot.dedicated)
+      ? slot.dedicated
+      : (slot.dedicated == null ? [] : [slot.dedicated]);
+    const dedicated = [...new Set(
+      dedicatedRaw.map(String).filter(id => {
+        const def = ITEM_DEFS[id];
+        return def && def.category === 'mod' && def.weapon === w;
+      })
+    )].slice(0, caps.dedicated);
     out[w] = { generic, dedicated };
   }
   return out;
@@ -235,6 +253,19 @@ export function normalizePlayer(value) {
   const c = data.combat || {};
   return {
     version: PLAYER_VERSION,
+    // 画板美术方案（设计稿 id，空串=默认美术）
+    art: (typeof data.art === 'string' && data.art && data.art !== 'undefined') ? data.art : '',
+    artScale: (() => { const n = Number(data.artScale); return Number.isFinite(n) && n > 0 ? n : 1; })(),
+    // 按武器类型绑定的美术方案：{ [武器id]: 设计稿id }
+    arts: (() => {
+      const src = data.arts && typeof data.arts === 'object' ? data.arts : {};
+      const out = {};
+      for (const w of weaponCatalog()) {
+        const v = src[w];
+        out[w] = (typeof v === 'string' && v && v !== 'undefined') ? v : '';
+      }
+      return out;
+    })(),
     meta: {
       name: data.meta?.name || '新存档',
       createdAt: Number(data.meta?.createdAt) || 0,
@@ -248,9 +279,10 @@ export function normalizePlayer(value) {
       points: Math.max(0, Math.floor(Number(data.progress?.points) || 0))
     },
     currency: {
-      gold: Math.max(0, Math.floor(Number(data.currency?.gold) || 0))
+      gold: Math.max(0, Math.floor(Number(data.currency?.gold) || 0)),
+      gems: Math.max(0, Math.floor(Number(data.currency?.gems) || 0))
     },
-    weapons: Object.fromEntries(PLAYER_WEAPONS.map(w => {
+    weapons: Object.fromEntries(weaponCatalog().map(w => {
       const wd = data.weapons?.[w] || {};
       return [w, {
         unlocked: wd.unlocked !== undefined

@@ -47,7 +47,11 @@
       "interactRadius": 120,
       "tipText": "按 F 交互",
       "event": "battle",
-      "visible": true
+      "visible": true,
+      "guide": false,
+      "guideRange": 600,
+      "guideIcon": "",
+      "guideStopAfterUse": true
     },
     {
       "id": "icon-1787812104430",
@@ -59,7 +63,11 @@
       "interactRadius": 120,
       "tipText": "按 F 交互",
       "event": "weapon",
-      "visible": true
+      "visible": true,
+      "guide": false,
+      "guideRange": 600,
+      "guideIcon": "",
+      "guideStopAfterUse": true
     },
     {
       "id": "icon-1787812137913",
@@ -71,7 +79,11 @@
       "interactRadius": 120,
       "tipText": "按 F 交互",
       "event": "workshop",
-      "visible": true
+      "visible": true,
+      "guide": false,
+      "guideRange": 600,
+      "guideIcon": "",
+      "guideStopAfterUse": true
     }
   ],
   "background": {

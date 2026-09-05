@@ -1,3 +1,5 @@
+import { normalizeRoomMarker } from './state.js';
+
 // 多箱庭关卡参数
 export const ROOM_SIZE = 1120;   // 默认小房间内宽高
 export const DEFAULT_ROAD_WIDTH = 448;  // 连接道路宽度（可配置）
@@ -30,7 +32,8 @@ export function normalizeRoomLayout(value) {
     .map(cell => ({
       c: Math.floor(Number(cell?.c)),
       r: Math.floor(Number(cell?.r)),
-      size: clampRoomSize(cell?.size)
+      size: clampRoomSize(cell?.size),
+      marker: normalizeRoomMarker(cell?.marker)
     }))
     .filter(cell => Number.isInteger(cell.c) && Number.isInteger(cell.r)
       && cell.c >= 0 && cell.c < cols && cell.r >= 0 && cell.r < rows);
@@ -61,7 +64,7 @@ export function generateRoomLayout(layout) {
   // 归一化：整体平移到最小格为原点
   const minC = Math.min(...layout.cells.map(cell => cell.c), 0);
   const minR = Math.min(...layout.cells.map(cell => cell.r), 0);
-  const cells = layout.cells.map(cell => ({ c: cell.c - minC, r: cell.r - minR, size: cell.size }));
+  const cells = layout.cells.map(cell => ({ c: cell.c - minC, r: cell.r - minR, size: cell.size, marker: cell.marker }));
   const maxC = cells.length ? Math.max(...cells.map(cell => cell.c)) : -1;
   const maxR = cells.length ? Math.max(...cells.map(cell => cell.r)) : -1;
 
@@ -103,7 +106,7 @@ export function generateRoomLayout(layout) {
     const oy = rowY[r] + (rowSize[r] - sh) / 2;
     const right = ox + sw, bottom = oy + sh;
     const cx = ox + sw / 2, cy = oy + sh / 2;
-    rooms.push({ c, r, x: ox, y: oy, w: sw, h: sh });
+    rooms.push({ c, r, x: ox, y: oy, w: sw, h: sh, marker: cell.marker });
 
     const nbL = cellByKey.get(`${c - 1},${r}`);
     const nbR = cellByKey.get(`${c + 1},${r}`);

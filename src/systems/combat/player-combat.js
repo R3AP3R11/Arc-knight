@@ -1,0 +1,112 @@
+/**
+ * 玩家战斗混入模块（分类：战斗相关）
+ *
+ * 职责：玩家侧的受伤结算、护盾格挡判定与破盾、武器轮切换，
+ * 以及受击时覆盖全屏的红色闪屏绘制。
+ *
+ * 方法清单：
+ *   damagePlayer     —— 扣血（含减伤、新手关血量下限、失败判定）
+ *   blockWithShield  —— 扇形护盾角度 + 距离判定，命中则扣盾并抖屏
+ *   hitShield        —— 近身敌人撞盾：先结算击杀再走格挡
+ *   switchWeapon     —— 按方向切换武器轮当前槽位
+ *   drawHitFlash     —— 受击红色闪屏（挖去玩家周围圆形）
+ *
+ * 通过 Object.assign(EditorScene.prototype, PlayerCombatMixin) 混入，
+ * 内部 this 恒为 EditorScene 实例，语义与原类内方法完全一致。
+ */
+import Phaser from 'phaser';
+import { PLAYER_ART, SHIELD, SHIELD_SHAKE_MS, SHIELD_SHAKE_INTENSITY, SHIELD_HIT_COLOR, HIT_FX_TTL } from '../constants.js';
+import { WEAPONS } from './weapons.js';
+import { playerIncomingDamage } from '../economy/damage.js';
+import { pointInWall, hitWall } from './geometry.js';
+
+// ── 本模块私有常量 ──
+const NEWBEE_MIN_HP = 5;         // 新手关血量下限，永不失败
+const HIT_FLASH_RADIUS = 70;     // 受击闪屏在玩家周围挖空的半径
+
+export const PlayerCombatMixin = {
+  // ── 受伤与护盾 ──
+    damagePlayer(dmg) {
+      const floor = this.isNewbeeLevel() ? NEWBEE_MIN_HP : 0;
+      const actual = playerIncomingDamage(this, dmg);
+      if (actual <= 0) return;
+      this.player.hp = Math.max(floor, (this.player.hp ?? 100) - actual);
+      this.player.hitFlash = {
+        alpha: 1,
+        total: Phaser.Math.Clamp(dmg * 40, 200, 1200),
+        t: 0
+      };
+      if (this.player.hp <= 0) {
+        this.state = 'fail';
+        this.syncUIState();
+      }
+    },
+
+    blockWithShield(x, y, damage, extraRadius) {
+      if (!this.player.shieldActive || this.player.shieldBroken) return false;
+      const toP = Phaser.Math.Angle.Between(this.player.x, this.player.y, x, y);
+      const diff = Math.abs(Phaser.Math.Angle.Wrap(toP - this.player.shieldAngle));
+      const radius = PLAYER_ART.weaponRingRadius + SHIELD.gap + (extraRadius || 0);
+      if (diff <= Phaser.Math.DegToRad(SHIELD.arcDeg / 2) && Math.hypot(x - this.player.x, y - this.player.y) < radius) {
+        const actual = playerIncomingDamage(this, damage || 0) || damage || 0;
+        this.player.shield = Math.max(0, this.player.shield - actual);
+        this.hitEffects.push({ x, y, ttl: HIT_FX_TTL, color: SHIELD_HIT_COLOR });
+        this.cameras.main.shake(SHIELD_SHAKE_MS, SHIELD_SHAKE_INTENSITY);
+        if (this.newbee) this.newbee.shieldBlocked = true;
+        if (this.player.shield <= 0) {
+          this.player.shieldBroken = true;
+          this.player.shieldActive = false;
+          this.player.shieldTimer = 0;
+        }
+        return true;
+      }
+      return false;
+    },
+
+    hitShield(e) {
+      this.defeatEnemy(e);
+      this.blockWithShield(e.x, e.y, e.damage, e.r);
+    },
+
+  // ── 武器切换 ──
+    switchWeapon(dir) {
+      const weapons = this.player.weapons;
+      const n = weapons.length;
+      if (n <= 1) return;
+      const from = this.player.weaponIndex;
+      const to = (from + dir + n) % n;
+      this.player.weaponIndex = to;
+      const weaponType = weapons[to];
+      const weapon = WEAPONS[weaponType];
+      if (!weapon) return;
+      this.player.weaponType = weaponType;
+      this.player.weapon = weapon;
+      this.player.scheme = weapon.scheme;
+      this.player.weaponArt = (weapon && weapon.appearance && Array.isArray(weapon.appearance.elements) && weapon.appearance.elements.length) ? weapon.appearance : null;
+      this.wheelAnim = { from, to, t: 0, dur: 500 };
+      this.syncUIState();
+    },
+
+  // ── 受击闪屏 ──
+    drawHitFlash(g) {
+      if (!this.player.hitFlash || this.player.hitFlash.alpha <= 0) return;
+      const v = this.viewRect();
+      const alpha = this.player.hitFlash.alpha * 0.85;
+      g.fillStyle(0xff0000, alpha);
+      g.beginPath();
+      g.moveTo(v.x, v.y);
+      g.lineTo(v.x + v.w, v.y);
+      g.lineTo(v.x + v.w, v.y + v.h);
+      g.lineTo(v.x, v.y + v.h);
+      g.closePath();
+      g.arc(this.player.x, this.player.y, HIT_FLASH_RADIUS, 0, Math.PI * 2, true);
+      g.fillPath();
+    },
+
+  // ── 回填：点是否落在墙内（供射击命中用） ──
+    pointInWall(x, y) {
+    const ctx = this.ctx;
+      return ctx.state.level.walls.some(w => hitWall(w, x, y))
+        || this.activeGateWalls().some(w => hitWall(w, x, y));
+    },
+};

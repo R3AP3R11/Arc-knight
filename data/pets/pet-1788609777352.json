@@ -1,0 +1,16 @@
+{
+  "id": "pet-1788609777352",
+  "name": "普通宠物1",
+  "art": "asset-1788602786942",
+  "weapon": "radial",
+  "radius": 200,
+  "angularSpeed": 90,
+  "size": 1,
+  "fireInterval": 2500,
+  "damage": 8,
+  "maxHp": 0,
+  "hitActive": false,
+  "price": 500,
+  "unlockLevel": 6,
+  "description": ""
+}

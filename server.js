@@ -42,6 +42,14 @@ const defaultUi={
   {id:'exit',type:'button',x:340,y:880,w:200,h:60,label:'退出'},
   {id:'exitLabel',type:'text',x:420,y:894,size:22,color:'#ffffff',text:'退出'},
   {id:'version',type:'text',x:120,y:1010,size:20,color:'#9fc3d8',text:'v0.1.0'}
+ ]},
+ 'idol-buffs':{id:'idol-buffs',offerCount:3,buffs:[
+  {id:'atk',name:'力量祝福',desc:'攻击力 +15%',icon:'asset-1787970208151',stats:{attackPower:{op:'mul',value:1.15}}},
+  {id:'crit',name:'致命祝福',desc:'暴击率 +10%',icon:'',stats:{critRate:{op:'add',value:0.1}}},
+  {id:'dodge',name:'迅捷祝福',desc:'闪避率 +8%',icon:'',stats:{dodgeRate:{op:'add',value:0.08}}},
+  {id:'speed',name:'疾风祝福',desc:'移动速度 +12%',icon:'',stats:{moveSpeed:{op:'mul',value:1.12}}},
+  {id:'hp',name:'生命祝福',desc:'生命上限 +25',icon:'',stats:{maxHp:{op:'add',value:25}}},
+  {id:'reduction',name:'守护祝福',desc:'受到伤害 -10%',icon:'',stats:{damageReduction:{op:'mul',value:0.9}}}
  ]}
 };
 const MIME={
@@ -68,7 +76,12 @@ export async function startServer(options = {}) {
     ui: uiDir,
     uploads: path.join(dataRoot, 'uploads'),
     players: path.join(dataRoot, 'players'),
-    testPlayers: path.join(dataRoot, 'test-players')
+    testPlayers: path.join(dataRoot, 'test-players'),
+    assets: path.join(dataRoot, 'assets'),
+    weapons: path.join(dataRoot, 'weapons'),
+    pets: path.join(dataRoot, 'pets'),
+    outlines: path.join(dataRoot, 'outlines'),
+    uiDesigns: options.uiDesignsDir || path.join(root, 'docs', 'ui-designs')
   };
 
   // 打包模式：优先使用只读内置资源；若内置目录缺失则回退可写目录，保证进程仍可启动。
@@ -90,6 +103,11 @@ export async function startServer(options = {}) {
   await fs.mkdir(dirs.uploads, { recursive: true });
   await fs.mkdir(dirs.players, { recursive: true });
   await fs.mkdir(dirs.testPlayers, { recursive: true });
+  await fs.mkdir(dirs.assets, { recursive: true });
+  await fs.mkdir(dirs.weapons, { recursive: true });
+  await fs.mkdir(dirs.pets, { recursive: true });
+  await fs.mkdir(dirs.outlines, { recursive: true });
+  await fs.mkdir(dirs.uiDesigns, { recursive: true });
 
   // 开发模式：levels/ui 属于项目 data/，可写且需要补齐默认内容。
   // 打包模式：levels/ui 来自只读内置资源，不做任何写入与补齐。
@@ -113,6 +131,7 @@ export async function startServer(options = {}) {
   const json = (res, value, status = 200) => {
     res.statusCode = status;
     res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Cache-Control', 'no-store');
     res.end(JSON.stringify(value));
   };
   async function body(req) { let text = ''; for await (const c of req) text += c; return JSON.parse(text || '{}'); }
@@ -173,7 +192,12 @@ export async function startServer(options = {}) {
           (parts[1] === 'levels' && parts.length > 2 && (req.method === 'POST' || req.method === 'DELETE')) ||
           (parts[1] === 'level' && req.method === 'POST') ||
           (parts[1] === 'ui' && parts.length > 2 && req.method === 'POST') ||
-          (parts[1] === 'flow' && req.method === 'POST')
+          (parts[1] === 'flow' && req.method === 'POST') ||
+          (parts[1] === 'assets' && parts.length > 2 && (req.method === 'POST' || req.method === 'DELETE')) ||
+          (parts[1] === 'weapons' && parts.length > 2 && (req.method === 'POST' || req.method === 'DELETE')) ||
+          (parts[1] === 'pets' && parts.length > 2 && (req.method === 'POST' || req.method === 'DELETE')) ||
+          (parts[1] === 'outlines' && parts.length > 2 && (req.method === 'POST' || req.method === 'DELETE')) ||
+          (parts[1] === 'ui-designs' && parts.length > 2 && (req.method === 'POST' || req.method === 'DELETE'))
         );
         if (readOnlyDenied) return json(res, { error: 'Read-only in packaged mode' }, 403);
 
@@ -266,6 +290,109 @@ export async function startServer(options = {}) {
               .sort();
           } catch {}
           return json(res, { icons: names.map(name => ({ name, url: `/icons/${encodeURIComponent(name)}` })) });
+        }
+        if (parts[1] === 'assets') {
+          if (parts.length === 2 && req.method === 'GET') {
+            let names = [];
+            try { names = await list('assets'); } catch {}
+            const assets = [];
+            for (const id of names) {
+              let name = id;
+              try { const a = JSON.parse(await fs.readFile(await file('assets', id), 'utf8')); if (a && a.name) name = a.name; } catch {}
+              assets.push({ id, name });
+            }
+            return json(res, { assets });
+          }
+          const id = parts[2]; if (!id || !/^[-\w]+$/.test(id)) return json(res, { error: 'Invalid id' }, 400);
+          if (req.method === 'GET') {
+            try { return json(res, JSON.parse(await fs.readFile(await file('assets', id), 'utf8'))); }
+            catch { return json(res, { error: 'Not found' }, 404); }
+          }
+          if (req.method === 'POST') { await fs.writeFile(await file('assets', id), JSON.stringify(await body(req), null, 2)); return json(res, { ok: true }); }
+          if (req.method === 'DELETE') { await fs.rm(await file('assets', id), { force: true }); return json(res, { ok: true }); }
+        }
+        if (parts[1] === 'weapons') {
+          if (parts.length === 2 && req.method === 'GET') {
+            let names = [];
+            try { names = await list('weapons'); } catch {}
+            const defs = [];
+            for (const id of names) {
+              let name = id;
+              try { const w = JSON.parse(await fs.readFile(await file('weapons', id), 'utf8')); if (w && w.name) name = w.name; } catch {}
+              defs.push({ id, name });
+            }
+            return json(res, { weapons: defs });
+          }
+          const id = parts[2]; if (!id || !/^[-\w]+$/.test(id)) return json(res, { error: 'Invalid id' }, 400);
+          if (req.method === 'GET') {
+            try { return json(res, JSON.parse(await fs.readFile(await file('weapons', id), 'utf8'))); }
+            catch { return json(res, { error: 'Not found' }, 404); }
+          }
+          if (req.method === 'POST') { await fs.writeFile(await file('weapons', id), JSON.stringify(await body(req), null, 2)); return json(res, { ok: true }); }
+          if (req.method === 'DELETE') { await fs.rm(await file('weapons', id), { force: true }); return json(res, { ok: true }); }
+        }
+        if (parts[1] === 'pets') {
+          if (parts.length === 2 && req.method === 'GET') {
+            let names = [];
+            try { names = await list('pets'); } catch {}
+            const defs = [];
+            for (const id of names) {
+              let name = id;
+              try { const p = JSON.parse(await fs.readFile(await file('pets', id), 'utf8')); if (p && p.name) name = p.name; } catch {}
+              defs.push({ id, name });
+            }
+            return json(res, { pets: defs });
+          }
+          const id = parts[2]; if (!id || !/^[-\w]+$/.test(id)) return json(res, { error: 'Invalid id' }, 400);
+          if (req.method === 'GET') {
+            try { return json(res, JSON.parse(await fs.readFile(await file('pets', id), 'utf8'))); }
+            catch { return json(res, { error: 'Not found' }, 404); }
+          }
+          if (req.method === 'POST') { await fs.writeFile(await file('pets', id), JSON.stringify(await body(req), null, 2)); return json(res, { ok: true }); }
+          if (req.method === 'DELETE') { await fs.rm(await file('pets', id), { force: true }); return json(res, { ok: true }); }
+        }
+        if (parts[1] === 'outlines') {
+          if (parts.length === 2 && req.method === 'GET') {
+            let names = [];
+            try { names = await list('outlines'); } catch {}
+            const items = [];
+            for (const id of names) {
+              let name = id;
+              try { const doc = JSON.parse(await fs.readFile(await file('outlines', id), 'utf8')); if (doc && doc.name) name = doc.name; } catch {}
+              items.push({ id, name });
+            }
+            return json(res, { outlines: items });
+          }
+          const id = parts[2]; if (!id || !/^[-\w]+$/.test(id)) return json(res, { error: 'Invalid id' }, 400);
+          if (req.method === 'GET') {
+            try { return json(res, JSON.parse(await fs.readFile(await file('outlines', id), 'utf8'))); }
+            catch { return json(res, { error: 'Not found' }, 404); }
+          }
+          if (req.method === 'POST') { await fs.writeFile(await file('outlines', id), JSON.stringify(await body(req), null, 2)); return json(res, { ok: true }); }
+          if (req.method === 'DELETE') { await fs.rm(await file('outlines', id), { force: true }); return json(res, { ok: true }); }
+        }
+        if (parts[1] === 'ui-designs') {
+          if (parts.length === 2 && req.method === 'GET') {
+            let names = [];
+            try { names = await list('uiDesigns'); } catch {}
+            const items = [];
+            for (const id of names) {
+              let name = id;
+              try { const d = JSON.parse(await fs.readFile(await file('uiDesigns', id), 'utf8')); if (d && d.name) name = d.name; } catch {}
+              items.push({ id, name });
+            }
+            return json(res, { designs: items });
+          }
+          const rawId = parts[2] || '';
+          let id = rawId;
+          try { id = decodeURIComponent(rawId); } catch {}
+          if (!id || !/^[-\w\p{L}\p{N}]+$/u.test(id)) return json(res, { error: 'Invalid id' }, 400);
+          if (req.method === 'GET') {
+            try { return json(res, JSON.parse(await fs.readFile(await file('uiDesigns', id), 'utf8'))); }
+            catch { return json(res, { error: 'Not found' }, 404); }
+          }
+          if (req.method === 'POST') { await fs.writeFile(await file('uiDesigns', id), JSON.stringify(await body(req), null, 2)); return json(res, { ok: true }); }
+          if (req.method === 'DELETE') { await fs.rm(await file('uiDesigns', id), { force: true }); return json(res, { ok: true }); }
         }
         return json(res, { error: 'Not found' }, 404);
       } catch (e) { console.error('[api error]', req.method, url.pathname, e); return json(res, { error: 'Not found' }, 404); }

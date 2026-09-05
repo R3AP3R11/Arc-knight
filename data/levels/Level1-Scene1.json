@@ -1084,6 +1084,9 @@
       "trigger": "trigger",
       "triggerId": "trigger-1-1",
       "openRadius": 50,
+      "guide": false,
+      "guideRange": 600,
+      "guideIcon": "",
       "rewards": [
         {
           "item": "gold",
@@ -1104,6 +1107,9 @@
       "trigger": "trigger",
       "triggerId": "trigger-1-2",
       "openRadius": 50,
+      "guide": false,
+      "guideRange": 600,
+      "guideIcon": "",
       "rewards": [
         {
           "item": "gold",
@@ -1124,6 +1130,9 @@
       "trigger": "trigger",
       "triggerId": "trigger-1-2",
       "openRadius": 50,
+      "guide": false,
+      "guideRange": 600,
+      "guideIcon": "",
       "rewards": [
         {
           "item": "gold",
@@ -1139,6 +1148,9 @@
       "trigger": "trigger",
       "triggerId": "trigger-1-2",
       "openRadius": 50,
+      "guide": false,
+      "guideRange": 600,
+      "guideIcon": "",
       "rewards": [
         {
           "item": "gold",
@@ -1154,6 +1166,9 @@
       "trigger": "trigger",
       "triggerId": "trigger-1787751836609",
       "openRadius": 50,
+      "guide": false,
+      "guideRange": 600,
+      "guideIcon": "",
       "rewards": [
         {
           "item": "gold",
@@ -1174,7 +1189,11 @@
       "trigger": "trigger",
       "triggerId": "trigger-1-2",
       "interactRadius": 90,
-      "visible": true
+      "visible": true,
+      "guide": false,
+      "guideRange": 600,
+      "guideIcon": "",
+      "guideStopAfterUse": true
     },
     {
       "id": "portal-2",
@@ -1186,7 +1205,11 @@
       "trigger": "trigger",
       "triggerId": "trigger-1787751836609",
       "interactRadius": 90,
-      "visible": true
+      "visible": true,
+      "guide": false,
+      "guideRange": 600,
+      "guideIcon": "",
+      "guideStopAfterUse": true
     }
   ],
   "vendors": [],
@@ -1198,7 +1221,11 @@
       "w": 500,
       "h": 500,
       "interactRadius": 130,
-      "visible": true
+      "visible": true,
+      "guide": false,
+      "guideRange": 600,
+      "guideIcon": "",
+      "guideStopAfterUse": true
     }
   ],
   "icons": [],

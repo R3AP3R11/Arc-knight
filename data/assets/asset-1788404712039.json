@@ -1,0 +1,203 @@
+{
+  "id": "asset-1788404712039",
+  "name": "多轨改件图标",
+  "bgColor": "#ffffff",
+  "center": {
+    "x": 0,
+    "y": 0
+  },
+  "scale": 1,
+  "elements": [
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 20,
+      "sides": 6,
+      "lineWidth": 3,
+      "color": "#000000",
+      "fill": "#000000",
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "points": [
+        {
+          "x": -1.0260290522828666,
+          "y": -21.333777538579643
+        },
+        {
+          "x": -21.026029052282865,
+          "y": -81.33377753857964
+        },
+        {
+          "x": -1.0260290522828666,
+          "y": -201.33377753857965
+        },
+        {
+          "x": 16.973970947717135,
+          "y": -81.33377753857964
+        }
+      ],
+      "closed": true,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 20,
+      "sides": 6,
+      "lineWidth": 3,
+      "color": "#000000",
+      "fill": "#000000",
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "points": [
+        {
+          "x": 17.973970947717135,
+          "y": 8.666222461420357
+        },
+        {
+          "x": 87.45252684389042,
+          "y": 29.000299824508755
+        },
+        {
+          "x": 169.0234581921638,
+          "y": 98.77376329677968
+        },
+        {
+          "x": 69.32563292735396,
+          "y": 57.99709704909598
+        }
+      ],
+      "closed": true,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 20,
+      "sides": 6,
+      "lineWidth": 3,
+      "color": "#000000",
+      "fill": "#000000",
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "points": [
+        {
+          "x": -18.155947150201683,
+          "y": 7.845036103694421
+        },
+        {
+          "x": -85.65924616573442,
+          "y": 25.3757153808434
+        },
+        {
+          "x": -166.32392713685982,
+          "y": 100.58605551861238
+        },
+        {
+          "x": -67.53235224919793,
+          "y": 57.090920519363614
+        }
+      ],
+      "closed": true,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "arc",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 75,
+      "sides": 6,
+      "lineWidth": 8,
+      "color": "#000000",
+      "fill": null,
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 360,
+      "points": [],
+      "closed": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "arc",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 110,
+      "sides": 6,
+      "lineWidth": 12,
+      "color": "#ffbb00",
+      "fill": null,
+      "rotSpeed": 0.5,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 80,
+      "points": [],
+      "closed": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "arc",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 110,
+      "sides": 6,
+      "lineWidth": 12,
+      "color": "#ffbb00",
+      "fill": null,
+      "rotSpeed": 0.5,
+      "phase": 2.0943951023931953,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 80,
+      "points": [],
+      "closed": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "arc",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 110,
+      "sides": 6,
+      "lineWidth": 12,
+      "color": "#ffbb00",
+      "fill": null,
+      "rotSpeed": 0.5,
+      "phase": 4.1887902047863905,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 80,
+      "points": [],
+      "closed": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    }
+  ]
+}

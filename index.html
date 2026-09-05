@@ -21,6 +21,11 @@
         <button id="playMode">游戏预览</button>
         <button id="trialPlay">流程试玩</button>
         <button id="uiConfig">UI 配置</button>
+        <button id="artboard">画板</button>
+        <button id="weaponBoard">武器</button>
+        <button id="petBoard">宠物</button>
+        <button id="uilibrary">组件库</button>
+        <button id="wireframe">设计稿</button>
       </div>
     </header>
 
@@ -66,6 +71,12 @@
               </div>
               <label>房间大小
                 <input id="roomCellSize" type="number" min="400" max="2400" step="20"/>
+              </label>
+              <label>标记类型
+                <select id="roomCellMarkerType"></select>
+              </label>
+              <label>标记图标
+                <select id="roomCellMarkerIcon"></select>
               </label>
               <p class="hint">单位：内壁宽高（正方形），每格独立设置。</p>
             </div>
@@ -156,6 +167,8 @@
             <div id="tpWeapons"></div>
             <h3>改件</h3>
             <div id="tpMods"></div>
+            <h3>宠物</h3>
+            <div id="tpPets"></div>
             <h3>战斗属性</h3>
             <label>移动速度 (x1=<span>100%</span>) <input id="tpMoveSpeed" type="number" min="0.1" step="0.1"/></label>
             <label>攻击力倍率 (x1=<span>100%</span>) <input id="tpAttackPower" type="number" min="0" step="0.05"/></label>
@@ -185,6 +198,8 @@
             <div id="pvWeapons"></div>
             <h3>改件</h3>
             <div id="pvMods"></div>
+            <h3>宠物</h3>
+            <div id="pvPets"></div>
             <h3>战斗属性</h3>
             <label>移动速度 (x1=<span>100%</span>) <input id="pvMoveSpeed" type="number" min="0.1" step="0.1"/></label>
             <label>攻击力倍率 (x1=<span>100%</span>) <input id="pvAttackPower" type="number" min="0" step="0.05"/></label>
@@ -235,6 +250,7 @@
           <option value="icon">图标</option>
           <option value="button">按钮</option>
           <option value="shape">几何形状</option>
+          <option value="poly">自定义多边形</option>
           <option value="image">图片</option>
         </select>
         <button id="uiNodeAdd">添加节点</button>
@@ -248,6 +264,181 @@
         </aside>
       </div>
     </section>
+
+    <section id="uilibraryPage" class="uilibrary-page" hidden>
+      <header class="uilibrary-bar">
+        <button id="uilibraryBack">← 返回关卡编辑</button>
+        <h2>UI 组件库</h2>
+        <span class="hint" id="uilibraryHint">选择可复用控件，配置其属性 → 预览</span>
+      </header>
+      <div class="uilibrary-main">
+        <aside id="uilibraryList" class="uilibrary-list"></aside>
+        <div class="uilibrary-preview">
+          <h3>预览</h3>
+          <canvas id="uilibraryCanvas" width="960" height="540"></canvas>
+          <label class="inline"><input type="checkbox" id="uilibraryHover"> 模拟悬停（扫光）</label>
+          <h3>属性</h3>
+          <div id="uilibraryForm"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="wireframePage" class="wireframe-page" hidden>
+      <header class="wireframe-bar">
+        <button id="wireframeBack">← 返回关卡编辑</button>
+        <h2>UI 设计稿 · mxGraph 解析</h2>
+        <label class="inline">名称<input id="wireframeName" type="text" placeholder="ui-wireframe"></label>
+        <button id="wireframeImport">解析导入</button>
+        <span class="sep"></span>
+        <select id="wireframePageSel" title="导入已有 UI 页面（代码绘制）"><option value="">导入已有页面…</option></select>
+        <button id="wireframePageImport">导入页面</button>
+        <span class="sep"></span>
+        <button id="wireframeSave">保存设计稿</button>
+        <select id="wireframeSelect"><option value="">选择已有设计稿…</option></select>
+        <button id="wireframeLoad">加载</button>
+        <button id="wireframeRefresh">刷新</button>
+        <button id="wireframeDelete">删除</button>
+        <span id="wireframeStatus" class="hint"></span>
+      </header>
+      <div class="wireframe-main">
+        <aside class="wireframe-left">
+          <h3>粘贴 mxGraph 线框 XML</h3>
+          <textarea id="wireframeXml" placeholder='<mxGraphModel><root><mxCell id="1" parent="0"/><mxCell id="hp" value="HP条" vertex="1" parent="1"><mxGeometry x="40" y="40" width="300" height="22" as="geometry"/></mxCell></root></mxGraphModel>'></textarea>
+          <h3>控件列表</h3>
+          <div id="wireframeList"></div>
+          <h3>选中控件 · 动画 / 逻辑描述</h3>
+          <div id="wireframeNote"></div>
+        </aside>
+        <div class="wireframe-preview">
+          <h3>预览</h3>
+          <canvas id="wireframeCanvas" width="960" height="540"></canvas>
+          <p class="hint">滚轮缩放 · 中键/右键拖拽平移 · 左键拖动移动控件 · 点击选中 · 「导入已有页面」可还原工坊/武器/关卡选择/结算页控件 · 左侧填写控件功能/动画/逻辑描述 → 保存设计稿供 AI 读取</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="artboardPage" class="artboard-page" hidden>
+      <header class="artboard-bar">
+        <button id="artboardBack">← 返回关卡编辑</button>
+        <h2>画板 · 动态资产</h2>
+        <label class="artboard-name">名称<input id="artboardName" type="text" placeholder="未命名设计"/></label>
+        <select id="artAssetSelect"><option value="">（新建）</option></select>
+        <button id="artNew">新建设计</button>
+        <button id="artDraw">绘制轮廓</button>
+        <button id="artGenDefaults">生成默认美术方案</button>
+        <button id="artSave">保存</button>
+      </header>
+      <div class="artboard-main">
+        <aside class="art-element-list">
+          <h3>形状元素</h3>
+          <div id="artElementList"></div>
+          <div class="art-list-actions"><button id="artElementAdd">+ 添加元素</button></div>
+          <div class="art-list-actions">
+            <select id="artCopySelect"><option value="">选择要复制的元素…</option></select>
+            <button id="artCopyOther">复制其他元素</button>
+          </div>
+          <div class="art-list-actions"><select id="artOutlineSelect"><option value="">选择已保存轮廓…</option></select><button id="artAddOutline">+ 从轮廓库添加</button><button id="artDeleteOutline">删除所选轮廓</button></div>
+          <p class="hint">每个元素是一组绕圆心转动的多边形（或圆弧/手绘轮廓）：数量决定一组几个、轨道半径决定离圆心多远、半径决定大小、旋转角速度决定转动快慢、旋转方向可选顺/逆时针。点击画布选中元素后可直接拖动、拖角上手柄缩放。
+「绘制轮廓」在独立画板中逐格点画出轮廓，支持网格吸附与 Ctrl+Z 撤销。已保存的轮廓可从轮廓库下拉一键添加为新元素（或删除所选轮廓），并支持调整轨道半径。</p>
+        </aside>
+        <div class="art-preview">
+          <h3>预览</h3>
+          <label class="inline">背景<input id="artBgColor" type="color" value="#0a1220"/></label>
+          <canvas id="artPreviewCanvas" width="800" height="600"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <section id="weaponPage" class="artboard-page" hidden>
+      <header class="artboard-bar">
+        <button id="weaponBack">← 返回关卡编辑</button>
+        <h2>武器 · 弹道编辑器</h2>
+        <label class="artboard-name">名称<input id="weaponName" type="text" placeholder="新武器"/></label>
+        <select id="weaponSelect"><option value="">（新建）</option></select>
+        <button id="weaponNew">新建设计</button>
+        <select id="weaponTemplate"><option value="">载入模板…</option></select>
+        <button id="weaponSave">保存</button>
+      </header>
+      <div class="artboard-main">
+        <aside class="art-element-list weapon-form" id="weaponForm"></aside>
+        <div class="art-preview">
+          <h3>开火预览</h3>
+          <canvas id="weaponPreviewCanvas" width="800" height="600"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <section id="petPage" class="artboard-page" hidden>
+      <header class="artboard-bar">
+        <button id="petBack">← 返回关卡编辑</button>
+        <h2>宠物编辑器</h2>
+        <label class="artboard-name">名称<input id="petName" type="text" placeholder="新宠物"/></label>
+        <select id="petSelect"><option value="">（新建）</option></select>
+        <button id="petNew">新建设计</button>
+        <button id="petSave">保存</button>
+      </header>
+      <div class="artboard-main">
+        <aside class="art-element-list weapon-form" id="petForm"></aside>
+        <div class="art-preview">
+          <h3>数值说明</h3>
+          <div id="petHint"></div>
+        </div>
+      </div>
+    </section>
+
+    <div id="artDrawBoard" class="draw-board">
+      <div class="draw-board-panel">
+        <header class="draw-board-bar">
+          <h3>绘制轮廓</h3>
+          <div class="draw-group">
+            <button id="drawToolAdd" class="active">加点</button>
+            <button id="drawToolSelect">选择</button>
+          </div>
+          <div class="draw-group">
+            <label>颜色<input id="drawColor" type="color" value="#ffa914"></label>
+            <label>粗细<input id="drawLineWidth" type="number" value="4" min="0.5" step="0.5"></label>
+            <button id="drawToolFill">填充</button>
+            <label>调色<input id="drawFillColor" type="color" value="#ffa914"></label>
+          </div>
+          <div class="draw-group">
+            <select id="drawInsertShape"><option value="">选择图形…</option><option value="circle">圆形</option><option value="arc">圆弧</option><option value="polygon">正多边形</option></select>
+            <label>半径<input id="drawRefRadius" type="number" value="100" min="10"></label>
+            <label>边数<input id="drawRefSides" type="number" value="6" min="3"></label>
+            <label>弧角°<input id="drawRefArcDeg" type="number" value="270"></label>
+            <button id="drawRefUnderlay">作参考底图</button>
+            <button id="drawRefToPoints">转为轮廓点</button>
+          </div>
+          <div class="draw-group">
+            <select id="drawRefOutline"><option value="">选择已注册轮廓…</option></select>
+            <button id="drawRefOutlineUnderlay">作参考底图</button>
+            <button id="drawRefOutlineToPoints">转为轮廓点</button>
+            <button id="drawRefOutlineDelete">删除该轮廓</button>
+            <button id="drawRefClear">清除参考</button>
+          </div>
+          <div class="draw-group">
+            <label>X<input id="drawSelX" type="number" step="1"></label>
+            <label>Y<input id="drawSelY" type="number" step="1"></label>
+            <button id="drawDelPoint">删除点</button>
+          </div>
+          <div class="draw-group">
+            <label>旋转°<input id="drawRotateDeg" type="number" step="5" value="0"></label>
+            <label>缩放%<input id="drawScalePct" type="number" step="10" value="100"></label>
+            <button id="drawApplyTransform">应用变换</button>
+          </div>
+          <div class="draw-group">
+            <label>名称<input id="drawOutlineName" type="text" placeholder="轮廓名称"></label>
+            <button id="drawSaveOutline">保存为轮廓</button>
+          </div>
+          <label class="inline"><input id="drawSnap" type="checkbox" checked/> 网格吸附</label>
+          <button id="drawUndo">撤销 (Ctrl+Z)</button>
+          <button id="drawClear">清空</button>
+          <button id="drawCancel">取消</button>
+          <button id="drawDone">完成</button>
+        </header>
+        <canvas id="drawBoardCanvas" width="600" height="560" tabindex="0"></canvas>
+        <p class="hint">三种工具：加点（点击网格添加顶点，点击第一个点使轮廓闭合）、选择（点击已有点选中后可拖动、方向键每次移 1 像素、XY 输入定位、Delete 删除）、填充（选好调色后在闭合回路内点击填充）。编辑已有轮廓时打开即显示当前点集；「参考轮廓→转为轮廓点」会替换当前点集（以所选轮廓为基础重绘）。「应用变换」对整条轮廓做旋转/缩放；**改完点「完成」才会写回画板元素**。Ctrl+Z 撤销上一点；Enter 完成；Esc 取消。</p>
+      </div>
+    </div>
   </div>
   <script>
     (function () {

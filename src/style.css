@@ -845,3 +845,770 @@ body.ui-config-mode #uiConfigPage {
   height: 28px;
   padding: 2px;
 }
+
+.ui-node.selected {
+  border-color: #00e5ff;
+  box-shadow: 0 0 0 1px #00e5ff;
+}
+
+.ui-node.selected .ui-node-head strong {
+  color: #00e5ff;
+}
+
+.ui-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: #fff;
+}
+
+.ui-editor-toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.ui-editor-toolbar .hint {
+  color: #9fc3d8;
+  margin-left: auto;
+}
+
+.ui-preview canvas {
+  cursor: default;
+  touch-action: none;
+  user-select: none;
+}
+
+.ui-interact,
+.ui-poly {
+  width: 100%;
+  border: 1px dashed #3a5a7a;
+  border-radius: 6px;
+  padding: 8px;
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ui-interact legend,
+.ui-poly legend {
+  color: #6fd3ff;
+  font-size: 12px;
+  padding: 0 6px;
+}
+
+.poly-point {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #fff;
+  font-size: 12px;
+}
+
+.poly-point input[type=number] {
+  width: 64px;
+}
+
+.ui-pt-del,
+.ui-pt-add {
+  background: #000;
+  border: 1px solid #fff;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* ── UI 组件库 ── */
+body.uilibrary-mode main {
+  display: none;
+}
+
+body.uilibrary-mode #uilibraryPage {
+  display: block;
+}
+
+.uilibrary-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.uilibrary-bar h2 {
+  margin: 0;
+  flex: 1;
+}
+
+.uilibrary-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 690px;
+  gap: 16px;
+  align-items: start;
+}
+
+.uilibrary-list {
+  display: grid;
+  gap: 10px;
+}
+
+.uil-library-card {
+  background: #000;
+  border: 1px solid #fff;
+  border-radius: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.uil-library-card.active {
+  border-color: #00e5ff;
+  box-shadow: 0 0 0 1px #00e5ff;
+}
+
+.uil-library-card strong {
+  color: #fff;
+}
+
+.uil-library-card em {
+  color: #6fd3ff;
+  font-style: normal;
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+.uilibrary-preview {
+  background: #000;
+  border: 1px solid #fff;
+  border-radius: 8px;
+  padding: 12px;
+  position: sticky;
+  top: 16px;
+}
+
+.uilibrary-preview h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #fff;
+}
+
+.uilibrary-preview canvas {
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  border: 1px solid #fff;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.uilibrary-preview .inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #fff;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.uilibrary-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.uilibrary-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #fff;
+}
+
+.uilibrary-form input {
+  width: 110px;
+  background: #000;
+  border: 1px solid #fff;
+  color: #fff;
+  padding: 6px;
+  border-radius: 4px;
+}
+
+.uilibrary-form input[type=color] {
+  width: 44px;
+  height: 28px;
+  padding: 2px;
+}
+
+/* ── UI 设计稿 · mxGraph 线框 ── */
+body.wireframe-mode main {
+  display: none;
+}
+
+body.wireframe-mode #wireframePage {
+  display: block;
+}
+
+.wireframe-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.wireframe-bar h2 {
+  margin: 0;
+  flex: 1;
+}
+
+.wireframe-bar .inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #fff;
+  font-size: 12px;
+}
+
+.wireframe-bar select {
+  background: #000;
+  border: 1px solid #fff;
+  color: #fff;
+  padding: 6px;
+  border-radius: 4px;
+}
+
+.wireframe-bar .sep {
+  width: 1px;
+  height: 24px;
+  background: #333;
+  margin: 0 4px;
+}
+
+.wireframe-main {
+  display: grid;
+  grid-template-columns: minmax(0, 420px) 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.wireframe-left {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wireframe-left h3 {
+  margin: 10px 0 4px;
+  font-size: 13px;
+  color: #fff;
+}
+
+#wireframeXml {
+  width: 100%;
+  height: 180px;
+  background: #000;
+  border: 1px solid #fff;
+  color: #9fc3d8;
+  padding: 8px;
+  border-radius: 4px;
+  resize: vertical;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.wf-list-item {
+  background: #000;
+  border: 1px solid #fff;
+  border-radius: 5px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+
+.wf-list-item.active {
+  border-color: #00e5ff;
+  box-shadow: 0 0 0 1px #00e5ff;
+}
+
+.wf-list-item strong {
+  color: #fff;
+}
+
+.wf-list-item em {
+  color: #6fd3ff;
+  font-style: normal;
+  font-size: 11px;
+  margin-left: 8px;
+}
+
+#wireframeNote {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+#wireframeNote label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #fff;
+}
+
+#wireframeNote input,
+#wireframeNote textarea {
+  background: #000;
+  border: 1px solid #fff;
+  color: #fff;
+  padding: 6px;
+  border-radius: 4px;
+}
+
+#wireframeNote textarea {
+  width: 100%;
+}
+
+.wireframe-preview {
+  background: #000;
+  border: 1px solid #fff;
+  border-radius: 8px;
+  padding: 12px;
+  position: sticky;
+  top: 16px;
+}
+
+.wireframe-preview canvas {
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  border: 1px solid #fff;
+  display: block;
+  cursor: default;
+  touch-action: none;
+}
+
+/* ── 画板工作台 ── */
+body.artboard-mode main {
+  display: none;
+}
+
+body.artboard-mode #artboardPage {
+  display: block;
+}
+
+.artboard-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.artboard-bar h2 {
+  margin: 0;
+}
+
+.artboard-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #fff;
+}
+
+.artboard-name input {
+  width: 150px;
+  background: #000;
+  border: 1px solid #fff;
+  color: #fff;
+  padding: 6px;
+  border-radius: 4px;
+}
+
+.artboard-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 690px;
+  gap: 16px;
+  align-items: start;
+}
+
+.art-element-list {
+  background: #000;
+  border: 1px solid #fff;
+  border-radius: 8px;
+  padding: 12px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+}
+
+.art-element-list h3,
+.art-preview h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #fff;
+}
+
+.art-element {
+  background: #000;
+  border: 1px solid #fff;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.art-element-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.art-element-head strong {
+  color: #fff;
+}
+
+.art-element-head .inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #fff;
+}
+
+.art-element-del {
+  margin-left: auto;
+}
+
+.art-element-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.art-element-body label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #fff;
+}
+
+.art-element-body input,
+.art-element-body select {
+  width: 110px;
+  background: #000;
+  border: 1px solid #fff;
+  color: #fff;
+  padding: 6px;
+  border-radius: 4px;
+}
+
+.art-element-body input[type=color] {
+  width: 44px;
+  height: 28px;
+  padding: 2px;
+}
+
+#artElementAdd {
+  width: 100%;
+  margin: 4px 0;
+}
+
+.art-preview {
+  background: #000;
+  border: 1px solid #fff;
+  border-radius: 8px;
+  padding: 12px;
+  position: sticky;
+  top: 16px;
+}
+
+.art-preview .inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #9ab;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.art-preview input[type=color] {
+  border: none;
+  background: transparent;
+  padding: 0;
+  width: 34px;
+  height: 22px;
+  cursor: pointer;
+}
+
+.art-preview canvas {
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  border: 1px solid #fff;
+  display: block;
+}
+
+.art-list-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 6px 0;
+}
+
+.art-list-actions select {
+  flex: 1;
+  min-width: 0;
+  background: #000;
+  border: 1px solid #fff;
+  color: #fff;
+  padding: 6px;
+  border-radius: 4px;
+}
+
+.art-wrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  font-size: 12px;
+  color: #fff;
+}
+
+.art-wrow select {
+  flex: 1;
+  min-width: 0;
+  background: #000;
+  border: 1px solid #fff;
+  color: #fff;
+  padding: 6px;
+  border-radius: 4px;
+}
+
+.draw-board {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.78);
+  z-index: 1000;
+}
+
+.draw-board.open {
+  display: flex;
+}
+
+.draw-board-panel {
+  margin: auto;
+  width: 664px;
+  max-width: 96vw;
+  background: #000;
+  border: 1px solid #fff;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.draw-board canvas {
+  display: block;
+  margin: 0 auto;
+}
+
+.draw-board-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  row-gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.draw-board-bar h3 {
+  margin: 0;
+}
+
+.draw-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.draw-group label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #b7cce4;
+  white-space: nowrap;
+}
+
+.draw-group label.inline {
+  color: #fff;
+}
+
+.draw-group input[type="number"],
+.draw-group input[type="text"] {
+  width: 64px;
+  min-width: 0;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #fff;
+  padding: 5px;
+  border-radius: 4px;
+}
+
+.draw-group input[type="color"] {
+  width: 36px;
+  height: 26px;
+  padding: 2px;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+}
+
+.draw-group select {
+  max-width: 150px;
+  min-width: 0;
+  padding: 5px 6px;
+  font-size: 12px;
+}
+
+.draw-group button {
+  padding: 5px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.draw-board-bar button.active {
+  background: #ffa914;
+  border-color: #ffa914;
+  color: #000;
+}
+
+.draw-board canvas {
+  border: 1px solid #fff;
+  border-radius: 4px;
+  background: #0a1220;
+  display: block;
+}
+
+/* ── 武器 · 弹道编辑器 ── */
+body.weapon-mode main {
+  display: none;
+}
+
+body.weapon-mode #weaponPage {
+  display: block;
+}
+
+/* ── 宠物编辑器 ── */
+body.pet-mode main {
+  display: none;
+}
+
+body.pet-mode #petPage {
+  display: block;
+}
+
+.weapon-form {
+  overflow-y: auto;
+  max-height: calc(100vh - 140px);
+}
+
+.weapon-form .wgroup {
+  border-top: 1px solid #333;
+  padding: 8px 0;
+}
+
+.weapon-form .wgroup h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #ffcb85;
+}
+
+.weapon-form label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 8px 3px 0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.weapon-form input[type="number"],
+.weapon-form input[type="text"],
+.weapon-form select,
+.weapon-form input[type="color"] {
+  min-width: 52px;
+}
+
+.weapon-form [data-palette] {
+  margin-top: 4px;
+}
+
+.weapon-form .pal-head {
+  font-size: 12px;
+  color: #ffcb85;
+  margin: 6px 0 4px;
+}
+
+.weapon-form .pal-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.weapon-form .pal-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: #222;
+}
+
+.weapon-form .pal-chip input[type="color"] {
+  width: 26px;
+  height: 22px;
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+.weapon-form .pal-del {
+  border: none;
+  background: transparent;
+  color: #ff6b6b;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 3px;
+}
+
+.weapon-form .pal-add {
+  border: 1px dashed #666;
+  background: transparent;
+  color: #ffcb85;
+  cursor: pointer;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.weapon-form .pal-empty {
+  font-size: 12px;
+  color: #888;
+}

@@ -21,9 +21,10 @@ test('normalizePlayer 空输入返回完整默认结构', () => {
   assert.equal(p.version, 1);
   assert.equal(p.progress.level, 1);
   assert.equal(p.currency.gold, 0);
+  assert.equal(p.currency.gems, 0);
   assert.equal(p.playedNewbee, false);
   assert.deepEqual(p.loadout, ['radial', '', '']);
-  assert.deepEqual(p.equipment.weaponMods.radial, { generic: [], dedicated: null });
+  assert.deepEqual(p.equipment.weaponMods.radial, { generic: [], dedicated: [] });
   assert.deepEqual(p.equipment.relics, []);
   assert.deepEqual(p.equipment.pets, []);
 });
@@ -40,7 +41,7 @@ test('normalizePlayer 往返幂等（保存→加载不丢失字段）', () => {
     version: 1,
     meta: { name: '测试档', createdAt: 123, updatedAt: 456, playTimeSec: 99 },
     progress: { level: 7, exp: 340, expToNext: 800, points: 3 },
-    currency: { gold: 1234 },
+    currency: { gold: 1234, gems: 456 },
     weapons: {
       radial: { unlocked: true, enhance: [1, 0, 1] },
       yellow: { unlocked: true, enhance: { 0: 0, 1: 1, 2: 0 } },
@@ -73,7 +74,7 @@ test('normalizePlayer 往返幂等（保存→加载不丢失字段）', () => {
 test('normalizePlayer 数值边界与非法值兜底', () => {
   const p = normalizePlayer({
     progress: { level: -5, exp: -100, expToNext: 0, points: -1 },
-    currency: { gold: -50 },
+    currency: { gold: -50, gems: -7.9 },
     combat: { critRate: 9, dodgeRate: -1, moveSpeed: 0, maxHp: 0 }
   });
   assert.equal(p.progress.level, 1, 'level 最小 1');
@@ -81,6 +82,7 @@ test('normalizePlayer 数值边界与非法值兜底', () => {
   assert.equal(p.progress.expToNext, 1, 'expToNext 最小 1');
   assert.equal(p.progress.points, 0, 'points 最小 0');
   assert.equal(p.currency.gold, 0, 'gold 最小 0');
+  assert.equal(p.currency.gems, 0, 'gems 最小 0（负数 clamp、浮点 floor）');
   assert.equal(p.combat.critRate, 1, 'critRate 上限 1');
   assert.equal(p.combat.dodgeRate, 0, 'dodgeRate 下限 0');
   assert.equal(p.combat.moveSpeed, 0.1, 'moveSpeed 下限 0.1');
@@ -133,9 +135,9 @@ test('normalizePlayer equipment.weaponMods / relics / pets 归一化与上限', 
       pets: ['pet-ember', 'pet-moss', 'pet-ember', 'relic-vitality']
     }
   });
-  assert.deepEqual(p.equipment.weaponMods.radial, { generic: ['multi-track'], dedicated: null });
-  assert.deepEqual(p.equipment.weaponMods.yellow, { generic: ['spin'], dedicated: null });
-  assert.deepEqual(p.equipment.weaponMods.green, { generic: ['triple'], dedicated: 'capacity' });
+  assert.deepEqual(p.equipment.weaponMods.radial, { generic: ['multi-track'], dedicated: [] });
+  assert.deepEqual(p.equipment.weaponMods.yellow, { generic: ['spin'], dedicated: [] });
+  assert.deepEqual(p.equipment.weaponMods.green, { generic: ['triple'], dedicated: ['capacity'] });
   assert.deepEqual(p.equipment.relics, ['relic-power', 'relic-vitality', 'relic-haste']);
   assert.deepEqual(p.equipment.pets, ['pet-ember', 'pet-moss']);
 });

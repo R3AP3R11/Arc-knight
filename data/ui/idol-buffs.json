@@ -1,0 +1,77 @@
+{
+  "offerCount": 3,
+  "buffs": [
+    {
+      "id": "atk",
+      "name": "力量祝福",
+      "desc": "攻击力 +15%",
+      "icon": "asset-1787970208151",
+      "stats": {
+        "attackPower": {
+          "op": "mul",
+          "value": 1.15
+        }
+      }
+    },
+    {
+      "id": "crit",
+      "name": "致命祝福",
+      "desc": "暴击率 +10%",
+      "icon": "",
+      "stats": {
+        "critRate": {
+          "op": "add",
+          "value": 0.1
+        }
+      }
+    },
+    {
+      "id": "dodge",
+      "name": "迅捷祝福",
+      "desc": "闪避率 +8%",
+      "icon": "",
+      "stats": {
+        "dodgeRate": {
+          "op": "add",
+          "value": 0.08
+        }
+      }
+    },
+    {
+      "id": "speed",
+      "name": "疾风祝福",
+      "desc": "移动速度 +12%",
+      "icon": "",
+      "stats": {
+        "moveSpeed": {
+          "op": "mul",
+          "value": 1.12
+        }
+      }
+    },
+    {
+      "id": "hp",
+      "name": "生命祝福",
+      "desc": "生命上限 +25",
+      "icon": "",
+      "stats": {
+        "maxHp": {
+          "op": "add",
+          "value": 25
+        }
+      }
+    },
+    {
+      "id": "reduction",
+      "name": "守护祝福",
+      "desc": "受到伤害 -10%",
+      "icon": "",
+      "stats": {
+        "damageReduction": {
+          "op": "mul",
+          "value": 0.9
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,155 @@
+{
+  "id": "weapon-1788434083294",
+  "name": "minigun",
+  "version": 1,
+  "baseDamage": 18,
+  "fireInterval": 80,
+  "maxAmmo": null,
+  "chargeRequired": 0,
+  "purchasable": false,
+  "price": 0,
+  "unlockLevel": 1,
+  "slot": 1,
+  "maxGenericMods": 3,
+  "maxDedicatedMods": 1,
+  "isTemplate": false,
+  "appearance": {
+    "scale": 1,
+    "center": {
+      "x": 0,
+      "y": 0
+    },
+    "elements": [
+      {
+        "shape": "polygon",
+        "count": 1,
+        "orbitRadius": 0,
+        "radius": 17,
+        "sides": 6,
+        "lineWidth": 6,
+        "color": "#ffffff",
+        "fill": null,
+        "rotSpeed": -1,
+        "dir": 1,
+        "phase": 0,
+        "offsetX": 3,
+        "offsetY": 3,
+        "offsetSpeed": 5,
+        "arcStart": 0,
+        "arcEnd": 360,
+        "points": [],
+        "closed": false
+      },
+      {
+        "shape": "polygon",
+        "count": 16,
+        "orbitRadius": 42,
+        "radius": 6,
+        "sides": 6,
+        "lineWidth": 4,
+        "color": "#ffffff",
+        "fill": null,
+        "rotSpeed": 1,
+        "dir": 1,
+        "phase": 0,
+        "offsetX": 1,
+        "offsetY": 1,
+        "offsetSpeed": 5,
+        "arcStart": 0,
+        "arcEnd": 360,
+        "points": [],
+        "closed": false
+      },
+      {
+        "shape": "arc",
+        "count": 2,
+        "orbitRadius": 0,
+        "radius": 30,
+        "sides": 3,
+        "lineWidth": 3,
+        "color": "#ffa914",
+        "fill": null,
+        "rotSpeed": 0,
+        "dir": 1,
+        "phase": 0,
+        "offsetX": 2,
+        "offsetY": 2,
+        "offsetSpeed": 5,
+        "arcStart": 0,
+        "arcEnd": 160,
+        "points": [],
+        "closed": false
+      }
+    ]
+  },
+  "medium": {
+    "ringIndex": 0,
+    "angle": 0,
+    "radius": 55,
+    "size": 2,
+    "ringColor": "#ffa914",
+    "ringWidth": 7,
+    "orbitSpeed": 150,
+    "fireSpeed": 5,
+    "elements": []
+  },
+  "bullet": {
+    "count": 1,
+    "spreadDeg": 0,
+    "baseAngleOffset": 0,
+    "range": 1200,
+    "speed": 3000,
+    "fadeDuration": 800,
+    "spreadRandom": 0,
+    "randomColor": true,
+    "randomPalette": [
+      "#ffa914",
+      "#ffffff"
+    ],
+    "shape": {
+      "scale": 1,
+      "center": {
+        "x": 0,
+        "y": 0
+      },
+      "elements": []
+    },
+    "size": 2,
+    "trail": {
+      "type": "cone",
+      "length": 500,
+      "width": 2,
+      "color": "#ffa914",
+      "fade": 1,
+      "tailWidth": 2,
+      "midWidth": 12,
+      "midAt": 0.6,
+      "particleSize": 3,
+      "particleGap": 6,
+      "historyMax": 12
+    },
+    "trajectory": {
+      "kind": "vector",
+      "beam": {
+        "width": 10,
+        "color": "#42d978"
+      },
+      "vector": {
+        "speed": 500,
+        "angleOffset": 0,
+        "gravityX": 0,
+        "gravityY": 0,
+        "zigzag": {
+          "enabled": false,
+          "ampDeg": 15,
+          "wavelength": 40
+        },
+        "jitter": {
+          "enabled": false,
+          "amount": 0,
+          "freq": 10
+        }
+      }
+    }
+  }
+}

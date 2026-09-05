@@ -1,7 +1,20 @@
 export const DEFAULT_WALL_COLOR = '#60758b';
 export const MIN_WALL_SIZE = 8;
 
+// 多箱庭小地图标记类型（渲染子任务按此消费）
+export const MINIMAP_MARKER_TYPES = ['combat', 'idol', 'chest', 'vendor', 'boss'];
+export const MINIMAP_MARKER_LABELS = { combat: '战斗', idol: '神像', chest: '宝箱', vendor: '商人', boss: 'BOSS' };
+
+// 多箱庭小地图标记归一化：非法/空 → null；type 不在白名单 → 丢弃整个 marker；icon 字符串否则空串
+export function normalizeRoomMarker(value) {
+  if (!value || typeof value !== 'object') return null;
+  const type = value.type;
+  if (!MINIMAP_MARKER_TYPES.includes(type)) return null;
+  return { type, icon: typeof value.icon === 'string' ? value.icon : '' };
+}
+
 import { normalizeRoomLayout } from './rooms.js';
+import { isKnownWeapon } from './systems/art/weapon-registry.js';
 
 export const ENEMY_TYPES = {
   basic1: { name: '基础敌人1', hp: 30, damage: 10 },
@@ -10,11 +23,12 @@ export const ENEMY_TYPES = {
   advanced2: { name: '进阶敌人2', hp: 100, damage: 15 }
 };
 
-export const DEFAULT_DROPS = { gold: 1, exp: 1 };
+export const DEFAULT_DROPS = { gold: 1, exp: 1, diamond: 0 };
 
-export const DROP_ITEMS = { gold: '金币', exp: '经验', charge: '充能球' };
+export const DROP_ITEMS = { gold: '金币', exp: '经验', charge: '充能球', diamond: '钻石' };
 
-export const WEAPON_TYPES = ['radial', 'yellow', 'green'];
+// 展示顺序基础列表（仅 radial 硬编码；yellow/green 与设计稿武器启动后并入 isKnownWeapon）
+export const WEAPON_TYPES = ['radial'];
 export const WEAPON_LABELS = { radial: '基础', yellow: '散射', green: '激光' };
 
 // 统一物品定义：改件 / 圣物 / 宠物
@@ -23,23 +37,24 @@ export const WEAPON_LABELS = { radial: '基础', yellow: '散射', green: '激�
 // weapon: 改件专属武器，空字符串表示通用
 // color: 图标着色
 export const ITEM_DEFS = {
-  // 通用改件（可堆叠）
-  'multi-track': { name: '多轨改件', category: 'mod', stackable: true, weapon: '', color: '#ffffff' },
-  'spin':        { name: '转速改件', category: 'mod', stackable: true, weapon: '', color: '#ffffff' },
-  'triple':      { name: '三发改件', category: 'mod', stackable: true, weapon: '', color: '#ffffff' },
+  // 通用改件（可堆叠）；icon=画板资产id（有则用 renderAsset 渲染动态资产，无则颜色块+简称）；effect=悬停提示的效果描述
+  'multi-track': { name: '多轨改件', category: 'mod', stackable: true, weapon: '', color: '#ffffff', icon: 'asset-1788404712039', effect: '同时向 3 个方向射出弹道' },
+  'spin':        { name: '转速改件', category: 'mod', stackable: true, weapon: '', color: '#ffffff', effect: '射击时武器保持高速旋转不减速' },
+  'triple':      { name: '三发改件', category: 'mod', stackable: true, weapon: '', color: '#ffffff', icon: 'asset-1788349008776', effect: '一次射出 3 发扇形弹道' },
   // 黄色武器专属改件（不可堆叠）
-  'ricochet':    { name: '反弹改件', category: 'mod', stackable: false, weapon: 'yellow', color: '#feed34' },
-  'split':       { name: '分裂改件', category: 'mod', stackable: false, weapon: 'yellow', color: '#feed34' },
+  'ricochet':    { name: '反弹改件', category: 'mod', stackable: false, weapon: 'yellow', color: '#feed34', effect: '子弹命中后反弹' },
+  'split':       { name: '分裂改件', category: 'mod', stackable: false, weapon: 'yellow', color: '#feed34', effect: '子弹命中后分裂' },
   // 绿色武器专属改件（不可堆叠）
-  'capacity':    { name: '容量改件', category: 'mod', stackable: false, weapon: 'green', color: '#42d978' },
-  'pierce':      { name: '穿透改件', category: 'mod', stackable: false, weapon: 'green', color: '#42d978' },
+  'capacity':    { name: '容量改件', category: 'mod', stackable: false, weapon: 'green', color: '#42d978', effect: '弹药容量翻倍' },
+  'pierce':      { name: '穿透改件', category: 'mod', stackable: false, weapon: 'green', color: '#42d978', effect: '子弹穿透墙体' },
   // 圣物（可堆叠）
-  'relic-vitality': { name: '生命圣物', category: 'relic', stackable: true, weapon: '', color: '#ffd54f' },
-  'relic-power':    { name: '力量圣物', category: 'relic', stackable: true, weapon: '', color: '#ffd54f' },
-  'relic-haste':    { name: '迅捷圣物', category: 'relic', stackable: true, weapon: '', color: '#ffd54f' },
-  // 宠物（不可堆叠）
+  'relic-vitality': { name: '生命圣物', category: 'relic', stackable: true, weapon: '', color: '#ffd54f', effect: '提升最大生命' },
+  'relic-power':    { name: '力量圣物', category: 'relic', stackable: true, weapon: '', color: '#ffd54f', effect: '提升攻击力' },
+  'relic-haste':    { name: '迅捷圣物', category: 'relic', stackable: true, weapon: '', color: '#ffd54f', effect: '提升攻击速度' },
+  // 宠物（不可堆叠）；icon=画板资产 id（外形，经 renderAsset 渲染），effect=悬停提示的机制说明
   'pet-ember':   { name: '焰尾', category: 'pet', stackable: false, weapon: '', color: '#4fc3f7' },
-  'pet-moss':    { name: '苔团', category: 'pet', stackable: false, weapon: '', color: '#4fc3f7' }
+  'pet-moss':    { name: '苔团', category: 'pet', stackable: false, weapon: '', color: '#4fc3f7' },
+  'pet-basic1':  { name: '基础宠物1', category: 'pet', stackable: false, weapon: '', color: '#4fc3f7', icon: 'asset-1788602786942', effect: '环绕玩家旋转，自动朝最近的敌人开火' }
 };
 
 // 改件定义（由 ITEM_DEFS 派生，保持旧字段形态：{ id: { name, weapon } }）
@@ -51,7 +66,7 @@ export const MOD_DEFS = Object.fromEntries(
 
 export function normalizeWeapons(weapons) {
   const list = (Array.isArray(weapons) ? weapons : ['radial'])
-    .filter(w => WEAPON_TYPES.includes(w))
+    .filter(w => isKnownWeapon(w))
     .slice(0, 3);
   return list.length ? list : ['radial'];
 }
@@ -64,11 +79,15 @@ export function normalizeEnemy(enemy, index) {
     x: Number(enemy?.x) || 0,
     y: Number(enemy?.y) || 0,
     type,
+    // 画板美术方案（设计稿 id，空串=默认美术）
+    art: (typeof enemy?.art === 'string' && enemy.art && enemy.art !== 'undefined') ? enemy.art : '',
+    artScale: (() => { const n = Number(enemy?.artScale); return Number.isFinite(n) && n > 0 ? n : 1; })(),
     hp: Number(enemy?.hp ?? def.hp),
     damage: Number(enemy?.damage ?? def.damage),
     drops: {
       gold: Math.max(0, Number(enemy?.drops?.gold ?? DEFAULT_DROPS.gold)),
-      exp: Math.max(0, Number(enemy?.drops?.exp ?? DEFAULT_DROPS.exp))
+      exp: Math.max(0, Number(enemy?.drops?.exp ?? DEFAULT_DROPS.exp)),
+      diamond: Math.max(0, Number(enemy?.drops?.diamond ?? DEFAULT_DROPS.diamond))
     }
   };
 }
@@ -84,7 +103,7 @@ export function normalizeDropRules(value) {
       item: DROP_ITEMS[r?.item] ? r.item : 'gold',
       count: Math.max(0, Math.floor(Number(r?.count) || 0)),
       chance: Math.min(100, Math.max(0, Number(r?.chance) ?? 100)),
-      weapon: r?.item === 'charge' && WEAPON_TYPES.includes(r?.weapon) ? r.weapon : ''
+      weapon: r?.item === 'charge' && isKnownWeapon(r?.weapon) ? r.weapon : ''
     }));
     if (entries.length) rules[type] = entries;
   }
@@ -146,6 +165,18 @@ export function normalizeRewardList(value) {
     .filter(r => r.count > 0);
 }
 
+// 游戏内指引箭头字段（平铺进实体）：guide=开关；guideRange=距玩家多远处仍显示指引；
+// guideIcon=指引图标（动态资产名，空=实体名称占位）；guideStopAfterUse=F 键交互后停止指引（仅 F 键实体）
+function guideFields(e, { stopAfterUse = false } = {}) {
+  const out = {
+    guide: e?.guide === true,
+    guideRange: Math.max(100, Number(e?.guideRange) || 600),
+    guideIcon: typeof e?.guideIcon === 'string' ? e.guideIcon : ''
+  };
+  if (stopAfterUse) out.guideStopAfterUse = e?.guideStopAfterUse !== false;
+  return out;
+}
+
 export function normalizeChest(chest, index) {
   return {
     id: chest?.id || `chest-${index + 1}`,
@@ -156,6 +187,7 @@ export function normalizeChest(chest, index) {
     triggerId: chest?.triggerId || '',
     // 打开判定半径（无碰撞体积）
     openRadius: Math.max(20, Number(chest?.openRadius) || 50),
+    ...guideFields(chest),
     rewards: normalizeRewardList(chest?.rewards)
   };
 }
@@ -173,7 +205,8 @@ export function normalizePortal(portal, index) {
     triggerId: portal?.triggerId || '',
     // 交互判定半径（无碰撞体积）
     interactRadius: Math.max(40, Number(portal?.interactRadius) || 90),
-    visible: portal?.visible !== false
+    visible: portal?.visible !== false,
+    ...guideFields(portal, { stopAfterUse: true })
   };
 }
 
@@ -185,7 +218,8 @@ export function normalizeVendor(vendor, index) {
     w: Math.max(20, Number(vendor?.w) || 130),
     h: Math.max(20, Number(vendor?.h) || 96),
     interactRadius: Math.max(30, Number(vendor?.interactRadius) || 120),
-    visible: vendor?.visible !== false
+    visible: vendor?.visible !== false,
+    ...guideFields(vendor, { stopAfterUse: true })
   };
 }
 
@@ -197,7 +231,8 @@ export function normalizeIdol(idol, index) {
     w: Math.max(20, Number(idol?.w) || 110),
     h: Math.max(20, Number(idol?.h) || 110),
     interactRadius: Math.max(40, Number(idol?.interactRadius) || 130),
-    visible: idol?.visible !== false
+    visible: idol?.visible !== false,
+    ...guideFields(idol, { stopAfterUse: true })
   };
 }
 
@@ -212,7 +247,8 @@ export function normalizeIcon(icon, index) {
     interactRadius: Math.max(40, Number(icon?.interactRadius) || 120),
     tipText: icon?.tipText ?? '按 F 交互',
     event: ['workshop', 'weapon', 'battle'].includes(icon?.event) ? icon.event : 'workshop',
-    visible: icon?.visible !== false
+    visible: icon?.visible !== false,
+    ...guideFields(icon, { stopAfterUse: true })
   };
 }
 

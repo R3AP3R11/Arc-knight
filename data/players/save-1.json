@@ -1,20 +1,29 @@
 {
   "version": 1,
+  "art": "",
+  "artScale": 1,
+  "arts": {
+    "radial": "",
+    "yellow": "",
+    "green": "",
+    "weapon-1788012926999": "",
+    "weapon-1788434083294": ""
+  },
   "meta": {
     "name": "新存档",
     "createdAt": 0,
-    "updatedAt": 1787738310448,
+    "updatedAt": 0,
     "playTimeSec": 0
   },
   "progress": {
-    "level": 5,
-    "exp": 269,
+    "level": 1,
+    "exp": 68,
     "expToNext": 100,
     "points": 0
   },
   "currency": {
-    "gold": 112,
-    "charge": 0
+    "gold": 0,
+    "gems": 0
   },
   "weapons": {
     "radial": {
@@ -40,38 +49,81 @@
         0,
         0
       ]
+    },
+    "weapon-1788012926999": {
+      "unlocked": false,
+      "enhance": [
+        0,
+        0,
+        0
+      ]
+    },
+    "weapon-1788434083294": {
+      "unlocked": false,
+      "enhance": [
+        0,
+        0,
+        0
+      ]
     }
   },
-  "mods": [],
-  "modInventory": [],
+  "loadout": [
+    "radial",
+    "",
+    ""
+  ],
   "playedNewbee": false,
   "combat": {
     "moveSpeed": 1,
     "attackPower": 1,
     "critRate": 0,
     "attackSpeed": 1,
-    "maxHp": 125,
+    "maxHp": 100,
     "maxShield": 50,
     "damageReduction": 1,
     "dodgeRate": 0
   },
   "points": {
     "maxHp": 0,
+    "maxShield": 0,
     "attackPower": 0,
-    "critRate": 0,
     "attackSpeed": 0
   },
   "items": {
     "stacks": {},
     "uniques": []
   },
+  "equipment": {
+    "weaponMods": {
+      "radial": {
+        "generic": [],
+        "dedicated": []
+      },
+      "yellow": {
+        "generic": [],
+        "dedicated": []
+      },
+      "green": {
+        "generic": [],
+        "dedicated": []
+      },
+      "weapon-1788012926999": {
+        "generic": [],
+        "dedicated": []
+      },
+      "weapon-1788434083294": {
+        "generic": [],
+        "dedicated": []
+      }
+    },
+    "relics": [],
+    "pets": []
+  },
   "levels": {
     "unlocked": [
       "level-1"
     ],
-    "completed": [
-      "level-1"
-    ],
+    "completed": [],
     "current": "level-1"
   }
 }

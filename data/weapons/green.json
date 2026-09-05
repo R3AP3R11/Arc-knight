@@ -1,0 +1,230 @@
+{
+  "id": "green",
+  "name": "激光",
+  "version": 1,
+  "baseDamage": 16,
+  "fireInterval": 150,
+  "maxAmmo": 30,
+  "chargeRequired": 8,
+  "purchasable": false,
+  "price": 0,
+  "unlockLevel": 1,
+  "slot": 3,
+  "maxGenericMods": 3,
+  "maxDedicatedMods": 1,
+  "isTemplate": false,
+  "appearance": {
+    "scale": 1,
+    "center": {
+      "x": 0,
+      "y": 0
+    },
+    "elements": [
+      {
+        "shape": "polygon",
+        "count": 1,
+        "orbitRadius": 0,
+        "radius": 4,
+        "sides": 20,
+        "lineWidth": 0,
+        "color": "#000000",
+        "fill": "#000000",
+        "rotSpeed": 0,
+        "dir": 1,
+        "phase": 0,
+        "offsetX": 0,
+        "offsetY": 0,
+        "offsetSpeed": 1,
+        "arcStart": 0,
+        "arcEnd": 360,
+        "points": [],
+        "closed": false
+      },
+      {
+        "shape": "arc",
+        "count": 3,
+        "orbitRadius": 0,
+        "radius": 35,
+        "sides": 3,
+        "lineWidth": 3,
+        "color": "#ffffff",
+        "fill": null,
+        "rotSpeed": 1,
+        "dir": 1,
+        "phase": 0,
+        "offsetX": 1,
+        "offsetY": 0,
+        "offsetSpeed": 5,
+        "arcStart": 0,
+        "arcEnd": 80,
+        "points": [],
+        "closed": false
+      },
+      {
+        "shape": "arc",
+        "count": 1,
+        "orbitRadius": 0,
+        "radius": 27,
+        "sides": 3,
+        "lineWidth": 1.5,
+        "color": "#44ff00",
+        "fill": null,
+        "rotSpeed": 0,
+        "dir": 1,
+        "phase": 0,
+        "offsetX": 2,
+        "offsetY": 2,
+        "offsetSpeed": 5,
+        "arcStart": 0,
+        "arcEnd": 360,
+        "points": [],
+        "closed": false
+      },
+      {
+        "shape": "arc",
+        "count": 1,
+        "orbitRadius": 0,
+        "radius": 24,
+        "sides": 3,
+        "lineWidth": 1.2,
+        "color": "#44ff00",
+        "fill": null,
+        "rotSpeed": 0,
+        "dir": 1,
+        "phase": 0,
+        "offsetX": 2.2,
+        "offsetY": 2.2,
+        "offsetSpeed": 5,
+        "arcStart": 0,
+        "arcEnd": 360,
+        "points": [],
+        "closed": false
+      },
+      {
+        "shape": "arc",
+        "count": 1,
+        "orbitRadius": 0,
+        "radius": 15,
+        "sides": 3,
+        "lineWidth": 1,
+        "color": "#11ff00",
+        "fill": null,
+        "rotSpeed": 0,
+        "dir": 1,
+        "phase": 0,
+        "offsetX": 4,
+        "offsetY": 4,
+        "offsetSpeed": 5,
+        "arcStart": 0,
+        "arcEnd": 360,
+        "points": [],
+        "closed": false
+      },
+      {
+        "shape": "arc",
+        "count": 1,
+        "orbitRadius": 0,
+        "radius": 12,
+        "sides": 3,
+        "lineWidth": 1,
+        "color": "#37ff00",
+        "fill": null,
+        "rotSpeed": 0,
+        "dir": 1,
+        "phase": 0,
+        "offsetX": 4.2,
+        "offsetY": 4.2,
+        "offsetSpeed": 5,
+        "arcStart": 0,
+        "arcEnd": 360,
+        "points": [],
+        "closed": false
+      }
+    ]
+  },
+  "medium": {
+    "ringIndex": 0,
+    "angle": 0,
+    "radius": 42,
+    "size": 1,
+    "ringColor": "#42d978",
+    "ringWidth": 4,
+    "orbitSpeed": 180,
+    "fireSpeed": 20,
+    "elements": [
+      {
+        "shape": "polygon",
+        "count": 1,
+        "orbitRadius": 0,
+        "radius": 5,
+        "sides": 20,
+        "lineWidth": 0,
+        "color": "#00ff59",
+        "fill": "#00ff59",
+        "rotSpeed": 0,
+        "dir": 1,
+        "phase": 0,
+        "offsetX": 0,
+        "offsetY": 0,
+        "offsetSpeed": 1,
+        "arcStart": 0,
+        "arcEnd": 360,
+        "points": [],
+        "closed": false
+      }
+    ]
+  },
+  "bullet": {
+    "count": 1,
+    "spreadDeg": 0,
+    "baseAngleOffset": 0,
+    "range": 0,
+    "spreadRandom": 0,
+    "randomColor": false,
+    "shape": {
+      "scale": 1,
+      "center": {
+        "x": 0,
+        "y": 0
+      },
+      "elements": []
+    },
+    "size": 1,
+    "trail": {
+      "type": "cone",
+      "length": 60,
+      "width": 10,
+      "color": "#42d978",
+      "fade": 1,
+      "tailWidth": 0,
+      "midWidth": 0,
+      "midAt": 0.05,
+      "particleSize": 3,
+      "particleGap": 6,
+      "historyMax": 12
+    },
+    "trajectory": {
+      "kind": "beam",
+      "beam": {
+        "width": 10,
+        "color": "#42d978"
+      },
+      "vector": {
+        "speed": 500,
+        "angleOffset": 0,
+        "gravityX": 0,
+        "gravityY": 0,
+        "zigzag": {
+          "enabled": false,
+          "ampDeg": 15,
+          "wavelength": 40
+        },
+        "jitter": {
+          "enabled": false,
+          "amount": 0,
+          "freq": 10
+        }
+      }
+    }
+  }
+}

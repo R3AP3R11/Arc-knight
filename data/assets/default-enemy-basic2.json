@@ -1,0 +1,79 @@
+{
+  "id": "default-enemy-basic2",
+  "name": "基础敌人2",
+  "center": {
+    "x": 0,
+    "y": 0
+  },
+  "scale": 1,
+  "elements": [
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 1,
+      "sides": 3,
+      "lineWidth": 1,
+      "color": "#000000",
+      "fill": "#ffffff",
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "points": [
+        {
+          "x": 15,
+          "y": 0
+        },
+        {
+          "x": 0,
+          "y": 15
+        },
+        {
+          "x": -15,
+          "y": 0
+        },
+        {
+          "x": 0,
+          "y": -15
+        }
+      ],
+      "closed": true
+    },
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 1,
+      "sides": 3,
+      "lineWidth": 1,
+      "color": "#000000",
+      "fill": "#ffffff",
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "points": [
+        {
+          "x": 10.606601717798213,
+          "y": 10.606601717798211
+        },
+        {
+          "x": -10.606601717798211,
+          "y": 10.606601717798213
+        },
+        {
+          "x": -10.606601717798213,
+          "y": -10.606601717798211
+        },
+        {
+          "x": 10.606601717798211,
+          "y": -10.606601717798213
+        }
+      ],
+      "closed": true
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "name": "ui-arrow",
+  "shapes": [
+    {
+      "id": "2",
+      "x": 788,
+      "y": 331,
+      "w": 16,
+      "h": 16,
+      "label": "图标",
+      "style": "ellipse;whiteSpace=wrap;html=1;aspect=fixed;strokeColor=none;gradientColor=none;fillColor=#000000;",
+      "shape": "ellipse",
+      "rounded": false,
+      "wrap": true,
+      "fill": "#000000",
+      "stroke": null,
+      "strokeWidth": 1,
+      "fontColor": "#ffffff",
+      "fontSize": 4,
+      "align": "center",
+      "verticalAlign": "middle",
+      "rotation": 0,
+      "dashed": false,
+      "fillOpacity": 1,
+      "strokeOpacity": 1,
+      "note": "白色圆形，图标为占位，后续替换为动态资产"
+    },
+    {
+      "id": "3",
+      "x": 790,
+      "y": 317.63,
+      "w": 12,
+      "h": 12.37,
+      "label": "",
+      "style": "triangle;whiteSpace=wrap;html=1;fillColor=#000000;gradientColor=none;rotation=-90;",
+      "shape": "triangle",
+      "rounded": false,
+      "wrap": true,
+      "fill": "#000000",
+      "stroke": "#000000",
+      "strokeWidth": 1,
+      "fontColor": null,
+      "fontSize": 12,
+      "align": "center",
+      "verticalAlign": "middle",
+      "rotation": -90,
+      "dashed": false,
+      "fillOpacity": 1,
+      "strokeOpacity": 1,
+      "note": "白色三角形，构成箭头"
+    }
+  ]
+}

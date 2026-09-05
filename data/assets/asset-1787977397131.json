@@ -1,0 +1,262 @@
+{
+  "id": "asset-1787977397131",
+  "name": "普通武器图标",
+  "bgColor": "#ffffff",
+  "center": {
+    "x": 0,
+    "y": 0
+  },
+  "scale": 1,
+  "elements": [
+    {
+      "shape": "arc",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 180,
+      "sides": 6,
+      "lineWidth": 12,
+      "color": "#000000",
+      "fill": null,
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 360,
+      "points": [],
+      "closed": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 20,
+      "sides": 6,
+      "lineWidth": 4,
+      "color": "#050505",
+      "fill": "#000000",
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "points": [
+        {
+          "x": -102,
+          "y": 95.42857142857143
+        },
+        {
+          "x": -42,
+          "y": 95.42857142857143
+        },
+        {
+          "x": -42,
+          "y": -54.57142857142857
+        },
+        {
+          "x": -102,
+          "y": -54.57142857142857
+        }
+      ],
+      "closed": true,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 20,
+      "sides": 6,
+      "lineWidth": 4,
+      "color": "#050505",
+      "fill": "#000000",
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "points": [
+        {
+          "x": -102,
+          "y": -63.57142857142857
+        },
+        {
+          "x": -42,
+          "y": -63.57142857142857
+        },
+        {
+          "x": -72,
+          "y": -115.57142857142857
+        }
+      ],
+      "closed": true,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 20,
+      "sides": 6,
+      "lineWidth": 4,
+      "color": "#050505",
+      "fill": "#000000",
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "points": [
+        {
+          "x": -30,
+          "y": 95.42857142857143
+        },
+        {
+          "x": 30,
+          "y": 95.42857142857143
+        },
+        {
+          "x": 30,
+          "y": -54.57142857142857
+        },
+        {
+          "x": -30,
+          "y": -54.57142857142857
+        }
+      ],
+      "closed": true,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 20,
+      "sides": 6,
+      "lineWidth": 4,
+      "color": "#050505",
+      "fill": "#000000",
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "points": [
+        {
+          "x": -30,
+          "y": -63.57142857142857
+        },
+        {
+          "x": 30,
+          "y": -63.57142857142857
+        },
+        {
+          "x": 0,
+          "y": -115.57142857142857
+        }
+      ],
+      "closed": true,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 20,
+      "sides": 6,
+      "lineWidth": 4,
+      "color": "#050505",
+      "fill": "#000000",
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "points": [
+        {
+          "x": 42,
+          "y": 95.42857142857143
+        },
+        {
+          "x": 102,
+          "y": 95.42857142857143
+        },
+        {
+          "x": 102,
+          "y": -54.57142857142857
+        },
+        {
+          "x": 42,
+          "y": -54.57142857142857
+        }
+      ],
+      "closed": true,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 20,
+      "sides": 6,
+      "lineWidth": 4,
+      "color": "#050505",
+      "fill": "#000000",
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "points": [
+        {
+          "x": 42,
+          "y": -63.57142857142857
+        },
+        {
+          "x": 102,
+          "y": -63.57142857142857
+        },
+        {
+          "x": 72,
+          "y": -115.57142857142857
+        }
+      ],
+      "closed": true,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "arc",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 210,
+      "sides": 6,
+      "lineWidth": 18,
+      "color": "#febb2a",
+      "fill": null,
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 360,
+      "points": [],
+      "closed": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    }
+  ]
+}
