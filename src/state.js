@@ -29,7 +29,7 @@ export const DROP_ITEMS = { gold: '金币', exp: '经验', charge: '充能球', 
 
 // 展示顺序基础列表（仅 radial 硬编码；yellow/green 与设计稿武器启动后并入 isKnownWeapon）
 export const WEAPON_TYPES = ['radial'];
-export const WEAPON_LABELS = { radial: '基础', yellow: '散射', green: '激光' };
+export const WEAPON_LABELS = { radial: '基础', yellow: '散射', green: '激光', 'weapon-1788679714207': '禅灭' };
 
 // 统一物品定义：改件 / 圣物 / 宠物
 // category: mod=改件（装备到武器槽）、relic=圣物（装备到玩家，最多3）、pet=宠物（装备到玩家，最多2）

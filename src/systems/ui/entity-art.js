@@ -8,6 +8,7 @@ import Phaser from 'phaser';
 import { VIEW_W, VIEW_H, CRATE_SIZE, CRATE_BORDER_THICKNESS, CRATE_INSET, CRATE_DEBRIS_TTL, PORTAL_COLOR, PORTAL_ALPHA, PLAYER_ART, PLAYER_LEAN, SHIELD, ENEMY_RED, ENEMY_BEHAVIOR } from '../constants.js';
 import { wallRotationRad, wallCorners } from '../combat/geometry.js';
 import { renderAsset } from '../art/asset-render.js';
+import { buildOrbitInstance } from '../art/weapon-runtime.js';
 import { getDesign, ensureDesign } from '../art/design-store.js';
 import { isKnownWeapon } from '../../player-data.js';
 
@@ -561,6 +562,23 @@ export function drawShieldArc(graphics, player) {
   graphics.strokePath();
 }
 
+// 环绕六边形航迹：按每颗的历史位置画渐隐尾迹（最新段最亮，旧段渐隐）
+function drawOrbitTrail(g, trails, count, colorInt, fade) {
+  if (!trails || !count) return;
+  for (let i = 0; i < count; i++) {
+    const tr = trails[i];
+    if (!tr || tr.length < 2) continue;
+    for (let j = 1; j < tr.length; j++) {
+      const a = (j / (tr.length - 1)) * (fade ?? 0.9);
+      g.lineStyle(Math.max(0.5, 2), colorInt, Math.max(0.05, a));
+      g.beginPath();
+      g.moveTo(tr[j - 1].x, tr[j - 1].y);
+      g.lineTo(tr[j].x, tr[j].y);
+      g.strokePath();
+    }
+  }
+}
+
 export function drawPlayer(graphics, player, t = 0) {
   // 美术方案按「当前武器类型」绑定：设了对应武器的设计稿 → 用它画玩家本体；否则回退默认/旧 art
   const wt = player.weaponType;
@@ -568,17 +586,34 @@ export function drawPlayer(graphics, player, t = 0) {
   const design = aid ? getDesign(aid) : null;
   // 仅当 aid 不是武器 id 时才当作美术资产加载，避免把武器 id 发到 /api/assets 造成 404
   if (aid && !design && !isKnownWeapon(aid)) ensureDesign(aid);
-  if (design) { renderAsset(graphics, design, player.x, player.y, t, player.artScale || 1); return; }
+  if (design) {
+    renderAsset(graphics, design, player.x, player.y, t, player.artScale || 1);
+    // 特殊机制武器（鼠标准心/蓄力）把发射媒介/瞄准线/红弧叠画在画板本体之上
+    const mc = player.weapon?.mechanic;
+    if (mc && (mc.aim === 'mouse' || mc.charge?.enabled)) drawWeaponMedium(graphics, player, player.weapon?.medium, t);
+    return;
+  }
 
   // 移动滞后动量：玩家移动 lean（moveLeanX/Y，已平滑），归一化到 [-1,1] 供元素偏移用
   const motion = { x: (player.moveLeanX || 0) / PLAYER_LEAN.hex, y: (player.moveLeanY || 0) / PLAYER_LEAN.hex };
   const med = player.weapon?.medium;
 
-  // 当前武器是「设计武器」且带画板外形（武器外形）→ 用它画玩家本体，并叠加发射媒介环+小球
+  // 当前武器是「设计武器」且带画板外形（武器外形）→ 用它画玩家本体；环绕六边形武器走动态轨道克隆 + 航迹，且不画发射媒介
   const wArt = player.weaponArt;
   if (wArt && Array.isArray(wArt.elements) && wArt.elements.length) {
-    renderAsset(graphics, wArt, player.x, player.y, t, player.artScale || 1, motion);
-    drawWeaponMedium(graphics, player, med, t);
+    const orbit = player.weapon?.mechanic?.orbit;
+    if (orbit?.enabled) {
+      const baseR = (wArt.elements?.[orbit.orbitIndexes?.[0]]?.orbitRadius) || 30;
+      const phase = player.orbit || { radius: baseR, speedMult: 1, sizeMult: 1, attacking: false, hexTrails: [] };
+      const dyn = buildOrbitInstance(wArt, orbit, { radius: phase.radius, speedMult: phase.speedMult, sizeMult: phase.sizeMult });
+      renderAsset(graphics, dyn, player.x, player.y, t, player.artScale || 1, motion);
+      if (phase.attacking && phase.hexTrails) {
+        drawOrbitTrail(graphics, phase.hexTrails, orbit.hexCount, color(orbit.trailColor || '#ffa914'), orbit.trailFade);
+      }
+    } else {
+      renderAsset(graphics, wArt, player.x, player.y, t, player.artScale || 1, motion);
+      drawWeaponMedium(graphics, player, med, t);
+    }
     return;
   }
 
@@ -592,7 +627,9 @@ export function drawPlayer(graphics, player, t = 0) {
   drawWeaponMedium(graphics, player, med, t);
 }
 
-// 发射媒介：环 + 环上骑一颗小球（随 weaponAngle + medium.angle，与 muzzlePosition 一致）
+// 发射媒介：环 + 环上骑一颗小球（随 weaponAngle + medium.angle，与 muzzlePosition 一致）。
+// 特殊武器额外：中心瞄准线（常显，长度近似无限，蓄满变红）+ 蓄力散射边界线（±spread）+ 表盘红弧带
+//   （半径=发射环（=环上小球），厚度减半，角度随蓄力散射角同步减小）+ 发射小球改为圆弧（角度=当前散射角）。
 function drawWeaponMedium(g, player, med, t) {
   if (!med) return;
   const scale = player.artScale || 1;
@@ -603,6 +640,50 @@ function drawWeaponMedium(g, player, med, t) {
   const ba = (player.weaponAngle || 0) + ((med.angle || 0) * Math.PI / 180);
   const ox = cx + Math.cos(ba) * ringR;
   const oy = cy + Math.sin(ba) * ringR;
+
+  const mech = player.weapon?.mechanic;
+  const chg = mech?.charge?.enabled ? mech.charge : null;
+  const mouseAim = mech?.aim === 'mouse';
+  if (chg || mouseAim) {
+    const charge = player.charge || 0;
+    const spreadDeg = chg ? chg.spreadMax * (1 - charge) : 0;   // 当前散射角（蓄满 0）
+    const full = !!(chg && charge >= 1);
+    const lineLen = 20000;
+    // 表盘红弧带：仅蓄力中显示（半径=arc.r，厚度减半，half=spreadDeg 随蓄力收窄）
+    if (chg && player.charging) {
+      const baseR = med.radius > 0 ? med.radius : (PLAYER_ART.weaponRingRadius || 40);
+      for (const arc of (mech.ampArcs || [])) {
+        const half = spreadDeg;
+        if (half > 0) {
+          const arcR = (arc.r > 0 ? arc.r : baseR) * scale;
+          g.lineStyle(Math.max(0.25, arc.width * scale * 0.5), color(arc.color), 0.9);
+          g.beginPath();
+          g.arc(cx, cy, arcR, ba - Phaser.Math.DegToRad(half), ba + Phaser.Math.DegToRad(half), false);
+          g.strokePath();
+        }
+      }
+    }
+    // 两条散射边界线：仅蓄力中且未满（charging && spreadDeg>0），长度近似无限
+    if (chg && player.charging && spreadDeg > 0) {
+      g.lineStyle(2, color(chg.boundLineColor || '#ffffff'), 0.8);
+      for (const s of [-spreadDeg, spreadDeg]) {
+        const a = ba + Phaser.Math.DegToRad(s);
+        g.lineBetween(cx + Math.cos(a) * ringR, cy + Math.sin(a) * ringR, cx + Math.cos(a) * (ringR + lineLen), cy + Math.sin(a) * (ringR + lineLen));
+      }
+      // 发射小球 → 圆弧（环上当前散射角范围）
+      g.lineStyle(Math.max(1.5, 4 * (med.size || 1) * scale), color(med.ringColor || '#ffffff'), 1);
+      g.beginPath();
+      g.arc(cx, cy, ringR, ba - Phaser.Math.DegToRad(spreadDeg), ba + Phaser.Math.DegToRad(spreadDeg), false);
+      g.strokePath();
+      return;
+    }
+    // 蓄力满（散射收敛为 0）：一条红色中心瞄准线（平时不显示）
+    if (full && chg) {
+      g.lineStyle(2, color(chg.aimLineFullColor || '#ff3b3b'), 0.9);
+      g.lineBetween(cx + Math.cos(ba) * ringR, cy + Math.sin(ba) * ringR, cx + Math.cos(ba) * (ringR + lineLen), cy + Math.sin(ba) * (ringR + lineLen));
+    }
+  }
+
   if (Array.isArray(med.elements) && med.elements.length) {
     renderAsset(g, { scale: med.size, center: { x: 0, y: 0 }, elements: med.elements }, ox, oy, t, 1);
   } else {

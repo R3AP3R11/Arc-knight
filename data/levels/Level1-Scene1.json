@@ -1325,27 +1325,44 @@
       {
         "c": 0,
         "r": 1,
-        "size": 820
+        "size": 820,
+        "marker": null
       },
       {
         "c": 1,
         "r": 1,
-        "size": 1120
+        "size": 1120,
+        "marker": {
+          "type": "combat",
+          "icon": ""
+        }
       },
       {
         "c": 2,
         "r": 1,
-        "size": 820
+        "size": 820,
+        "marker": {
+          "type": "idol",
+          "icon": ""
+        }
       },
       {
         "c": 3,
         "r": 1,
-        "size": 1120
+        "size": 1120,
+        "marker": {
+          "type": "combat",
+          "icon": ""
+        }
       },
       {
         "c": 2,
         "r": 0,
-        "size": 1600
+        "size": 1600,
+        "marker": {
+          "type": "boss",
+          "icon": ""
+        }
       }
     ]
   },

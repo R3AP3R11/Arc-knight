@@ -6,6 +6,7 @@
 function num(v, def) { const n = Number(v); return Number.isFinite(n) ? n : def; }
 function posn(v, def) { const n = Number(v); return Number.isFinite(n) ? n : def; }
 function clampN(v, min, max) { const n = num(v, min); return Math.min(max, Math.max(min, n)); }
+function clampInt(v, min, max) { return Math.max(min, Math.min(max, Math.round(num(v, min)))); }
 
 // 规范化颜色为 #rrggbb 小写（3位hex 展开），供调色盘/运行时复用；非法返回 null
 function toColorHex(c) {
@@ -135,6 +136,60 @@ function normalizeBullet(value = {}) {
   };
 }
 
+// 特殊机制（可扩展；普通武器为 auto/无）。机制行为靠 combat 侧按字段激活：
+//   aim      —— 'mouse'=准心（发射环小球+瞄准线）始终指向鼠标；'auto'=常规环绕
+//   charge   —— 蓄力射击：按住蓄力、松开发射；起始 spreadMax→0°，蓄满速度/大小/伤害乘以乘子
+//   ampArcs  —— 发射环外「表盘红色圆弧」带：子弹穿过该环带变红且伤害翻倍（支持多个）
+//   orbit    —— 环绕六边形：以玩家为中心按相位循环攻出的六边形(可多环)对敌造成近身伤害，无子弹
+function normalizeOrbit(value) {
+  const v = value || {};
+  if (!v.enabled) return null;
+  return {
+    enabled: !!v.enabled,
+    orbitIndexes: Array.isArray(v.orbitIndexes) ? v.orbitIndexes.slice(0, 6).map(n => clampInt(n, 0, 15)) : [0, 1],
+    hexCount: clampInt(v.hexCount, 1, 12),
+    phase2Radius: Math.max(0, num(v.phase2Radius, 250)),
+    phase3Radius: Math.max(0, num(v.phase3Radius, 400)),
+    phase2SpeedMult: Math.max(1, num(v.phase2SpeedMult, 2)),
+    phase3SpeedMult: Math.max(1, num(v.phase3SpeedMult, 4)),
+    phase2SizeMult: Math.max(1, num(v.phase2SizeMult, 2)),
+    phase3SizeMult: Math.max(1, num(v.phase3SizeMult, 4)),
+    phase3HoldMs: Math.max(0, num(v.phase3HoldMs, 2000)),
+    attackLerpMs: Math.max(0, num(v.attackLerpMs, 120)),
+    retractMs: Math.max(0, num(v.retractMs, 400)),
+    hitIntervalMs: Math.max(1, num(v.hitIntervalMs, 120)),
+    trailSamples: clampInt(v.trailSamples, 4, 120),
+    trailFade: Math.max(0, Math.min(1, num(v.trailFade, 0.9))),
+    trailColor: String(v.trailColor || '#ffa914')
+  };
+}
+function normalizeMechanic(value = {}) {
+  const v = value || {};
+  const charge = v.charge ? {
+    enabled: !!v.charge.enabled,
+    duration: Math.max(50, num(v.charge.duration, 1500)),   // 蓄力时长 ms
+    spreadMax: Math.max(0, num(v.charge.spreadMax, 0)),     // 蓄力起始散射角 °（蓄力→0）
+    speedMult: Math.max(1, num(v.charge.speedMult, 1.4)),   // 蓄满速度乘子
+    sizeMult: Math.max(1, num(v.charge.sizeMult, 1.4)),     // 蓄满大小乘子
+    damageMult: Math.max(1, num(v.charge.damageMult, 2)),   // 蓄满伤害乘子
+    aimLineColor: String(v.charge.aimLineColor || '#ffffff'),
+    aimLineFullColor: String(v.charge.aimLineFullColor || '#ff3b3b'),
+    boundLineColor: String(v.charge.boundLineColor || '#ffffff')
+  } : null;
+  const ampArcs = Array.isArray(v.ampArcs) ? v.ampArcs.slice(0, 8) : [];
+  return {
+    aim: v.aim === 'mouse' ? 'mouse' : 'auto',
+    charge,
+    ampArcs: ampArcs.map(a => ({
+      r: Math.abs(num(a?.r, 0)),                 // 距玩家半径（弧心圆半径）
+      halfDeg: Math.max(0, num(a?.halfDeg, 0)),  // 弧半角（相对 weaponAngle）
+      width: Math.max(0, num(a?.width, 6)),      // 带宽度
+      color: String(a?.color || '#ff3b3b')
+    })),
+    orbit: normalizeOrbit(v.orbit)
+  };
+}
+
 export function normalizeWeaponDesign(value = {}) {
   const v = value || {};
   const slot = [1, 2, 3].includes(Number(v.slot)) ? Number(v.slot) : 1;
@@ -168,7 +223,8 @@ export function normalizeWeaponDesign(value = {}) {
       fireSpeed: Math.abs(num(v.medium?.fireSpeed, 20)),
       elements: (Array.isArray(v.medium?.elements) ? v.medium.elements : []).slice(0, 16).map(normalizeWeaponShape)
     },
-    bullet: normalizeBullet(v.bullet)
+    bullet: normalizeBullet(v.bullet),
+    mechanic: normalizeMechanic(v.mechanic)
   };
 }
 

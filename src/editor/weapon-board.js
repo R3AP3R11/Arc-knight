@@ -91,6 +91,20 @@ function scalarFields() {
       ['maxAmmo', '弹量(0=∞)', 'number'],
       ['chargeRequired', '蓄力需弹', 'number']
     ]},
+    { g: '特殊机制', group: [
+      ['mechanic.aim', '准心', 'select', [['auto', '环绕'], ['mouse', '鼠标准心']], true],
+      ['mechanic.charge.enabled', '蓄力射击', 'bool', null, true]
+    ]},
+    { g: '蓄力参数', when: () => design.mechanic?.charge?.enabled, group: [
+      ['mechanic.charge.duration', '蓄力时长ms', 'number'],
+      ['mechanic.charge.spreadMax', '起始散射°', 'number'],
+      ['mechanic.charge.speedMult', '蓄满速度乘子', 'number'],
+      ['mechanic.charge.sizeMult', '蓄满大小乘子', 'number'],
+      ['mechanic.charge.damageMult', '蓄满伤害乘子', 'number'],
+      ['mechanic.charge.aimLineColor', '瞄准线色', 'color'],
+      ['mechanic.charge.aimLineFullColor', '蓄满瞄准线色', 'color'],
+      ['mechanic.charge.boundLineColor', '散射边界线色', 'color']
+    ]},
     { g: '发射媒介(环上小球)', group: [
       ['medium.angle', '环角度°', 'number'],
       ['medium.radius', '环半径', 'number'],

@@ -4,6 +4,8 @@ import { BARREL_ICON, BARREL_TEX_KEY, CHEST_CLOSED_KEY, CHEST_OPEN_KEY, VENDOR_T
 import { hitWall, reflectBulletAgainstWall } from './systems/combat/geometry.js';
 import { WEAPONS, spawnLaser } from './systems/combat/weapons.js';
 import { playerDamage, activeMods } from './systems/economy/damage.js';
+import { buildOrbitInstance } from './systems/art/weapon-runtime.js';
+import { elementCenter } from './systems/art/asset-render.js';
 import { color, updatePlayerMoveLean } from './systems/ui/entity-art.js';
 import { EditorInputMixin } from './systems/editor/editor-input.js';
 import { EditorCameraMixin } from './systems/editor/editor-camera.js';
@@ -246,20 +248,139 @@ export function createGameScene(ctx) {
       }
 
       const mods = activeMods(this, this.player.weaponType);
+      const mech = this.player.weapon?.mechanic;
+      const fireWasDown = this.player.previousFireDown;   // 上一帧是否按下（蓄力武器「松开发射」用，须在下方覆盖前取）
       // 转速改件：射击时小球不减速转动
       const hasSpin = mods.has('spin');
-      // 发射媒介转速：设计武器用 medium.orbitSpeed/fireSpeed；原武器回退 180（怠速）/20（射击，带 spin 180）
-      const medSpd = this.player.weapon?.medium;
-      const idleSpd = medSpd?.orbitSpeed != null ? medSpd.orbitSpeed : 180;
-      const fireSpd = medSpd?.fireSpeed != null ? medSpd.fireSpeed : (hasSpin ? 180 : 20);
-      const angularSpeed = Phaser.Math.DegToRad(fireDown ? fireSpd : idleSpd);
-      this.player.weaponAngle = Phaser.Math.Angle.Wrap(
-        this.player.weaponAngle + this.player.weaponDirection * angularSpeed * dt / 1000
-      );
+      // 鼠标准心武器：发射环小球/瞄准方向始终指向鼠标，不再自动旋转
+      if (mech?.aim === 'mouse') {
+        const wp = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        this.player.weaponAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, wp.x, wp.y);
+        this.player.weaponDirection = 1;
+      } else {
+        // 发射媒介转速：设计武器用 medium.orbitSpeed/fireSpeed；原武器回退 180（怠速）/20（射击，带 spin 180）
+        const medSpd = this.player.weapon?.medium;
+        const idleSpd = medSpd?.orbitSpeed != null ? medSpd.orbitSpeed : 180;
+        const fireSpd = medSpd?.fireSpeed != null ? medSpd.fireSpeed : (hasSpin ? 180 : 20);
+        const angularSpeed = Phaser.Math.DegToRad(fireDown ? fireSpd : idleSpd);
+        this.player.weaponAngle = Phaser.Math.Angle.Wrap(
+          this.player.weaponAngle + this.player.weaponDirection * angularSpeed * dt / 1000
+        );
+      }
+      // 蓄力武器：按住蓄力（charge 进度 0..1），松开时在 fire 段发射；蓄力完成保持满值直到松开
+      if (mech?.charge?.enabled) {
+        if (fireDown) this.player.charge = Math.min(1, (this.player.charge || 0) + dt / Math.max(1, mech.charge.duration));
+        else if (!this.player.previousFireDown) this.player.charge = 0;
+      } else {
+        this.player.charge = 0;
+      }
+      // —— 环绕六边形机制（mechanic.orbit）：无子弹。6 颗六边形绕玩家撞击敌身；按住左键蓄击（半径/角速度/体积翻倍→再翻倍），松开平滑收拢 ——
+      if (mech?.orbit?.enabled) {
+        const orbit = mech.orbit;
+        const wArt = this.player.weaponArt;
+        const baseRadius = (wArt?.elements?.[orbit.orbitIndexes?.[0]]?.orbitRadius) || 30;
+        this.player.orbit = this.player.orbit || { holdMs: 0, attacking: false, radius: baseRadius, speedMult: 1, sizeMult: 1, hexTrails: [] };
+        const o = this.player.orbit;
+        o.attacking = fireDown;
+        // 蓄击计时（仅按住时累计；松开清 0，视觉收拢靠下方补间）
+        if (fireDown) o.holdMs = Math.min(orbit.phase3HoldMs, (o.holdMs || 0) + dt);
+        else o.holdMs = 0;
+        // 目标阶段：按住>=phase3HoldMs 三段；按住>0 二段；否则平时/收拢目标=基础
+        let tgt;
+        if (o.holdMs >= orbit.phase3HoldMs) tgt = { r: orbit.phase3Radius, s: orbit.phase3SpeedMult, z: orbit.phase3SizeMult };
+        else if (o.holdMs > 0) tgt = { r: orbit.phase2Radius, s: orbit.phase2SpeedMult, z: orbit.phase2SizeMult };
+        else tgt = { r: baseRadius, s: 1, z: 1 };
+        // 补间趋近：攻击时快速（attackLerpMs），松开时慢速（retractMs）
+        const climb = fireDown ? orbit.attackLerpMs : orbit.retractMs;
+        const k = Math.min(1, dt / Math.max(1, climb));
+        o.radius = (o.radius ?? baseRadius) + (tgt.r - (o.radius ?? baseRadius)) * k;
+        o.speedMult = (o.speedMult ?? 1) + (tgt.s - (o.speedMult ?? 1)) * k;
+        o.sizeMult = (o.sizeMult ?? 1) + (tgt.z - (o.sizeMult ?? 1)) * k;
+        const tt = (this.time?.now || 0) / 1000;
+        const dyn = buildOrbitInstance(wArt, orbit, { radius: o.radius, speedMult: o.speedMult, sizeMult: o.sizeMult });
+        const e0 = dyn?.elements?.[orbit.orbitIndexes?.[0]];
+        if (e0) {
+          // 拖尾：攻击时按每颗六边形记录历史位置（渲染端绘制渐隐航迹），最旧在前
+          o.hexTrails = o.hexTrails || [];
+          if (fireDown) {
+            for (let i = 0; i < orbit.hexCount; i++) {
+              const c = elementCenter(dyn, e0, i, this.player.x, this.player.y, tt, this.player.artScale || 1);
+              (o.hexTrails[i] = o.hexTrails[i] || []).push({ x: c.x, y: c.y });
+              while (o.hexTrails[i].length > orbit.trailSamples) o.hexTrails[i].shift();
+            }
+          } else if (o.hexTrails.length) {
+            o.hexTrails = [];
+          }
+          // 碰撞伤害：攻击时，每颗六边形命中敌身，按 hitIntervalMs 对同敌节流；伤害走 playerDamage（攻强/暴击，与常规武器一致）
+          if (fireDown) {
+            this.orbitHit = this.orbitHit || new Map();
+            const now = (this.time?.now || 0);
+            for (let i = 0; i < orbit.hexCount; i++) {
+              const c = elementCenter(dyn, e0, i, this.player.x, this.player.y, tt, this.player.artScale || 1);
+              const hitR = (e0.radius || 10) * (c.worldScale || this.player.artScale || 1);
+              for (const e of this.enemies) {
+                if (!e.alive) continue;
+                if (Math.hypot(e.x - c.x, e.y - c.y) < hitR + e.r) {
+                  const last = this.orbitHit.get(e.id) ?? -Infinity;
+                  if (now - last >= orbit.hitIntervalMs) {
+                    this.orbitHit.set(e.id, now);
+                    const dmg = playerDamage(this, this.player.weaponType);
+                    e.hp -= dmg;
+                    this.hitEffects.push({ x: c.x, y: c.y, ttl: HIT_FX_TTL });
+                    if (e.hp <= 0) this.defeatEnemy(e);
+                  }
+                }
+              }
+              // 六边形命中可破坏物：箱子砸碎 / 油桶爆炸（一次触发，无节流；explodeBarrel 会置 alive=false 并连锁）
+              const hitPad = Math.max(3, hitR * 0.5);
+              for (const cr of this.crates) {
+                if (cr.alive && hitWall(cr, c.x, c.y, hitPad)) {
+                  cr.alive = false;
+                  this.hitEffects.push({ x: c.x, y: c.y, ttl: HIT_FX_TTL });
+                  this.spawnCrateDebris(cr);
+                  break;
+                }
+              }
+              for (const br of this.barrels) {
+                if (br.alive && Math.hypot(br.x - c.x, br.y - c.y) < br.r + hitPad) {
+                  this.explodeBarrel(br);
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+      // 蓄力视窗缩放（方向：tgt=1-0.6*charge 蓄力缩放大）；发射后先停顿 0.6s（保持当前值）再逐渐恢复
+      if (mech?.charge?.enabled) {
+        if (fireDown) {
+          this.zoomHold = 0;
+          const tgt = 1 - 0.6 * (this.player.charge || 0);
+          const cur = this.chargeZoom ?? 1;
+          this.chargeZoom = cur + (tgt - cur) * Math.min(1, dt / 120);
+        } else if (fireWasDown && (this.player.charge || 0) > 0) {
+          // 本帧松开发射：进入 0.6s 停顿（保持当前缩放值）
+          this.zoomHold = 600;
+        } else if (this.zoomHold > 0) {
+          // 停顿中：保持当前缩放值不变
+          this.zoomHold = Math.max(0, this.zoomHold - dt);
+        } else {
+          // 停顿结束：逐渐恢复回 1
+          const cur = this.chargeZoom ?? 1;
+          this.chargeZoom = cur + (1 - cur) * Math.min(1, dt / 120);
+        }
+      } else {
+        this.chargeZoom = 1;
+      }
+      this.player.charging = fireDown;
       this.player.firing = fireDown;
       this.player.previousFireDown = fireDown;
 
-      if (fireDown && this.fireClock <= 0) {
+      const chargeWeapon = mech?.charge?.enabled;
+      const wantFire = chargeWeapon
+        ? (!fireDown && fireWasDown && (this.player.charge || 0) > 0)
+        : (fireDown && this.fireClock <= 0);
+      if (wantFire) {
         const wt = this.player.weaponType;
         const currentAmmo = this.player.ammo[wt];
         if (currentAmmo === undefined || currentAmmo > 0) {
@@ -313,11 +434,12 @@ export function createGameScene(ctx) {
           }
           if (currentAmmo !== Infinity) this.player.ammo[wt] = currentAmmo - 1;
           this.tryRefillWeapon(wt);
+          if (chargeWeapon) this.player.charge = 0;
           const attackSpeed = this.player.combat?.attackSpeed ?? 1;
           let interval = this.player.weapon.fireInterval || 120;
           // 转速改件：射速 +50%（间隔缩为 2/3）
           if (hasSpin) interval = interval * 2 / 3;
-          this.fireClock = interval / attackSpeed;
+          this.fireClock = chargeWeapon ? 0 : interval / attackSpeed;
         }
       }
       this.fireClock -= dt;
@@ -335,6 +457,28 @@ export function createGameScene(ctx) {
         b.y += b.vy * dt / 1000;
         b.dist += Math.hypot(b.vx, b.vy) * dt / 1000;
         WEAPONS[b.weaponType]?.stepBullet?.(b, dt, this);
+
+        // 蓄力武器「表盘红弧」穿环：子弹本帧位移线段跨过红弧带圆（半径=arc.r）→ 变红 + 伤害翻倍（一次性）。
+        // 用「上帧位置→当前位置」线段跨越判定：子弹速度快、环带宽窄时逐帧距离判定会漏。
+        const ampArcs = WEAPONS[b.weaponType]?.mechanic?.ampArcs;
+        if (ampArcs && ampArcs.length && !b.amplified) {
+          const p = this.player;
+          // 角度判定用子弹飞行航向（速度方向），而非位置角：接近发射环时不同散射角的子弹
+          // 位置角都会压缩到瞄准方向附近，导致穿弧判定失真（该红的没红、不该红的红了）。
+          const heading = Phaser.Math.Angle.Wrap(Math.atan2(b.vy, b.vx) - (p.weaponAngle || 0));
+          const px = b.x - b.vx * dt / 1000, py = b.y - b.vy * dt / 1000;
+          const d0 = Math.hypot(px - p.x, py - p.y), d1 = Math.hypot(b.x - p.x, b.y - p.y);
+          const baseR = ((p.weapon?.medium?.radius > 0 ? p.weapon.medium.radius : 40) || 40) * (p.artScale || 1);
+          for (const arc of ampArcs) {
+            const arcR = (arc.r > 0 ? arc.r : baseR) * (p.artScale || 1);
+            if ((d0 - arcR) * (d1 - arcR) <= 0 && Math.abs(heading) <= Phaser.Math.DegToRad(arc.halfDeg)) {
+              b.amplified = true;
+              b.colorStr = arc.color || '#ff3b3b';
+              b.amplifiedColor = arc.color || '#ff3b3b';
+              break;
+            }
+          }
+        }
 
         // 反弹改件：撞墙时反射速度而非销毁
         if (b.ricochet) {
@@ -387,7 +531,10 @@ export function createGameScene(ctx) {
 
         for (const e of this.enemies) {
           if (e.alive && Math.hypot(e.x - b.x, e.y - b.y) < e.r + 5) {
-            e.hp -= (b.petDamage != null ? b.petDamage : playerDamage(this, b.weaponType));
+            let dmg = b.petDamage != null ? b.petDamage : playerDamage(this, b.weaponType);
+            if (b.damageMult) dmg *= b.damageMult;   // 蓄力伤害倍率
+            if (b.amplified) dmg *= 2;               // 穿表盘红弧伤害翻倍
+            e.hp -= dmg;
             this.hitEffects.push({ x: b.x, y: b.y, ttl: HIT_FX_TTL });
             if (e.hp <= 0) {
               // 分裂改件：击杀后从敌位置向周围 3 方向发小号子弹
@@ -412,6 +559,14 @@ export function createGameScene(ctx) {
             hit = true;
             break;
           }
+        }
+
+        // 命中敌人/箱子/油桶且配置了消失时长：停驻在原地渐隐，而不是立即销毁（拖尾逐渐变淡）
+        if (hit && b.fadeDuration > 0) {
+          b.wallFade = true;
+          b.overTime = 0;
+          b.fade = 1;
+          return true;
         }
 
         return !b.dead && !hit && b.x > 0 && b.x < ww && b.y > 0 && b.y < wh;

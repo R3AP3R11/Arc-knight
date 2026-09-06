@@ -89,7 +89,8 @@ export const EditorCameraMixin = {
     updatePlayCamera() {
     const ctx = this.ctx;
       const cam = this.cameras.main;
-      const z = this.playZoom();
+      // 蓄力武器（冥狙）：蓄力时视窗逐渐放大（最多+60%），发射后 0.6s 内恢复（chargeZoom 因子）
+      const z = this.playZoom() * (this.chargeZoom || 1);
       cam.setZoom(z);
 
       if (this.isMenuLevel()) {

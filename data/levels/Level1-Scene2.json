@@ -23,7 +23,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-0-1-bottom",
@@ -36,7 +38,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-0-1-left",
@@ -49,7 +53,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-0-1-right-a",
@@ -62,7 +68,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-0-1-right-b",
@@ -75,7 +83,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-0-1-road-h-t",
@@ -88,7 +98,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-0-1-road-h-b",
@@ -101,7 +113,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-1-1-top",
@@ -114,7 +128,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-1-1-bottom-a",
@@ -127,7 +143,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-1-1-bottom-b",
@@ -140,7 +158,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-1-1-left-a",
@@ -153,7 +173,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-1-1-left-b",
@@ -166,7 +188,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-1-1-right-a",
@@ -179,7 +203,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-1-1-right-b",
@@ -192,7 +218,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-1-1-road-h-t",
@@ -205,7 +233,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-1-1-road-h-b",
@@ -218,7 +248,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-1-1-road-v-l",
@@ -231,7 +263,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-1-1-road-v-r",
@@ -244,7 +278,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-2-1-top",
@@ -257,7 +293,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-2-1-bottom",
@@ -270,7 +308,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-2-1-left-a",
@@ -283,7 +323,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-2-1-left-b",
@@ -296,7 +338,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-2-1-right-a",
@@ -309,7 +353,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-2-1-right-b",
@@ -322,7 +368,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-2-1-road-h-t",
@@ -335,7 +383,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-2-1-road-h-b",
@@ -348,7 +398,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-1-2-top-a",
@@ -361,7 +413,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-1-2-top-b",
@@ -374,7 +428,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-1-2-bottom",
@@ -387,7 +443,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-1-2-left",
@@ -400,7 +458,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-1-2-right",
@@ -413,7 +473,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-1-top-a",
@@ -426,7 +488,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-1-top-b",
@@ -439,7 +503,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-1-bottom-a",
@@ -452,7 +518,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-1-bottom-b",
@@ -465,7 +533,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-1-left-a",
@@ -478,7 +548,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-1-left-b",
@@ -491,7 +563,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-1-right-a",
@@ -504,7 +578,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-1-right-b",
@@ -517,7 +593,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-1-road-h-t",
@@ -530,7 +608,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-1-road-h-b",
@@ -543,7 +623,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-1-road-v-l",
@@ -556,7 +638,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-1-road-v-r",
@@ -569,7 +653,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-0-top",
@@ -582,7 +668,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-0-bottom-a",
@@ -595,7 +683,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-0-bottom-b",
@@ -608,7 +698,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-0-left",
@@ -621,7 +713,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-0-right",
@@ -634,7 +728,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-0-road-v-l",
@@ -647,7 +743,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-0-road-v-r",
@@ -660,7 +758,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-4-1-top",
@@ -673,7 +773,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-4-1-bottom",
@@ -686,7 +788,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-4-1-left-a",
@@ -699,7 +803,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-4-1-left-b",
@@ -712,7 +818,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-4-1-right-a",
@@ -725,7 +833,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-4-1-right-b",
@@ -738,7 +848,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-4-1-road-h-t",
@@ -751,7 +863,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-4-1-road-h-b",
@@ -764,7 +878,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-2-top-a",
@@ -777,7 +893,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-2-top-b",
@@ -790,7 +908,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-2-bottom-a",
@@ -803,7 +923,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-2-bottom-b",
@@ -816,7 +938,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-2-left",
@@ -829,7 +953,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-2-right",
@@ -842,7 +968,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-2-road-v-l",
@@ -855,7 +983,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-2-road-v-r",
@@ -868,7 +998,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-3-top-a",
@@ -881,7 +1013,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-3-top-b",
@@ -894,7 +1028,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-3-bottom-a",
@@ -907,7 +1043,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-3-bottom-b",
@@ -920,7 +1058,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-3-left-a",
@@ -933,7 +1073,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-3-left-b",
@@ -946,7 +1088,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-3-right-a",
@@ -959,7 +1103,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-3-right-b",
@@ -972,7 +1118,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-3-road-h-t",
@@ -985,7 +1133,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-3-road-h-b",
@@ -998,7 +1148,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-3-road-v-l",
@@ -1011,7 +1163,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-3-road-v-r",
@@ -1024,7 +1178,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-4-3-top",
@@ -1037,7 +1193,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-4-3-bottom",
@@ -1050,7 +1208,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-4-3-left-a",
@@ -1063,7 +1223,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-4-3-left-b",
@@ -1076,7 +1238,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-4-3-right",
@@ -1089,7 +1253,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-4-top-a",
@@ -1102,7 +1268,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-4-top-b",
@@ -1115,7 +1283,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-4-bottom",
@@ -1128,7 +1298,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-4-left",
@@ -1141,7 +1313,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-3-4-right",
@@ -1154,7 +1328,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-2-3-top",
@@ -1167,7 +1343,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-2-3-bottom",
@@ -1180,7 +1358,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-2-3-left",
@@ -1193,7 +1373,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-2-3-right-a",
@@ -1206,7 +1388,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-2-3-right-b",
@@ -1219,7 +1403,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-2-3-road-h-t",
@@ -1232,7 +1418,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-2-3-road-h-b",
@@ -1245,7 +1433,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-5-1-top",
@@ -1258,7 +1448,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-5-1-bottom",
@@ -1271,7 +1463,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-5-1-left-a",
@@ -1284,7 +1478,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-5-1-left-b",
@@ -1297,7 +1493,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     },
     {
       "id": "room-5-1-right",
@@ -1310,7 +1508,9 @@
       "rotation": 0,
       "color": "#ffffff",
       "visible": true,
-      "room": true
+      "room": true,
+      "startAngle": 0,
+      "endAngle": 360
     }
   ],
   "enemies": [],
@@ -1353,67 +1553,80 @@
       {
         "c": 0,
         "r": 1,
-        "size": 1120
+        "size": 1120,
+        "marker": null
       },
       {
         "c": 1,
         "r": 1,
-        "size": 1120
+        "size": 1120,
+        "marker": null
       },
       {
         "c": 2,
         "r": 1,
-        "size": 1120
+        "size": 1120,
+        "marker": null
       },
       {
         "c": 1,
         "r": 2,
-        "size": 1120
+        "size": 1120,
+        "marker": null
       },
       {
         "c": 3,
         "r": 1,
-        "size": 1120
+        "size": 1120,
+        "marker": null
       },
       {
         "c": 3,
         "r": 0,
-        "size": 1920
+        "size": 1920,
+        "marker": null
       },
       {
         "c": 4,
         "r": 1,
-        "size": 1120
+        "size": 1120,
+        "marker": null
       },
       {
         "c": 3,
         "r": 2,
-        "size": 1120
+        "size": 1120,
+        "marker": null
       },
       {
         "c": 3,
         "r": 3,
-        "size": 1120
+        "size": 1120,
+        "marker": null
       },
       {
         "c": 4,
         "r": 3,
-        "size": 1120
+        "size": 1120,
+        "marker": null
       },
       {
         "c": 3,
         "r": 4,
-        "size": 1120
+        "size": 1120,
+        "marker": null
       },
       {
         "c": 2,
         "r": 3,
-        "size": 1120
+        "size": 1120,
+        "marker": null
       },
       {
         "c": 5,
         "r": 1,
-        "size": 1120
+        "size": 1120,
+        "marker": null
       }
     ]
   },

@@ -36,7 +36,7 @@ description: 改武器手感与弹道、敌人 AI 行为、伤害与命中判定
 | `src/systems/economy/damage.js` | 伤害公式与改件生效集合（归数值_经济，但战斗必经） | `playerDamage` `playerIncomingDamage` `activeMods` | 50 |
 | `src/systems/constants.js` | 战斗相关常量（护盾、命中特效、敌人行为参数） | `SHIELD` `SHIELD_MAX` `HIT_FX_TTL` `HIT_FX_RADIUS` `BULLET_DAMAGE` `ENEMY_BEHAVIOR` `BARREL_DAMAGE` 等 | 84 |
 | `src/pathfinding.js` | 网格构建与 A* | `buildGrid` `findPath` `nearestWalkable` | 105 |
-| `src/game-scene.js` | `update` 主循环：开火节流、子弹推进、命中判定、敌人更新的调度点 | `createGameScene` | 568 |
+| `src/game-scene.js` | `update` 主循环：开火节流、子弹推进、命中判定、敌人更新的调度点 | `createGameScene` | 742 |
 
 ### 改 X 该动哪里
 
@@ -289,6 +289,15 @@ enemy-ai.js:defeatEnemy(e)
 3. 战斗接入：`initPets` 读 `player.equipment.pets` 与 `pet-store.getPetDef(id)` 自动生成，无需改装配/update。宠物子弹复用 `weapon` 武器的 fire/drawBullet/stepBullet，命中用 `b.petDamage`。
 4. 打包端需 `registerBuiltinPets()`（`default-pets.js`）兜底内置，否则无 `/api/pets` 服务器时定义为空、宠物不生成。
 
+### 6.6 特殊机制武器（设计稿 `mechanic` 字段驱动）
+普通武器弹道是「封闭模板」，新奇机制用 `weapon-design.js:normalizeMechanic` 字段激活（`weapon-runtime.js:buildWeaponRuntimeEntry` 把 `mechanic` 挂到 `WEAPONS[wt]`），机制行为在 combet 侧按字段分支：
+- **`aim:'mouse'`** 鼠标准心：`game-scene.js:update` 里 `weaponAngle` 改为指向 `cameras.main.getWorldPoint(pointer)`，发射环小球+瞄准线不再自动旋转。
+- **`charge`** 蓄力射击：按住蓄力（`player.charge` 0..1），松开发射。`fire` 按 charge 把随机散射 `spreadMax*(1-charge)→0`、速度/大小/伤害按 `(1+(mult-1)*charge)` 插值；命中处 `b.damageMult` 生效。发射判断在 `game-scene.js:update` 用 `fireWasDown`（**须在瞄准段覆盖 `previousFireDown` 之前取**，否则同帧读到 false 导致蓄力松开发射失效）——`!fireDown && fireWasDown && charge>0`，不消耗连射 `fireClock`。**蓄力视窗缩放**：蓄力时相机 `chargeZoom` 平滑趋近 `tgt`（当前冥狙 `tgt=1-0.6*charge`，方向由 game-scene 该式决定）；**松开发射瞬间先停顿 `zoomHold=600ms`（保持当前值），停顿结束后再逐渐恢复到 1**；`editor-camera.js:updatePlayCamera` 用 `playZoom()*chargeZoom` 注入缩放（滚动居中仍用 `cam.width/2`，不随 zoom）。
+- **`ampArcs`** 发射环外「表盘红弧」带：子弹跨过弧带圆（半径=`arc.r`，用「上帧位置→当前位置」线段跨越判定）且相对 `weaponAngle` 的**飞行航向角** `<=halfDeg` 时变红 `b.amplified=true` + `colorStr` 变红，命中伤害 `*2`。角度必须用子弹速度方向（`atan2(b.vy,b.vx)`），不能用位置角——接近发射环时不同散射角的子弹位置角都压缩到瞄准方向附近会误判（`game-scene.js:update` 子弹 filter 内检测）。
+- **`orbit`** 环绕六边形：**无子弹**，`appearance.elements[<orbitIndexes>]` 的复合体（如 禅灭 = elements[0]+[1] 的 6 颗六边形）绕玩家转圈撞击敌身。三段动态轨道在 `game-scene.js:update` 的 `mechanic.orbit` 分支维护运行时 `player.orbit`（按住左键→二段 radius 250/角速×2/体积×2，按住≥`phase3HoldMs`→三段 400/×4/×4；松开→`retractMs` 内平滑收拢回基础）。判伤按 `hitIntervalMs` 对同敌节流，伤害走 `playerDamage`（固定=`baseDamage`，不乘体积倍率）；命中可破坏物：箱子 `spawnCrateDebris`/油桶 `explodeBarrel`（一次触发、无节流）。**`fire()` 直接返回 `[]`**。
+- 渲染：`entity-art.js:drawWeaponMedium` 在 `chg || mouseAim` 下画**中心瞄准线**（常显、长度近似无限、蓄满变红）+ 两条散射边界线（蓄力中，±当前散射角）+表盘红弧带（**半径=`arc.r`、厚度减半、角度=当前散射角随蓄力减小**）+发射小球改为圆弧（角度=当前散射）。**orbit 武器例外**：`entity-art.js:drawPlayer` 走 `buildOrbitInstance`（weapon-runtime）动态克隆外观渲染（不污染共享 `WEAPONS[id].appearance`）+ `drawOrbitTrail` 画每颗六边形航迹，**跳过 `drawWeaponMedium`**（去掉发射环/小球）。
+- 新机制字段要同步 `weapon-design.js:normalizeMechanic` + `weapon-board.js:scalarFields`（特殊机制/蓄力参数组）+ 命中/渲染分支。示例：`data/weapons/weapon-1788656554163.json`（冥狙）、`data/weapons/weapon-1788679714207.json`（禅灭，orbit）。
+
 ## 7. 坑与约束
 
 1. **mixin 同名方法会静默覆盖**。装配顺序在 `game-scene.js` 的 `Object.assign(EditorScene.prototype, EnemyAiMixin, PlayerCombatMixin, DestructiblesMixin, SpawningMixin, TriggersMixin, InteractablesMixin, LevelFlowMixin, HudMixin, UiRuntimeMixin, ScreensMixin, SaveLoginMixin, NewbeeHubMixin, WorkshopMixin, DropsMixin, ProgressionMixin, EditorInputMixin, EditorCameraMixin, WorldRenderMixin, WorldOverlayMixin)`。**后面的覆盖前面的**。新增方法前先确认全仓没有同名（`node -e` 扫 `^    方法名(`）。
@@ -308,6 +317,7 @@ enemy-ai.js:defeatEnemy(e)
 15. **宠物子弹必须带 `b.petDamage`**。现有命中分支只用 `playerDamage(this, weaponType)`；宠物子弹在 `firePet` 里补 `petDamage`，命中处 `b.petDamage != null` 才覆盖，否则按武器 baseDamage 结算（会偏高）。
 16. **敌弹命中宠物在 shield 之后、玩家之前**，且仅 `pet.invincible === false` 时结算。首帧 `draw` 可能先于 `updatePets`，`this.pets` 尚未初始化，`drawPets`/敌弹判定须用 `this.pets || []` 兜底。
 17. **宠物环绕不参与墙体碰撞**（`updatePets` 不调 `resolveMovementCollision`）。半径穿墙时宠物会显示在墙内，仅视觉问题；如需卡墙需自行加回推。
+18. **ampArc 穿弧判定要用子弹航向角而不是位置角**：子弹从发射环（半径=`medium.radius`）出发，接近环时不同散射角的子弹位置角都逼近 `weaponAngle`，用 `atan2(b.y-p.y, b.x-p.x)` 会把弧外子弹误判为穿弧（该白的红了）；半径判定必须用 `arc.r`（带圆半径），用 `ringR`（=发射环=子弹起点）会让首帧 `d0-ringR==0` 恒穿越（该红的全红）。正确几何见 §6.6。
 
 ## 8. 验证方式
 

@@ -17,6 +17,22 @@ export function muzzlePosition(player, design) {
 
 function degToRad(d) { return d * Math.PI / 180; }
 
+// 生成环绕六边形的动态外观克隆：仅改 orbitIndexes 元素的 orbitRadius/rotSpeed/radius，
+// 其余元素保持基础（本体/装饰不变）。phase = { radius, speedMult, sizeMult }。
+export function buildOrbitInstance(weaponArt, orbit, phase) {
+  const idx = new Set((orbit?.orbitIndexes || []));
+  const els = (weaponArt?.elements || []).map((e, i) => {
+    if (!idx.has(i)) return e;
+    return {
+      ...e,
+      orbitRadius: phase.radius,
+      rotSpeed: (Number(e.rotSpeed) || 0) * (phase.speedMult ?? 1),
+      radius: (Number(e.radius) || 20) * (phase.sizeMult ?? 1)
+    };
+  });
+  return { ...(weaponArt || {}), elements: els };
+}
+
 // 随机颜色：在色相环上取一个高饱和中等亮度的颜色（用于「子弹随机颜色」）
 function randomHueColor() {
   const h = Math.random() * 360;
@@ -82,8 +98,10 @@ export function buildWeaponRuntimeEntry(design) {
     maxDedicatedMods: d.maxDedicatedMods ?? 1,
     medium: d.medium,
     appearance: d.appearance,   // 武器外形（画板矢量），供 entity-art 画玩家本体
+    mechanic: d.mechanic,       // 特殊机制字段（aim/charge/ampArcs），combat 侧按此激活
 
     fire(player, level, scene) {
+      if (d.mechanic?.orbit?.enabled) return [];   // 环绕六边形武器：不开火、不产生子弹，碰撞伤害由 game-scene 侧 mechanics.orbit 分支处理
       const muzzle = muzzlePosition(player, d);
       const aim = (player.weaponAngle || 0) + degToRad(d.bullet.baseAngleOffset || 0);
       const kind = d.bullet.trajectory.kind;
@@ -95,13 +113,27 @@ export function buildWeaponRuntimeEntry(design) {
 
       const results = [];
       const count = d.bullet.count;
+      const mech = d.mechanic;
+      // 蓄力修正：charge 为玩家蓄力进度 0..1（game-scene 维护），蓄力武器把随机散射从 spreadMax→0，
+      // 并让速度/大小/伤害随蓄力增大（蓄满 = spreadMax*0、速度/大小 *speed/sizeMult、伤害 *damageMult）
+      const chg = mech?.charge?.enabled ? mech.charge : null;
+      const charge = chg ? (player.charge || 0) : 0;
+      const speedMult = chg ? (1 + (chg.speedMult - 1) * charge) : 1;
+      const sizeMult = chg ? (1 + (chg.sizeMult - 1) * charge) : 1;
+      const dmgMult = chg ? (1 + (chg.damageMult - 1) * charge) : 1;
       const spread = d.bullet.spreadDeg || 0;
-      const spreadRandom = d.bullet.spreadRandom || 0;
+      const spreadRandom = chg ? Math.max(0, chg.spreadMax * (1 - charge)) : (d.bullet.spreadRandom || 0);
       for (let i = 0; i < count; i++) {
         const offset = (count > 1 ? (i / (count - 1) - 0.5) * spread : 0)
           + (Math.random() - 0.5) * 2 * spreadRandom;
         const a = aim + degToRad(offset);
-        results.push(makeBullet(wt, d, muzzle, a, level));
+        const b = makeBullet(wt, d, muzzle, a, level);
+        if (chg) {
+          b.vx *= speedMult; b.vy *= speedMult;
+          b.bulletSize = Math.max(0.05, (b.bulletSize || 1) * sizeMult);
+          b.damageMult = dmgMult;
+        }
+        results.push(b);
       }
       return results;
     },
