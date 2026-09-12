@@ -10,12 +10,14 @@ import { setStatus } from '../ui.js';
 import { ctx } from './context.js';
 import { pushUndo } from './history.js';
 import { setNested } from './entity-properties.js';
+import { roomPassagesForPoint, isGateOnPassage } from '../rooms.js';
+import { GATE_OUTER_COLOR, GATE_INNER_COLOR } from '../systems/constants.js';
 
 const { state } = ctx;
 
 // ── 事件参数表单 ──
 function triggerEventParamsHtml(ev, i, options) {
-  const { enemyTypeOptions, levelOptions, gateOptions } = options;
+  const { enemyTypeOptions, levelOptions } = options;
   const type = ev.type || 'complete';
 
   if (type === 'spawnEnemy') {
@@ -94,12 +96,68 @@ function triggerEventParamsHtml(ev, i, options) {
 
   if (type === 'spawnGate' || type === 'removeGate') {
     const arr = Array.isArray(ev.gateIds) ? ev.gateIds : (ev.gateIds = []);
-    return `<div class="field-multiselect"><span class="ms-title">目标能量门（多选）</span><div class="ms-list">
-        ${gateOptions.map(([v, name]) => `<label class="ms-item"><input type="checkbox" data-event-i="${i}" data-ms="events.${i}.gateIds" value="${v}" ${arr.includes(v) ? 'checked' : ''}/>${name}</label>`).join('')}
+    // 方案：从当前关卡门列表实时生成（而非 options.gateOptions 快照），自动生成门后重渲染即可看到新门
+    const doorOpts = (state.level.gates || []).map((g, gi) => [g.id, `${gi + 1}. ${g.id}`]);
+    return `
+        <label class="te-check"><input type="checkbox" data-event-i="${i}" data-event-auto="${i}" ${ev.auto ? 'checked' : ''}/>自动（触发器所在箱庭通道的门）</label>
+        <p class="hint" style="margin-top:2px">勾选后：一键生成/消除触发器所在箱庭通道上的能量门；取消勾选可手动多选。</p>
+        <div class="field-multiselect"><span class="ms-title">目标能量门（多选）</span><div class="ms-list">
+        ${doorOpts.map(([v, name]) => `<label class="ms-item"><input type="checkbox" data-event-i="${i}" data-ms="events.${i}.gateIds" value="${v}" ${arr.includes(v) ? 'checked' : ''}/>${name}</label>`).join('')}
       </div></div>`;
   }
 
+  if (type === 'playCinematic') {
+    const cinematics = state.level.cinematics || [];
+    const cineId = ev.cinematicId || '';
+    const focusTarget = ev.focusTarget || '';
+    return `
+        <label>运镜动画
+          <select data-event-i="${i}" data-event-field="cinematicId">
+            <option value="">（未选择）</option>
+            ${cinematics.map(c => `<option value="${c.id}" ${cineId === c.id ? 'selected' : ''}>${c.name || c.id}</option>`).join('')}
+          </select>
+        </label>
+        <label>焦点目标
+          <select data-event-i="${i}" data-event-field="focusTarget">
+            <option value="" ${focusTarget === '' ? 'selected' : ''}>无（用关键帧 pan）</option>
+            <option value="boss" ${focusTarget === 'boss' ? 'selected' : ''}>BOSS（锁定其死亡位置）</option>
+          </select>
+        </label>
+        <p class="hint">选「BOSS」后镜头中心在运镜期间动态锁定到 BOSS 死亡坐标（视口左上角 paX/paY 被换算为中心）。</p>`;
+  }
+
   return '<p class="hint">该事件无参数</p>';
+}
+
+// 自动生成：为触发器所在箱庭房间的每个通道补齐门实体，并把门 id 写入 ev.gateIds（供勾选列表回显）
+function autoGenerateGateEvent(entity, ev, dom) {
+  const layout = state.level.roomLayout;
+  if (!layout) {
+    setStatus(dom, '该关卡不是多箱庭布局，无法自动生成门', true);
+    return false;
+  }
+  const room = roomPassagesForPoint(layout, entity.x, entity.y);
+  if (!room?.passages?.length) {
+    setStatus(dom, '触发器不在任何箱庭房间内，请把触发器放入房间再自动生成门', true);
+    return false;
+  }
+  const gates = state.level.gates || (state.level.gates = []);
+  const ids = [];
+  for (const p of room.passages) {
+    let gate = gates.find(g => isGateOnPassage(g, p));
+    if (!gate) {
+      gate = {
+        id: `gate-${entity.id}-${p.edge}`,
+        x: p.cx, y: p.cy, w: p.w, h: 45, rotation: p.rotation,
+        label: 'Barrier Active', color1: GATE_OUTER_COLOR, color2: GATE_INNER_COLOR,
+        active: false, visible: true
+      };
+      gates.push(gate);
+    }
+    if (!ids.includes(gate.id)) ids.push(gate.id);
+  }
+  ev.gateIds = ids;
+  return true;
 }
 
 // ── 事件列表渲染与交互 ──
@@ -183,6 +241,8 @@ export function renderTriggerEvents(entity, options) {
       delete ev.target;
       delete ev.spawnPoint;
       delete ev.gateIds;
+      delete ev.cinematicId;
+      delete ev.focusTarget;
       if (ev.type === 'spawnEnemy') {
         ev.spawn = { stopOnExit: false, resumeOnReturn: true, waves: [] };
       } else if (ev.type === 'switchLevel') {
@@ -190,6 +250,24 @@ export function renderTriggerEvents(entity, options) {
         ev.spawnPoint = { x: 0, y: 0 };
       } else if (ev.type === 'spawnGate' || ev.type === 'removeGate') {
         ev.gateIds = [];
+        ev.auto = false;
+      } else if (ev.type === 'playCinematic') {
+        ev.cinematicId = '';
+        ev.focusTarget = '';
+      }
+      render();
+      saveQuiet();
+      return;
+    }
+    if (el.dataset.eventAuto != null) {
+      const i = Number(el.dataset.eventAuto);
+      const ev = entity.events[i];
+      if (!ev) return;
+      ev.auto = el.checked;
+      if (ev.auto && !autoGenerateGateEvent(entity, ev, dom)) {
+        ev.auto = false;
+        render();
+        return;
       }
       render();
       saveQuiet();

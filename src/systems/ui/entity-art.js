@@ -11,6 +11,8 @@ import { renderAsset } from '../art/asset-render.js';
 import { buildOrbitInstance } from '../art/weapon-runtime.js';
 import { getDesign, ensureDesign } from '../art/design-store.js';
 import { isKnownWeapon } from '../../player-data.js';
+import { BOSS25T5_ART } from '../combat/boss25t5.js';
+import { drawBoss25T5Body } from './boss25t5-art.js';
 
 // ── 颜色与旋转矩形工具 ──
 export function color(value) {
@@ -42,12 +44,12 @@ export function fillRotatedRoundedRect(g, cx, cy, w, h, r, rad) {
 }
 
 // ── 木箱 / 传送门 / 圆环 ──
-export function drawCrate(g, x, y) {
+export function drawCrate(g, x, y, alpha = 1) {
   const s = CRATE_SIZE / 2;
   const t = CRATE_BORDER_THICKNESS;
   const inset = CRATE_INSET;
   const k = 0.95;
-  g.lineStyle(t, 0xffffff, 1);
+  g.lineStyle(t, 0xffffff, alpha);
   g.lineBetween(x - s + inset, y - s, x + s - inset, y - s);
   g.lineBetween(x + s, y - s + inset, x + s, y + s - inset);
   g.lineBetween(x + s - inset, y + s, x - s + inset, y + s);
@@ -69,10 +71,10 @@ export function fillRotatedRect(g, cx, cy, w, h, rad) {
   g.fillPath();
 }
 
-export function drawPortalShape(g, x, y, w, h, rotation = 0) {
+export function drawPortalShape(g, x, y, w, h, rotation = 0, alpha = 1) {
   const rad = Phaser.Math.DegToRad(rotation);
   const bh = Math.max(6, h * 0.42);
-  g.fillStyle(PORTAL_COLOR, PORTAL_ALPHA);
+  g.fillStyle(PORTAL_COLOR, PORTAL_ALPHA * alpha);
   // 下层宽条
   fillRotatedRect(g, x, y + h * 0.06, w, bh, rad);
   // 上层窄条
@@ -338,10 +340,10 @@ export function drawDefaultPlayer(graphics, centerX, centerY) {
   graphics.fillCircle(centerX, centerY, 13);
 }
 
-export function drawDiamond(g, e, size, fill, angle) {
+export function drawDiamond(g, e, size, fill, angle, alpha = 1) {
   const longHalf = size / 2;
   const shortHalf = size * 0.36;
-  g.fillStyle(fill);
+  g.fillStyle(fill, alpha);
   g.beginPath();
   g.moveTo(e.x + Math.cos(angle) * longHalf, e.y + Math.sin(angle) * longHalf);
   g.lineTo(e.x + Math.cos(angle + Math.PI / 2) * shortHalf, e.y + Math.sin(angle + Math.PI / 2) * shortHalf);
@@ -351,11 +353,11 @@ export function drawDiamond(g, e, size, fill, angle) {
   g.fillPath();
 }
 
-export function drawSquareAt(g, cx, cy, size, angle, fill) {
+export function drawSquareAt(g, cx, cy, size, angle, fill, alpha = 1) {
   const half = size / 2;
   const r = half * Math.SQRT2;
   const a = angle + Math.PI / 4;
-  g.fillStyle(fill);
+  g.fillStyle(fill, alpha);
   g.beginPath();
   for (let i = 0; i < 4; i++) {
     const p = a + i * Math.PI / 2;
@@ -366,64 +368,90 @@ export function drawSquareAt(g, cx, cy, size, angle, fill) {
   g.fillPath();
 }
 
-export function drawSquares(g, e, size, fill, spin1, spin2) {
-  drawSquareAt(g, e.x, e.y, size, spin1, fill);
-  drawSquareAt(g, e.x, e.y, size, spin2, fill);
+export function drawSquares(g, e, size, fill, spin1, spin2, alpha = 1) {
+  drawSquareAt(g, e.x, e.y, size, spin1, fill, alpha);
+  drawSquareAt(g, e.x, e.y, size, spin2, fill, alpha);
 }
 
-export function drawX(g, e, size, lineWidth, fill) {
+export function drawX(g, e, size, lineWidth, fill, alpha = 1) {
   const d = size * 0.35;
-  g.lineStyle(lineWidth, fill, 1);
+  g.lineStyle(lineWidth, fill, alpha);
   g.lineBetween(e.x - d, e.y - d, e.x + d, e.y + d);
   g.lineBetween(e.x - d, e.y + d, e.x + d, e.y - d);
 }
 
-export function drawAdvanced2(g, e, dynamic, target) {
+export function drawAdvanced2(g, e, dynamic, target, alpha = 1) {
   const b = ENEMY_BEHAVIOR.advanced2;
   const bodyR = 18;
   const orbitR = dynamic ? (e.orbitRadius ?? b.orbitMin) : b.orbitMin;
   const ballAngle = dynamic ? (e.orbitAngle ?? 0) : -Math.PI / 2;
 
-  g.fillStyle(0xffffff);
+  g.fillStyle(0xffffff, alpha);
   g.fillCircle(e.x, e.y, bodyR);
 
-  g.lineStyle(2, 0xffffff, 1);
+  g.lineStyle(2, 0xffffff, alpha);
   g.strokeCircle(e.x, e.y, orbitR);
 
   const bx = e.x + Math.cos(ballAngle) * orbitR;
   const by = e.y + Math.sin(ballAngle) * orbitR;
-  g.fillStyle(e.aggressive ? ENEMY_RED : 0xffffff);
+  g.fillStyle(e.aggressive ? ENEMY_RED : 0xffffff, alpha);
   g.fillCircle(bx, by, 4);
 }
 
-export function drawEnemyShape(g, e, dynamic, target, t = 0) {
+export function drawEnemyShape(g, e, dynamic, target, t = 0, alpha = 1) {
+  // 母舰：长尖端始终朝向玩家；受击时把整个四边形（设计稿描边轮廓）填充为实白
+  if (e.type === 'mothership') {
+    const design = e?.art ? getDesign(e.art) : null;
+    if (design) {
+      // 敌→玩家方向 θ；设计长尖默认朝上(-π/2)，整体相位偏转 θ+π/2 使长尖指向玩家
+      const theta = target ? Phaser.Math.Angle.Between(e.x, e.y, target.x, target.y) : -Math.PI / 2;
+      const facing = theta + Math.PI / 2;
+      const rotDesign = {
+        ...design,
+        elements: design.elements.map(el => ({
+          ...el,
+          phase: (el.phase || 0) + facing,
+          fill: e.hitFlashT > 0 ? '#ffffff' : el.fill
+        }))
+      };
+      renderAsset(g, rotDesign, e.x, e.y, t, e.artScale || 1, undefined, alpha);
+      return;
+    }
+  }
+  // BOSS「原型机-2-5T5」：圆弧4 瞄玩家 / 圆弧5 自转 / 护盾分档透明度 / 受击闪白 / 技能3 合并紫弧。
+  // 动态覆写设计稿元素后交给 renderAsset（实现见 systems/ui/boss25t5-art.js）；
+  // 设计稿未加载（getDesign 为空）时返回 false → 落到下方默认敌人形状。
+  if (e.type === 'boss-2-5t5') {
+    const bossDesign = getDesign(e.art || BOSS25T5_ART);
+    if (drawBoss25T5Body(g, e, bossDesign, target, t, alpha)) return;
+  }
   // 应用画板美术方案：实体带 art 且设计稿已加载 → 用 renderAsset 覆盖默认绘制
   const design = e?.art ? getDesign(e.art) : null;
-  if (design) { renderAsset(g, design, e.x, e.y, t, e.artScale || 1); return; }
+  if (design) { renderAsset(g, design, e.x, e.y, t, e.artScale || 1, undefined, alpha); return; }
 
   const b = ENEMY_BEHAVIOR[e.type] || ENEMY_BEHAVIOR.basic1;
   const fill = e.red ? ENEMY_RED : 0xffffff;
   if (e.type === 'advanced2') {
-    drawAdvanced2(g, e, dynamic, target);
+    drawAdvanced2(g, e, dynamic, target, alpha);
     return;
   }
   if (e.type === 'basic2') {
     const spin1 = dynamic ? (e.spin1 || 0) : 0;
     const spin2 = dynamic ? (e.spin2 || 0) : 0;
-    drawSquares(g, e, b.size, fill, spin1, spin2);
+    drawSquares(g, e, b.size, fill, spin1, spin2, alpha);
   } else if (e.type === 'advanced1') {
-    drawX(g, e, b.size, b.lineWidth || 12, fill);
+    drawX(g, e, b.size, b.lineWidth || 12, fill, alpha);
   } else {
     const angle = dynamic && target
       ? Phaser.Math.Angle.Between(e.x, e.y, target.x, target.y)
       : -Math.PI / 2;
-    drawDiamond(g, e, b.size, fill, angle);
+    drawDiamond(g, e, b.size, fill, angle, alpha);
   }
 }
 
-export function drawDropDiamond(g, x, y, fillColor) {
+export function drawDropDiamond(g, x, y, fillColor, alpha = 1) {
   const r = 10;
-  g.fillStyle(fillColor);
+  g.fillStyle(fillColor, alpha);
   g.beginPath();
   g.moveTo(x, y - r);
   g.lineTo(x + r, y);
@@ -563,14 +591,14 @@ export function drawShieldArc(graphics, player) {
 }
 
 // 环绕六边形航迹：按每颗的历史位置画渐隐尾迹（最新段最亮，旧段渐隐）
-function drawOrbitTrail(g, trails, count, colorInt, fade) {
+function drawOrbitTrail(g, trails, count, colorInt, fade, width = 2) {
   if (!trails || !count) return;
   for (let i = 0; i < count; i++) {
     const tr = trails[i];
     if (!tr || tr.length < 2) continue;
     for (let j = 1; j < tr.length; j++) {
       const a = (j / (tr.length - 1)) * (fade ?? 0.9);
-      g.lineStyle(Math.max(0.5, 2), colorInt, Math.max(0.05, a));
+      g.lineStyle(Math.max(0.5, width), colorInt, Math.max(0.05, a));
       g.beginPath();
       g.moveTo(tr[j - 1].x, tr[j - 1].y);
       g.lineTo(tr[j].x, tr[j].y);
@@ -608,7 +636,7 @@ export function drawPlayer(graphics, player, t = 0) {
       const dyn = buildOrbitInstance(wArt, orbit, { radius: phase.radius, speedMult: phase.speedMult, sizeMult: phase.sizeMult });
       renderAsset(graphics, dyn, player.x, player.y, t, player.artScale || 1, motion);
       if (phase.attacking && phase.hexTrails) {
-        drawOrbitTrail(graphics, phase.hexTrails, orbit.hexCount, color(orbit.trailColor || '#ffa914'), orbit.trailFade);
+        drawOrbitTrail(graphics, phase.hexTrails, orbit.hexCount, color(orbit.trailColor || '#ffa914'), orbit.trailFade, orbit.trailWidth);
       }
     } else {
       renderAsset(graphics, wArt, player.x, player.y, t, player.artScale || 1, motion);

@@ -6,12 +6,13 @@
 // 分类：引擎编辑器需求
 // 导出：showArtboard, initArtboard, getArtboardDesign
 // ============================================================
-import { listAssets, loadAsset, saveAsset, listOutlines, loadOutline, deleteOutline } from '../api.js';
+import { listAssets, loadAsset, saveAsset, listOutlines, loadOutline, deleteOutline, listPixels, loadPixel, deletePixel } from '../api.js';
 import { setStatus } from '../ui.js';
 import { makeG, normalizeDesign, renderAsset, elementCenter, normalizeElement, normalizeOutline } from '../systems/art/asset-render.js';
 import { registerDesign, refreshArtChoices } from '../systems/art/design-store.js';
 import { buildAllDefaultArt } from '../systems/art/default-art.js';
 import { openDrawBoard } from './draw-board.js';
+import { openPixelBoard } from './pixel-board.js';
 
 function numberField(label, key, value, step = 1) {
   return `<label>${label}<input data-key="${key}" type="number" step="${step}" value="${value ?? ''}"></label>`;
@@ -37,11 +38,12 @@ function dirField(el) {
 
 function elementFields(el) {
   const shapeField = selectField('形状', 'shape', el.shape, [
-    { value: 'polygon', label: '多边形' }, { value: 'arc', label: '圆弧' }, { value: 'stroke', label: '轮廓' }
+    { value: 'polygon', label: '多边形' }, { value: 'arc', label: '圆弧' }, { value: 'stroke', label: '轮廓' }, { value: 'pixel', label: '像素' }
   ]);
   if (el.shape === 'stroke') {
     return [
       shapeField,
+      numberField('数量(组)', 'count', el.count, 1),
       colorField('颜色', 'color', el.color),
       numberField('粗细', 'lineWidth', el.lineWidth, 1),
       numberField('旋转角速度', 'rotSpeed', el.rotSpeed, 0.05),
@@ -57,6 +59,8 @@ function elementFields(el) {
   if (el.shape === 'arc') {
     const fields = [
       shapeField,
+      numberField('数量(组)', 'count', el.count, 1),
+      numberField('轨道半径', 'orbitRadius', el.orbitRadius, 5),
       numberField('半径', 'radius', el.radius, 5),
       numberField('粗细', 'lineWidth', el.lineWidth, 1),
       colorField('颜色', 'color', el.color),
@@ -66,7 +70,7 @@ function elementFields(el) {
       numberField('弧形起始°', 'arcStart', el.arcStart, 5),
       numberField('弧形结束°', 'arcEnd', el.arcEnd, 5),
       selectField('显示形式', 'pattern', el.pattern || 'plain', [
-        { value: 'plain', label: '普通圆弧' }, { value: 'clock', label: '钟表表盘' }
+        { value: 'plain', label: '普通圆弧' }, { value: 'clock', label: '钟表表盘' }, { value: 'hands', label: '长短针' }
       ])
     ];
     if (el.pattern === 'clock') {
@@ -80,7 +84,36 @@ function elementFields(el) {
         ])
       );
     }
+    if (el.pattern === 'hands') {
+      fields.push(
+        numberField('长针轨道半径', 'handLongRadius', el.handLongRadius, 5),
+        numberField('短针轨道半径', 'handShortRadius', el.handShortRadius, 5),
+        colorField('长针颜色', 'handLongColor', el.handLongColor || el.color),
+        colorField('短针颜色', 'handShortColor', el.handShortColor || el.color),
+        numberField('长针长度', 'tickLongLen', el.tickLongLen, 1),
+        numberField('短针长度', 'tickShortLen', el.tickShortLen, 1),
+        numberField('刻度密度(总针数)', 'tickDensity', el.tickDensity, 1),
+        numberField('长短针比例(每1长配N短)', 'tickRatio', el.tickRatio, 1),
+        selectField('刻度方向', 'tickDir', el.tickDir || 'in', [
+          { value: 'in', label: '朝圆心' }, { value: 'out', label: '向外' }, { value: 'both', label: '双向' }
+        ])
+      );
+    }
     return fields;
+  }
+  if (el.shape === 'pixel') {
+    return [
+      shapeField,
+      numberField('列数', 'cols', el.cols, 1),
+      numberField('行数', 'rows', el.rows, 1),
+      numberField('格宽', 'cellSize', el.cellSize, 1),
+      colorField('网格颜色', 'gridColor', el.gridColor),
+      numberField('旋转角速度', 'rotSpeed', el.rotSpeed, 0.05),
+      dirField(el),
+      numberField('初始相位°', 'phaseDeg', Math.round((el.phase * 180 / Math.PI) * 100) / 100, 5),
+      numberField('轨道半径', 'orbitRadius', el.orbitRadius, 5),
+      `<p class="hint">像素：${(el.cells || []).length} 格（点「像素画板」在独立弹层里画）</p>`
+    ];
   }
   return [
     shapeField,
@@ -98,7 +131,7 @@ function elementFields(el) {
 }
 
 function elementRow(el, index) {
-  const label = el.shape === 'arc' ? '圆弧' : el.shape === 'stroke' ? '轮廓' : '多边形';
+  const label = el.shape === 'arc' ? '圆弧' : el.shape === 'stroke' ? '轮廓' : el.shape === 'pixel' ? '像素' : '多边形';
   const fillOn = el.shape === 'stroke' ? ''
     : `<label class="inline"><input data-key="fillOn" type="checkbox" ${el.fill ? 'checked' : ''}> 填充</label>`;
   return `<div class="art-element" data-index="${index}">
@@ -131,6 +164,8 @@ function canvasPoint(canvas, e) {
 }
 function pivot(canvas) { return { x: canvas.width / 2, y: canvas.height / 2 }; }
 
+function clampCellSize(v) { return Math.max(1, Math.min(2000, v)); }
+
 function rimPoint(canvas, el, index, center) {
   // polygon：沿第 i 个副本当前公转角方向的半径边缘，作为缩放手柄
   const r = Math.max(1, (center.el || el).radius * center.worldScale);
@@ -154,7 +189,7 @@ function hitElement(canvas, px, py) {
   const p = pivot(canvas);
   let best = null;
   design.elements.forEach((el, ei) => {
-    const count = el.shape === 'arc' ? 1 : el.count;
+    const count = el.count;
     for (let i = 0; i < count; i++) {
       const c = elementCenter(design, el, i, p.x, p.y, simT, viewScale);
       const d = Math.hypot(px - c.x, py - c.y);
@@ -190,8 +225,8 @@ function draw(canvas, dom) {
   // 选中元素：轨道参考环 + 选中高亮 + 缩放手柄
   if (selectedIndex >= 0 && design.elements[selectedIndex]) {
     const el = design.elements[selectedIndex];
-    const count = el.shape === 'arc' ? 1 : el.count;
-    if (el.orbitRadius > 0 && el.shape !== 'arc') {
+    const count = el.count;
+    if (el.orbitRadius > 0) {
       ctx.strokeStyle = 'rgba(255,224,131,0.5)';
       ctx.setLineDash([6, 6]);
       ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(0.1, el.orbitRadius * viewScale * design.scale), 0, Math.PI * 2); ctx.stroke();
@@ -214,6 +249,21 @@ function draw(canvas, dom) {
         ctx.strokeStyle = '#ffe083';
         ctx.lineWidth = 2;
         ctx.beginPath(); ctx.arc(c.x + Math.cos(c.angle) * (r + 24), c.y + Math.sin(c.angle) * (r + 24), 5, 0, Math.PI * 2); ctx.stroke();
+      } else if (el.shape === 'pixel') {
+        // pixel：网格居中于 c；选中圈 = max(hw,hh) 虚线圈，rim 缩放手柄在对角距 maxR 处，外延 24px 旋转手柄
+        const hw = ((el.cols || 1) * (el.cellSize || 1) / 2) * c.worldScale;
+        const hh = ((el.rows || 1) * (el.cellSize || 1) / 2) * c.worldScale;
+        const selR = Math.max(hw, hh);
+        const maxR = Math.hypot(hw, hh);
+        ctx.strokeStyle = 'rgba(255,224,131,0.5)';
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath(); ctx.arc(c.x, c.y, Math.max(0.1, selR), 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#ffe083';
+        ctx.beginPath(); ctx.arc(c.x + Math.cos(c.angle) * maxR, c.y + Math.sin(c.angle) * maxR, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#ffe083';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(c.x + Math.cos(c.angle) * (maxR + 24), c.y + Math.sin(c.angle) * (maxR + 24), 5, 0, Math.PI * 2); ctx.stroke();
       } else {
         ctx.strokeStyle = 'rgba(255,224,131,1)';
         ctx.beginPath(); ctx.arc(c.x, c.y, Math.max(0.1, el.radius * c.worldScale), 0, Math.PI * 2); ctx.stroke();
@@ -238,7 +288,7 @@ function startLoop(canvas) {
 
 function stopLoop() { if (raf) { cancelAnimationFrame(raf); raf = null; } }
 
-function shapeLabel(s) { return s === 'arc' ? '圆弧' : s === 'stroke' ? '轮廓' : '多边形'; }
+function shapeLabel(s) { return s === 'arc' ? '圆弧' : s === 'stroke' ? '轮廓' : s === 'pixel' ? '像素' : '多边形'; }
 
 function populateCopySelect(dom) {
   if (!dom.artCopySelect) return;
@@ -335,6 +385,19 @@ function refreshOutlineSelect(dom, keepId) {
   }).catch(() => { dom.artOutlineSelect.innerHTML = '<option value="">（读取失败）</option>'; });
 }
 
+// 像素库下拉（/api/pixels）；keepId 用于刷新后保留选中项
+function refreshPixelSelect(dom, keepId) {
+  if (!dom.artPixelSelect) return;
+  listPixels().then(res => {
+    const valid = ((res && res.pixels) || [])
+      .map(a => typeof a === 'string' ? { id: a, name: a } : a)
+      .filter(a => a && a.id && a.id !== 'undefined');
+    dom.artPixelSelect.innerHTML = '<option value="">选择已保存像素…</option>' +
+      valid.map(a => `<option value="${a.id}">${a.name || a.id}</option>`).join('');
+    if (keepId && valid.some(a => a.id === keepId)) dom.artPixelSelect.value = keepId;
+  }).catch(() => { dom.artPixelSelect.innerHTML = '<option value="">（读取失败）</option>'; });
+}
+
 function selectDesign(dom, assetId) {
   if (!assetId || assetId === 'undefined' || /^\s*$/.test(assetId)) {
     design = emptyDesign(); selectedIndex = -1; currentDesignId = null;
@@ -367,6 +430,7 @@ export function showArtboard(show, dom, state) {
     syncBgColor(dom);
     refreshArtChoices();
     refreshOutlineSelect(dom);
+    refreshPixelSelect(dom);
     startLoop(dom.artPreviewCanvas);
   } else {
     stopLoop();
@@ -393,6 +457,11 @@ export function initArtboard(dom, state) {
     getSelectedIndex: () => selectedIndex,
     onDone: idx => { if (idx != null) selectedIndex = idx; renderElementList(dom); },
     onSaved: () => refreshOutlineSelect(dom)
+  });
+  dom.artPixel.onclick = () => openPixelBoard(dom, design, {
+    getSelectedIndex: () => selectedIndex,
+    onDone: idx => { if (idx != null) selectedIndex = idx; renderElementList(dom); },
+    onSaved: () => refreshPixelSelect(dom)
   });
   dom.artCopyOther.onclick = () => {
     const src = Number(dom.artCopySelect.value);
@@ -428,6 +497,26 @@ export function initArtboard(dom, state) {
       setStatus(dom, `已删除轮廓：${id}`);
       refreshOutlineSelect(dom);
     } catch (e) { setStatus(dom, '轮廓删除失败', true); }
+  };
+  dom.artAddPixel.onclick = async () => {
+    const id = dom.artPixelSelect.value;
+    if (!id) { setStatus(dom, '请先在下拉中选择像素设计稿', true); return; }
+    try {
+      const p = await loadPixel(id);
+      design.elements.push(normalizeElement({ shape: 'pixel', cols: p.cols, rows: p.rows, cellSize: p.cellSize, gridColor: p.gridColor || null, cells: p.cells, rotSpeed: p.rotSpeed || 0, phase: p.phase || 0, dir: p.dir ?? 1, orbitRadius: p.orbitRadius || 0 }));
+      selectedIndex = design.elements.length - 1;
+      renderElementList(dom);
+      setStatus(dom, `已从像素库添加：${p.name}`);
+    } catch (e) { setStatus(dom, '像素读取失败', true); }
+  };
+  dom.artDeletePixel.onclick = async () => {
+    const id = dom.artPixelSelect.value;
+    if (!id) { setStatus(dom, '请先在下拉中选择要删除的像素', true); return; }
+    try {
+      await deletePixel(id);
+      setStatus(dom, `已删除像素：${id}`);
+      refreshPixelSelect(dom);
+    } catch (e) { setStatus(dom, '像素删除失败', true); }
   };
   dom.artAssetSelect.onchange = () => selectDesign(dom, dom.artAssetSelect.value);
   dom.artSave.onclick = async () => {
@@ -478,6 +567,24 @@ export function initArtboard(dom, state) {
           canvas.setPointerCapture(e.pointerId);
           return;
         }
+      } else if (el.shape === 'pixel') {
+        // pixel：旋转手柄（≤12）→ 缩放手柄（≤14）；缩放围绕网格中心（单元格坐标系原点 = 元素中心 c）
+        const hw = ((el.cols || 1) * (el.cellSize || 1) / 2) * c.worldScale;
+        const hh = ((el.rows || 1) * (el.cellSize || 1) / 2) * c.worldScale;
+        const maxR = Math.hypot(hw, hh);
+        const rx = Math.cos(c.angle), ry = Math.sin(c.angle);
+        const rot = { x: c.x + rx * (maxR + 24), y: c.y + ry * (maxR + 24) };
+        const rim = { x: c.x + rx * maxR, y: c.y + ry * maxR };
+        if (Math.hypot(pt.x - rot.x, pt.y - rot.y) <= 12) {
+          drag = { mode: 'pixel-rotate', index: selectedIndex };
+          canvas.setPointerCapture(e.pointerId);
+          return;
+        }
+        if (Math.hypot(pt.x - rim.x, pt.y - rim.y) <= 14) {
+          drag = { mode: 'pixel-scale', index: selectedIndex, startDist: Math.hypot(pt.x - c.x, pt.y - c.y), startCellSize: el.cellSize || 8 };
+          canvas.setPointerCapture(e.pointerId);
+          return;
+        }
       }
     }
 
@@ -525,6 +632,17 @@ export function initArtboard(dom, state) {
       // 手柄方位角 → 5° 吸附 → 反推 phase（ga = phase + rotSpeed*t*dir，扣除当前 simT 转角）
       const c = elementCenter(design, el, 0, p.x, p.y, simT, viewScale);
       const ga = Math.round(Math.atan2(pt.y - c.y, pt.x - c.x) * 180 / Math.PI / 5) * 5 * Math.PI / 180;
+      design.elements[drag.index].phase = ga - simT * el.rotSpeed * (el.dir || 1);
+    } else if (drag.mode === 'pixel-scale' && el.shape === 'pixel') {
+      // 围绕网格几何中心等比缩放 cellSize（格索引保持不变 → 像素始终对齐网格，无锯齿错位）
+      const c = elementCenter(design, el, 0, p.x, p.y, simT, viewScale);
+      const d = Math.hypot(pt.x - c.x, pt.y - c.y);
+      const k = Math.min(50, Math.max(0.05, d / Math.max(drag.startDist, 1)));
+      design.elements[drag.index].cellSize = clampCellSize((drag.startCellSize || 8) * k);
+    } else if (drag.mode === 'pixel-rotate' && el.shape === 'pixel') {
+      // 自由角度旋转（不做 5° 吸附）：手柄方位角反推 phase（扣除当前 simT 转角）
+      const c = elementCenter(design, el, 0, p.x, p.y, simT, viewScale);
+      const ga = Math.atan2(pt.y - c.y, pt.x - c.x);
       design.elements[drag.index].phase = ga - simT * el.rotSpeed * (el.dir || 1);
     }
     renderElementList(dom);

@@ -27,16 +27,17 @@ description: 改武器手感与弹道、敌人 AI 行为、伤害与命中判定
 
 | 文件 | 职责 | 关键导出 | 行数 |
 |---|---|---|---|
-| `src/systems/combat/geometry.js` | 纯几何：网格吸附、墙体命中、圆体推出、射线求交、子弹反射 | `snap` `toCell` `wallRotationRad` `wallCorners` `pointInWall` `hitWall` `resolveCircleAgainstWalls` `hitTrigger` `rayRectIntersect` `rayRotatedRectDistance` `rayWallDistance` `rayCircleDistance` `rayToBounds` `reflectBulletAgainstWall` `pointSegmentDistance` | 222 |
-| `src/systems/combat/weapons.js` | 武器定义表 + 激光生成 | `WEAPONS` `spawnLaser` | 229 |
-| `src/systems/combat/enemy-ai.js` | 敌人行为机、寻路、开火、死亡结算 | `EnemyAiMixin`（13 方法） | 363 |
-| `src/systems/combat/player-combat.js` | 玩家受伤、护盾格挡、武器切换、受击闪屏 | `PlayerCombatMixin`（6 方法） | 112 |
+| `src/systems/combat/geometry.js` | 纯几何：网格吸附、墙体命中、圆体推出、射线求交、子弹反射 | `snap` `toCell` `wallRotationRad` `wallCorners` `pointInWall` `hitWall` `resolveCircleAgainstWalls` `hitTrigger` `rayRectIntersect` `rayRotatedRectDistance` `rayWallDistance` `rayCircleDistance` `rayToBounds` `reflectBulletAgainstWall` `pointSegmentDistance` | 288 |
+| `src/systems/combat/weapons.js` | 武器定义表 + 激光生成 + 被拦截弹（`b.blockedBoss`）强制红 + BOSS 施力弹（`b.forceTrail`）白弹体 + 彩色拖尾（内部 `drawForceTrailBullet`；颜色由 `forceTrail.color` 决定 —— 技能1 蓝 / 技能2 红 / 技能5 蓝） | `WEAPONS` `spawnLaser` | 160 |
+| `src/systems/combat/enemy-ai.js` | 敌人行为机、寻路、开火、死亡结算（含母舰/原型机-2-5T5 运镜与拦截弹/漩涡清理） | `EnemyAiMixin` | 484 |
+| `src/systems/combat/boss25t5.js` | 原型机-2-5T5 专属：数据契约（默认值/归一化）+ 行为状态机 + 技能区域生命周期（**扇形方向释放时固定、可被走出躲避** + 命中像素级容差）+ 阻挡护盾拦截 + 技能5 场景级漩涡（捕获环绕 / 释放停驻）+ 已转化子弹对区域施力（**一次性固定速度+固定距离**；**不 import Phaser，可被 state.js 安全引用**） | `BOSS25T5_ART` `BOSS25T5_DESIGN` `BOSS25T5_DEFAULTS` `boss25t5Defaults` `normalizeBoss25T5Config` `Boss25T5Mixin`（**27 方法（实测）**：`stepBoss25T5` + 26 个 `boss25t5*`；本轮重写 `boss25t5ZoneBulletForce`（改为一次性固定速度+固定距离）；`boss25t5ZonesTick` 的扇形方向改为释放瞬间写死、**不再跟随玩家**，仅保留像素级命中容差） | 1383 |
+| `src/systems/combat/player-combat.js` | 玩家受伤、护盾格挡、武器切换、受击闪屏 | `PlayerCombatMixin`（6 方法） | 113 |
 | `src/systems/combat/destructibles.js` | 木箱碎片、油桶爆炸 | `DestructiblesMixin`（2 方法） | 77 |
-| `src/systems/combat/pet-runtime.js` | 玩家宠物：环绕玩家、索敌开火、受击结算 | `PetMixin`（5 方法）+ 依赖 `pet-store.getPetDef` | 163 |
-| `src/systems/economy/damage.js` | 伤害公式与改件生效集合（归数值_经济，但战斗必经） | `playerDamage` `playerIncomingDamage` `activeMods` | 50 |
-| `src/systems/constants.js` | 战斗相关常量（护盾、命中特效、敌人行为参数） | `SHIELD` `SHIELD_MAX` `HIT_FX_TTL` `HIT_FX_RADIUS` `BULLET_DAMAGE` `ENEMY_BEHAVIOR` `BARREL_DAMAGE` 等 | 84 |
+| `src/systems/combat/pet-runtime.js` | 玩家宠物：环绕玩家、索敌开火、受击结算 | `PetMixin`（5 方法）+ 依赖 `pet-store.getPetDef` | 144 |
+| `src/systems/economy/damage.js` | 伤害公式与改件生效集合（归数值_经济，但战斗必经） | `playerDamage` `playerIncomingDamage` `activeMods` | 56 |
+| `src/systems/constants.js` | 战斗相关常量（护盾、命中特效、敌人行为参数、`ENEMY_BEHAVIOR['boss-2-5t5']`） | `SHIELD` `SHIELD_MAX` `HIT_FX_TTL` `HIT_FX_RADIUS` `BULLET_DAMAGE` `ENEMY_BEHAVIOR` `BARREL_DAMAGE` 等 | 102 |
 | `src/pathfinding.js` | 网格构建与 A* | `buildGrid` `findPath` `nearestWalkable` | 105 |
-| `src/game-scene.js` | `update` 主循环：开火节流、子弹推进、命中判定、敌人更新的调度点 | `createGameScene` | 742 |
+| `src/game-scene.js` | `update` 主循环：开火节流、子弹推进、命中判定、敌人更新与 `boss25t5ZonesTick`/`boss25t5VorticesTick` 的调度点、构造函数注入 `this.playerDamage`；子弹 filter 的新顺序见 §6.2 | `createGameScene` | 900 |
 
 ### 改 X 该动哪里
 
@@ -147,6 +148,55 @@ description: 改武器手感与弹道、敌人 AI 行为、伤害与命中判定
 
 **宠物定义 & 获取**：数值存 `data/pets/*.json`（含 `price` 金币与 `unlockLevel` 购买资格等级），`pet-design.js:normalizePetDesign` 归一化、`pet-store.js`(`getPetDef/listPetDefs/ensurePetDef/registerBuiltinPets`) 懒加载（启动 `registerBuiltinPets` 兜底内置，`loadPetDefs` 拉盘覆盖），`pet-board.js` 是可视化编辑器。商店 `pet` 页签由 `screens.js` 遍历 `listPetDefs()` 出卡，`buyPet` 扣款写入 `source.items.uniques`（不可堆叠），再从背包拖入装备槽（`equipment.pets`，上限 2）。玩家数据面板「宠物」区可勾「拥有/装备」用于测试（`ui.js:renderPreviewPets` + `player-panels.js:bindPetPanel`）。
 
+### 3.6 `boss-2-5t5`（原型机-2-5T5）运行时字段与 `e.zones`
+
+由 `enemy-ai.js:initEnemy` 的 `e.type === 'boss-2-5t5'` 分支初始化，配置来自 `e.bossCfg = normalizeBoss25T5Config(e.boss)`（82 键补全）。字段定义与全部 `??=` 兜底在 `combat/boss25t5.js`。
+
+> **子弹侧标记**（`b.blockedBy` / `b.thawed` / `b.forceTrail` / `b.force` / `b.forceSrc` / `b.forceStepT` / `b.captured` / `b.captureAngle`）见 §3.7 —— 它们是「已转化子弹」的契约，与 BOSS 运行时字段成对出现。
+
+| 字段 | 含义 |
+|---|---|
+| `bossActive` | 待机/激活。关卡的 `bossBattle` 触发器置 true（`triggers.js:startBossBattle`）；false 时无敌、不动、不放技能、无血条（`stepBoss25T5` 顶部早退） |
+| `bossCfg` | 82 键配置对象（`BOSS25T5_DEFAULTS` 的补全结果，见 §5） |
+| `shieldAlpha` / `shieldDown` / `shieldDownT` | 护盾透明度（渐显渐隐） / 是否消失中 / 消失计时 |
+| `state` | 主状态机：`'move'｜'moveEnd'｜'skill'` |
+| `moveKind` / `moveT` / `moveDur` / `moveDir` | 移动方式（①接近②快环绕③慢环绕④远离，4 选 1）与计时/方向 |
+| `arc4Phase` / `arc5Phase` | 圆弧4/5 各自自转角（rad）。等待期（`moveWait>0`）以 `arcAlignDeg` 转向本次技能目标角；其余时间按 `arc4SpinDeg` / `arc5SpinDeg` 自由自转（`stepBoss25T5` 用 `rotateToward`） |
+| `arc4OffsetDeg` / `arc5OffsetDeg` | 本次预选技能对应的两弧目标夹角（deg，带符号；`arcTargetsFor(cfg, pick)` 产出：参战弧 0、非参战弧停靠 `parkMinDeg..180°`，技能3 两弧皆 0） |
+| `skillPick` | `boss25t5BeginMove` 按权重 `pickWeighted` 预选的技能 1/2/3 |
+| `moveWait` / `moveDone` | 移动前/后等待期剩余 ms（>0 时不位移、护盾保持存在） / 位移是否走完 |
+| `skillKind` / `skillPhase` / `skillT` / `skill4Cooldown` | 技能种类 / 相位 / 计时 / 技能4 触发冷却 |
+| `zones` / `activeZoneId` | 技能区域数组 / 当前主导区域 id |
+| `skill4Fx` | 技能4 灰色弧特效（一次性） |
+| `hitFlashT` | 受击闪白剩余毫秒（`stepBoss25T5` 顶部递减） |
+
+`e.zones[]` 元素契约（渲染端 `ui/boss25t5-art.js` 消费）：
+`{ id, kind:'s1'|'s2'|'s3', x, y, a0, a1, rMin, rMax, phase:'extend'|'pause'|'anim'|'keep'|'fade', t, arcR, prevArcR, alpha, purpleAlpha, visMin, visMax, purplePolys }`
+- `x/y` = **释放那一刻的 BOSS 世界坐标（世界锚定）**，之后所有几何判定与渲染都以它作扇形顶点，不再用实时 `e.x/e.y`（见 §7 坑）。
+- `a0/a1` = 扇形起/止方位角（rad，可能跨 ±π，`a1-a0` 取最短正张角）—— **释放瞬间写死、全程不变（不跟随玩家 → 玩家可横向走出扇区躲避）**。角度命中容差改按像素级 `zoneHitPadPx`（默认 30px，仅 s1/s2，见 §6.2）。
+- `phase` 生命周期：`extend`（延长线）→`pause`→`anim`（收紧/扩张弧）→`keep`→`fade`（保留 10s 后变淡消失）。
+- `purplePolys`：`null`（s3 整区紫）｜`[]`（当前无重叠）｜`Array<Array<{x,y}>>`（s2 与各存活 s1 蓝区的楔形交集多边形，≥3 点）。
+- `visMin` / `visMax`：渲染端实际绘制的径向范围（世界单位）。`anim`/`keep` 恒 `rMin..rMax`；`fade` 阶段**方向性收缩**——s1 的 `visMax` 由 `rMax` 收到 `rMin`（**从外向内**消失）、s2/s3 的 `visMin` 由 `rMin` 收到 `rMax`（**从内向外**消失）；`z.alpha` 恒为 1（**不再整体淡出**）。两侧延长线、s1/s2/s3 同心弧、s3 扇环填充/描边、黑遮罩都按它裁剪（渲染端 `boss25t5-art.js:drawZone`）。
+- `purpleAlpha`：紫色**多边形**（`purplePolys`，技能2 的重叠区）无法径向裁剪 → 用它在 fade 阶段淡出；技能3 的整区扇环则同时享受方向性裁剪 + `purpleAlpha`。
+
+### 3.7 `boss-2-5t5` 技能5「蓝色漩涡」（场景级实体，不挂在 BOSS 上）
+
+| 结构 | 契约 | 说明 |
+|---|---|---|
+| `scene.boss25t5Vortices` | `Array<{ id, x, y, r, hp, maxHp, t, hitT }>` | `game-scene.js:58` 初始化。`r`=`s5Radius`、`hp/maxHp` 初值 `s5Hp`、`t`=存活毫秒（渲染相位）、`hitT`=玩家下次受伤倒计时。**只有玩家子弹能扣 HP**（`b.petDamage` 优先，否则 `this.playerDamage`）；已转化子弹（`b.blockedBy != null`）落进来只消灭该弹、**不扣 `v.hp`**、不计分 |
+| 生命周期 | **不自动消散** | ① `hp<=0` 被击杀（`boss25t5VortexAbsorb` 里即时 `splice`，**无** `dying` 过渡字段，渲染端靠模块内自维护的 250ms 淡出环）→ 同时调 `boss25t5ReleaseCaptured(v.id)` 释放它捕获的全部弹；② `boss25t5ClearVortices()`（BOSS 死亡由 `enemy-ai.js:defeatEnemy` 调）；技能结束后仍留场 |
+| `player.boss25t5Pull` | `{ vx, vy }`（px/s） | `boss25t5VorticesTick` 每帧先清零再按存活漩涡写入，吸力 `a = s5PullMin + (s5PullMax - s5PullMin) × clamp(1 - d/s5PullRadius, 0, 1)`（**进入吸力半径即受 `s5PullMin`**、越靠近涡心越强、涡心处 `s5PullMax`，半径外 0）；多漩涡向量累加后按 `Math.max(1, s5PullMax)` 钳速度上限；`game-scene.js:236-237` 在玩家移动处按与 `boss25t5Slow` 同写法叠加（**1 帧延迟**，可接受）；无漩涡时恒 `{0,0}` |
+| `b.blockedBy` | 玩家子弹上的标记（BOSS id） | `boss25t5TryBlock` 拦截时写 `e.id`。**解冻 / 捕获 / 释放后一律保留** —— 它同时是「已转化子弹」的判定标记（`b.blockedBy != null`）：`boss25t5CfgFromBullet` 靠它找 BOSS、`enemy-ai.js:defeatEnemy` 靠它清残留弹（`x.blockedBy === e.id`）、`game-scene` 靠它跳过敌人伤害。清掉 → 三处同时失效（见 §7 坑 36） |
+| `b.thawed` | 已解冻 | `boss25t5VortexPull` / `boss25t5ZoneBulletForce` 解冻时置 true；`boss25t5TryBlock` 首行 `if (b.thawed) return false;` → 不再被护盾反复拦（解冻弹起点正落在护盾面上，否则会在「冻结↔解冻」间横跳，见 §7 坑 32） |
+| `b.forceTrail` | `{ width, length, color }` | 施力弹渲染契约（白色弹体 + 彩色拖尾）。颜色由写入方决定：技能1 `s1BulletTrail*`（蓝 #4fc3f7）/ 技能2 `s2BulletTrail*`（红 #ff3b3b）/ 技能5 `s5BulletTrail*`（蓝 #4fc3f7）。渲染端 `weapons.js:drawForceTrailBullet` 与 `weapon-runtime.js:drawForceTrailBullet` |
+| `b.force` | `{ mode:'drag'|'push', ownerId, speed, remain } \| null` | 技能1/2 对已转化子弹施力的**一次性任务**（`remain` = 剩余距离 px）。`drag` 朝 owner（技能1）、`push` 背离 owner（技能2）；每帧按 `speed` 沿方向写 `vx/vy` 并 `remain -= speed*sec`，**不再无限加速**。停下条件：owner 不存在 / `remain<=stepLen`（距离用完）/ `drag` 且到 owner 距离 ≤ `innerRadius×artScale`（拖到圆弧1 内缘）→ `vx=vy=0; force=null`。参数：**速度复用玩家拖拽值**（s1 `s1DragSpeed`、s2 `s2PushSpeed`），**距离 = 玩家距离 × 2**（模块常量 `BULLET_FORCE_DIST_MULT`，即 s1 `s1DragDist`×2、s2 `s2PushDist`×2）。见 `boss25t5.js:1233 boss25t5ZoneBulletForce` |
+| `b.forceSrc` | 区域 id | 已对该弹授予过施力的**区域 id**（写 `zone.id`）。同一区域只授予一次 —— 防止子弹停下后（`remain` 用尽）又被反复重新施加。见 `boss25t5.js:1288` |
+| `b.forceStepT` | 帧令牌（`this.time.now`） | 本帧是否已推进过 `b.force` 的距离预算（同一帧多个调用点只扣一次 `remain`；`undefined` 时不去重）。见 `boss25t5.js:1240-1241` |
+| `b.captured` / `b.captureAngle` | 被哪个漩涡捕获（漩涡 id）/ 环上角度（rad） | `boss25t5VortexCapture` 写 `captured=v.id` + 黄金角散布的 `captureAngle`，并清 `b.force=null`（丢弃未用完的施力任务）。捕获后该弹**不前进、不碰撞、不施力**，位置每帧由 `boss25t5VorticesTick` 驱动（贴在 `v.r * s5CaptureOrbitRatio`（默认 0.25）内层环，按 `s5CaptureSpinDeg`（默认 90°/s）公转，写 `x/y`、切线 `dirX/dirY`、`vx=vy=0`）。捕获数 ≥ `s5CaptureMax`（默认 16）→ 不再捕获，留给 `boss25t5VortexAbsorb` 直接消灭。消散（被击杀 / BOSS 死亡）→ `boss25t5ReleaseCaptured` / `boss25t5ClearVortices` 置 `captured=null` + 速度归零 + **清 `b.force`** = **静止停驻原处**（不带着剩余距离继续跑；仍是威胁、仍可被护盾消除） |
+
+- 渲染：`ui/boss25t5-art.js:drawBoss25T5Vortices`（6 槽位蓝色同心弧「旋转 + 向心收缩 + 末段渐隐 + 原位重生」+ 中心白色刻度星环 + 上方细血条 + 击杀淡出环）；`world-render.js:582` 调它，`world-render.js:585` 调 `drawBoss25T5Zones` → 图层「漩涡 < 技能区域/黑遮罩 < 玩家」。
+- 施力弹拖尾：`weapons.js:drawForceTrailBullet`（`radial.drawBullet` / `basic.drawBullet` 在 `b.blockedBoss` 分支**之后**接）与 `weapon-runtime.js:drawForceTrailBullet`（`drawBullet` 里 `b.forceTrail` 优先，跳过普通拖尾避免叠白线）——沿航向反向画彩色拖尾，长度/宽度只取 `b.forceTrail`、**不看 `b.dist`**；速度退化时沿用 `b.dirX/dirY`，仍无方向则只画白点。
+
 ## 4. 关键流程
 
 ### 4.1 玩家开火 → 命中
@@ -160,12 +210,21 @@ game-scene.js:update
   ├ 扣弹药 this.player.ammo[wt]-- → tryRefillWeapon()  economy/drops.js
   └ this.fireClock = fireInterval / attackSpeed（spin 改件再 ×2/3）
 
-每帧推进：this.bullets.filter(...)                    game-scene.js:321
-  ├ 位移 + b.dist 累加
+每帧推进：this.bullets.filter(...)                    game-scene.js:472
+  ├ ① b.captured 早退（捕获环绕：位置由 boss25t5VorticesTick 驱动）        :474
+  ├ ② b.blockedBoss 早退（靠 boss25t5VortexPull/ZoneBulletForce 够得着则解冻）  :479
+  ├ ③ b.wallFade 早退（停驻原地按 fadeDuration 渐隐）                     :484
+  ├ ④ 位移 + b.dist 累加                                                :488
+  ├ ⑤ 技能5 漩涡吸力 / 技能1·2 区域施力 → 捕获环绕 / 扣漩涡 HP          :497-500
+  ├ ⑥ boss25t5TryBlock 护盾拦截（停驻变红 + blockedBoss/blockedBy）      :504
   ├ WEAPONS[type].stepBullet?.(b, dt, this)          yellow 蛇形在此
-  ├ ricochet 分支：hitWall 命中 → reflectBulletAgainstWall  geometry.js
-  ├ 墙体命中：l.walls + this.activeGateWalls() 逐个 hitWall(pad=3)
-  └ 敌人命中：距离 < e.r → playerDamage() 扣血 → hitEffects.push → defeatEnemy
+  ├ 蓄力武器表盘红弧穿环（航向角 + 「上帧→本帧」跨越弧圆）              :513
+  ├ ricochet 分支：hitWall 命中 → reflectBulletAgainstWall  geometry.js（仍为单点判定）
+  ├ 墙体命中：l.walls + this.activeGateWalls() 用「上一帧→当前帧」线段 rayWallDistance 连续碰撞判定（防高速子弹隧穿；命中时子弹回退到墙面）
+  ├ crate/barrel：crate 用 rayWallDistance 线段、barrel 用 pointSegmentDistance 点到线段判定
+  └ 敌人命中：循环前 `const converted = b.blockedBy != null;` + `if (converted) break;`（已转化弹不伤敌人）→ pointSegmentDistance(e, 线段) < e.r → playerDamage() 扣血 → hitEffects.push → defeatEnemy
+
+filter 之后（同一帧）：boss25t5UpdateBlocked(dt)  :676 → boss25t5VorticesTick(dt)  :680 → 敌人循环（stepEnemy + boss25t5ZonesTick  :687）
 ```
 
 ### 4.2 敌人决策 → 位移
@@ -239,16 +298,24 @@ enemy-ai.js:defeatEnemy(e)
 | `ENEMY_TYPES.basic2` | `state.js:8` | hp50 / dmg15 | 基础敌人2（会环绕） | — |
 | `ENEMY_TYPES.advanced1` | `state.js:9` | hp80 / dmg20 | 进阶1（会冲锋） | — |
 | `ENEMY_TYPES.advanced2` | `state.js:10` | hp100 / dmg15 | 进阶2（远程点射） | — |
+| `ENEMY_TYPES.mothership` | `state.js:24` | hp1500 / dmg0 / art `asset-1788764178616` / artScale2 | 母舰（远距压迫，接触自爆） | 卡关级威胁 |
 | `ENEMY_BEHAVIOR.basic1` | `constants.js:72` | size30 approach200 engage50 engageDelay0.4 colorRange300 | 接近距离/交战距离/变红距离 | 压迫感 |
 | `ENEMY_BEHAVIOR.basic2` | `constants.js:73` | orbit `{period:2,duration:1,degPerSec:30}` spin4 | 环绕节奏 | — |
 | `ENEMY_BEHAVIOR.advanced1` | `constants.js:74` | engage160 charge `{pause:0.6,speed:200}` | 冲锋前摇与速度 | 最危险近战 |
 | `ENEMY_BEHAVIOR.advanced2` | `constants.js:75` | attackRange500 fireInterval400 burstInterval3000 burstCount3 speed30 | 三连点射节奏 | 远程压制 |
+| `ENEMY_BEHAVIOR.mothership` | `constants.js:83` | size260 speed30 spawnInterval5000 spawnRadius220 | 母舰慢速逼近+每5s投放 | 压迫感/投放节奏 |
+| `MOTHERSHIP_SPAWN_TABLE` | `constants.js:87` | basic1×5 / basic2×6 / advanced1×2 / advanced2×1 | 母舰投放表（每5s等概率随机一组） | 投放组成 |
+| `ENEMY_TYPES['boss-2-5t5']` | `state.js:31` | name 原型机-2-5T5 / hp1500 / dmg0 / art `asset-1788964413981` | 第二类特殊 BOSS（**血量看敌人顶层 `e.hp`**，`boss.hp` 仅占位） | 卡关级威胁 |
+| `ENEMY_BEHAVIOR['boss-2-5t5']` | `constants.js:85` | size160（→ `e.r`=80）/ orbit·charge=null | 命中·碰撞半径；行为不走通用行为机（见 §6.2） | 命中判定范围 |
+| `BOSS25T5_DEFAULTS` | `combat/boss25t5.js:185` | **82 键（实测）（删 2 加 2）**：name / hp1500 / moveSpeed30 / moveWaitPreMs·PostMs2000 / approachMin·MaxMs2000·4000 / spinFastDeg180·spinFastMs800 / spinSlowDeg10·spinSlowMs3000 / fleeMin·MaxMs2000·4000 / shieldRadius220 / shieldFadeMs400 / shieldRestoreDelayMs600 / arcRadius185 / arcSpanDeg45 / arc4SpinDeg30 / arc5SpinDeg57.3 / arcAlignDeg180 / innerRadius80 / arc2Radius65 / s1=s2=s3Range1500 / s1DragSpeed2000·s1DragDist500 / s2PushSpeed2000·s2PushDist500 / s4PushSpeed2000·s4PushDist800·s4Damage20 / mergeOverlapPct20 / parkMinDeg108 / skillWeightS1·S2·S3=40·40·20 / skillWeightS5=20 / s2Damage20 / blockedBulletDamage10 / shieldClearCost10 / s1·s2·s5BulletTrailWidth6·Length40·Color（s1 `#4fc3f7` 蓝 / s2 `#ff3b3b` 红 / s5 `#4fc3f7` 蓝）/ s5HpPct50 / s5CastMs3000 / s5SpawnDist600 / s5Radius150 / s5Hp500 / s5PullRadius900 / s5PullMin40 / s5PullMax160 / s5BulletPull900 / s5HitIntervalMs500 / s5HitDamage15 / s5CaptureMax16 / s5CaptureOrbitRatio0.25 / s5CaptureSpinDeg90 / cutsceneId'' + **本轮改动**：删 `zoneAimTrackDeg`（旧口径「成型期扇形跟随玩家瞄准 °/s」——**已废弃**：跟随会让扇形一直罩住玩家、玩家无法走出躲避）+ 删 `s5PullAccel`（旧口径：单一吸力加速度，**已废弃**）→ 加 `s5PullMin40`（**吸力半径边缘处**的吸力 px/s）+ `s5PullMax160`（**涡心处**的吸力 / 向量累加后的速度上限 px/s；**必须 < 玩家移速 180**），`s5PullRadius900` **保留**（吸力生效半径），净值仍 82 键；**上一轮新增 1 键**：`zoneHitPadPx30`（技能1/2 命中**像素级**容差 —— 判定区最多只超出绘制扇形斜线 30px，不再随距离放大；s3 不参与）；**上一轮删除 3 键**：`zoneHitPadDeg`（固定角度容差，已被 `zoneHitPadPx` 取代）、`s1BulletForce` / `s2BulletForce`（每帧加速度 → 技能1/2 施力改为**一次性固定速度+固定距离**：速度复用玩家的 `s1DragSpeed`/`s2PushSpeed`，距离 = 玩家的 `s1DragDist`/`s2PushDist` × 2）；**上一轮改名**：技能5 拖尾宽/长两个旧键（`…RedTrailWidth` / `…RedTrailLength` 形态）→ 统一为 `s5BulletTrailWidth` / `s5BulletTrailLength`（`normalizeBoss25T5Config` 只按 `BOSS25T5_DEFAULTS` 的键产出一份新对象，旧键被丢弃；`data/levels/Boss2-Test.json` 里的 4 / 250 已随改名保留） | BOSS 全部可配数值入口（编辑器 `boss.*` 面板写入 `e.boss`） | 技能节奏/范围/伤害/占比 |
 | `BARREL_DAMAGE` | `constants.js:35` | 30 | 油桶爆炸伤害 | 环境击杀强度 |
 | `BARREL_EXPLOSION_MS` | `constants.js:36` | 100 | 爆炸动画时长 | — |
 | `CRATE_DEBRIS_TTL` | `constants.js:37` | 450 | 木箱碎片存活 ms | — |
 | `PLAYER_COLLISION_RADIUS` | `constants.js` | — | 玩家碰撞半径 | 卡墙手感 |
 | `CELL` | `constants.js:9` | 30 | 寻路网格与吸附单位 | 全局 |
 | `PATH_INFLATE` | `level/level-flow.js` | 24 | 寻路网格障碍膨胀 | 敌人贴墙程度 |
+
+> **技能5 吸力调参（判据，见 §7 坑34）**：吸力公式 `a = s5PullMin + (s5PullMax - s5PullMin) × clamp(1 - d/s5PullRadius, 0, 1)`（`boss25t5.js:boss25t5VorticesTick`）。**进入吸力半径即受 `s5PullMin`**（吸力半径 `s5PullRadius` 边缘处 = min），越靠近涡心吸力线性增强，涡心处 = `s5PullMax`；半径外为 0。默认 `s5PullRadius=900 / s5PullMin=40 / s5PullMax=160`，实测 d=900→40、d=450→100、d→0→160、d>900→0（随距离**单调递增**）；多漩涡向量累加后按 `Math.max(1, s5PullMax)` 钳速度上限（三漩涡叠加封顶 160），消费点 `game-scene.js:236-237`（与 `boss25t5Slow` 同写法叠加）。**`s5PullMax` 必须小于玩家基础移速 `baseSpeed = 180`**（`game-scene.js:228`）—— 否则玩家被吸住后永远挣脱不了，表现为「按住方向键也不动」。`data/levels/Boss2-Test.json` 实配 `s5PullMin: 40` / `s5PullMax: 165`（用户手调，< 180 ✓；要加大手感就得同步确认玩家移速）。子弹侧吸力 `s5BulletPull: 900`（px/s²，未变）是另一条口径，本次只改玩家吸力的 min/max。同时 `boss25t5CastSkill5` 的生成点要求「与玩家之间无墙」且先钳制再判可达，避免涡心落在墙另一侧。
 
 改件效果（定义在 `state.js:ITEM_DEFS`/`MOD_DEFS`，生效点在 `game-scene.js:update` 与 `weapons.js`）：`multi-track` 多轨复制弹、`triple` 三发、`spin` 射速+50%（间隔×2/3）、`ricochet` 撞墙反弹、`split` 分裂、`pierce` 激光穿墙、`capacity` 扩容。数值细节见 `economy-numbers`。
 
@@ -261,6 +328,7 @@ enemy-ai.js:defeatEnemy(e)
 4. `src/state.js` 的 `WEAPON_TYPES` 与 `WEAPON_LABELS` 各加一条（否则 UI 显示 id）。
 5. 若要能购买/解锁：`data/ui/weapon.json` 加 `prices` 条目（详见 `economy-numbers`）。
 6. 武器轮图标：`src/ui-layer.js:drawWeaponGlyph` 加分支（详见 `ui-interaction`）。
+7. **设计稿武器改 `bullet.speed`/`range` 时注意隧穿**：`bullet.range` 越大越安全（Range 只控制淡出），但 `bullet.speed` 一旦超过 ~2000px/s（每帧位移 > 墙厚/敌人半径）就会穿墙漏检。此时命中判定已用连续碰撞（§7.20），无需再改代码；若新建平行弹道逻辑，务必沿用「上帧→当前帧」线段判定而非逐帧点判定。
 
 ### 6.2 新增一种敌人行为
 1. `src/state.js:ENEMY_TYPES` 加类型（`hp` / `damage` / `name`）。
@@ -269,6 +337,34 @@ enemy-ai.js:defeatEnemy(e)
 4. 行为逻辑：简单变体直接吃 `ENEMY_BEHAVIOR` 参数即可；复杂的仿照 `stepAdvanced2` 新写一个 `stepXxx`，并在 `stepEnemy` 里按 `e.type` 分派。
 5. 外观：`src/systems/ui/entity-art.js:drawEnemyShape` 加分支（详见 `ui-interaction`）。
 6. 关卡里能配出来：`level-design` skill 的敌人字段。
+
+> **母舰（`mothership`）是特殊敌人，不走通用行为机**，自检以下 7 处（默认值集中 `constants`/`state`，可被关卡预置条目覆盖）：
+> ① `ENEMY_TYPES.mothership`（`art`/`artScale` 进 `initEnemy`） ② `ENEMY_BEHAVIOR.mothership` + `MOTHERSHIP_SPAWN_TABLE`（`constants.js`）
+> ③ `enemy-ai.js:stepEnemy` 顶部派发 `stepMothership`（慢速逼近+hitFlashT 递减+按 `e.boss.spawnInterval`/`e.boss.spawnTable` 周期 `spawnMothershipMinions`）；`initEnemy` 补 `bossActive:false`+`boss:{spawnInterval,spawnTable,name}`
+> ④ `game-scene.js` 敌接触循环母舰分派（**Hitbox 用风筝形非圆**）：撞盾=清盾+`mothershipSelfDestruct`（`mothershipBodyDist<radius`）；贴身=秒杀(`state='fail'`)+自爆（`mothershipBodyDist<player.r`）；母舰命中用 `mothershipBulletHit`（`geometry.js`，含 `mothershipPolyVerts`/`mothershipBoundsR`），受击置 `e.hitFlashT=100`
+> ⑤ `entity-art.js:drawEnemyShape` 母舰分支：把设计稿相位偏转 `θ+π/2`（θ=敌→玩家方向）使长尖始终朝向玩家；`e.hitFlashT>0` 时对该设计元素 `fill:'#ffffff'`，把整个四边形（描边轮廓）填为实白
+> ⑥ 生成点走 `spawning.js:spawnMothership`（整圆穿墙排除+三档兜底保生成，防大身体卡墙/波次空转），经既有波次 `mode:'offscreen'` 触发
+> ⑦ Boss 化：母舰**预置**在关卡 `l.enemies[]`（`level-flow:283` 经 `initEnemy` 入队），`bossActive=false`=待机（无敌、不移动、不召唤、无血条，`stepMothership` 顶部早退；`game-scene` 子弹/接触/轨道命中都加 `&& e.bossActive`）。踩带 `bossBattle` 事件的触发器 → `triggers.js:startBossBattle(ev)`：`boss.bossActive=true; this.bossTarget=boss; this.bossBarReveal=0`；UI 血条见 `ui-interaction`（`drawBossBar`/`updateBossBar`）。大小=条目 `artScale`（编辑器「大小」字段）；`bossBattle` 事件类型双份维护（`state.js:EVENT_TYPES` 与 `editor/entity-properties.js:eventTypeOptions`）。
+
+> **原型机-2-5T5（`boss-2-5t5`）是第二类特殊 BOSS**（不走母舰范式，`bossActive` 待机语义与母舰一致）。自检以下 10 处接线：
+> ① `state.js:ENEMY_TYPES['boss-2-5t5']`（art 指向 `asset-1788964413981`）+ `constants.js:ENEMY_BEHAVIOR['boss-2-5t5']`（size160 → `e.r`=80）
+> ② `state.js:normalizeEnemy` 的 `boss` 按 type 分派：`boss-2-5t5` 走 `normalizeBoss25T5Config`（其余走母舰形状；非 Boss 敌人为 null）
+> ③ `enemy-ai.js:initEnemy` 的 `boss-2-5t5` 分支显式初始化全部运行时字段（`bossActive/bossCfg/shieldAlpha/state/zones/...`，与 `??=` 兜底一一对应）
+> ④ `enemy-ai.js:stepEnemy` 顶部按 `e.type` 派发 `stepBoss25T5`（`enemy-ai.js:134`）
+> ⑤ `game-scene.js` 子弹 filter（`:472` 起，**顺序即契约**）：① `if (b.captured) return !b.dead;`（`:474`，捕获环绕早退）→ ② `b.blockedBoss` 早退（`:479`；够得着时由 `boss25t5VortexPull`/`boss25t5ZoneBulletForce` 解冻并置 `blockedBoss=false`）→ ③ `b.wallFade`（`:484`）→ ④ 位移（`:488-491`）→ ⑤ `boss25t5VortexPull` + `boss25t5ZoneBulletForce`（`:497-498`）→ ⑥ `boss25t5VortexCapture` 保留该弹（`:499`）/ `boss25t5VortexAbsorb` 消灭（`:500`）→ ⑦ `boss25t5TryBlock` 拦截停驻变红（`:506`）→ ⑧ 敌人循环前 `const converted = b.blockedBy != null;` + 循环首行 `if (converted) break;`（`:601`/`:603`，已转化弹不再伤敌人/BOSS）；受击判定加 `boss25t5ShieldActive`（护盾存在时不扣血，`:610`）；filter 之后 `boss25t5UpdateBlocked(dt)`（`:676`）+ `boss25t5VorticesTick(dt)`（`:680`）
+> ⑥ `game-scene.js` 敌人循环每帧 `boss25t5ZonesTick(e, dt)`（`:687`，**漏调 = 技能永不结束、BOSS 卡死 skill 态、区域永久定格**）
+> ⑦ `game-scene.js` 玩家移动消费 `player.boss25t5Slow`（×0.05，`:231`）；接触伤害/撞盾反杀排除 `boss-2-5t5`（伤害只走技能区域）
+> ⑧ 玩家子弹命中半径 `e.r`=80；受击仅在护盾消失时生效，命中置 `e.hitFlashT=100`
+> ⑨ `triggers.js:startBossBattle`（`:65`）与 `editor-camera.js:_resolveFocusTarget`（`:254`）的 BOSS 查找都含 `boss-2-5t5`
+> ⑩ 渲染：`ui/boss25t5-art.js`（`drawBoss25T5Body`/`drawBoss25T5Zones`/`drawBoss25T5Vortices`）+ `entity-art.js:drawEnemyShape` 分支 + `world-render.js` 在 `drawPlayer` 之前调 `drawBoss25T5Vortices`（`:582`）/ `drawBoss25T5Zones`（`:585`）
+> 失败清理：`enemy-ai.js:defeatEnemy` 支持其运镜（读 `e.bossCfg.cutsceneId`）并清理被拦截弹；死亡后重置 `player.boss25t5Slow`。
+> **技能种类 = 权重预选；释放方向恒为玩家方向；参战弧等待期对准玩家**：`boss25t5ChooseSkill` 只做 `boss25t5StartSkill(e, cfg, e.skillPick || 1)`（夹角窗口/距离/扇区等几何判定已全部移除）；`boss25t5BeginMove` 用 `pickWeighted(skillWeightS1/S2/S3)`（默认 40/40/20）预选本次技能，并用 `arcTargetsFor(cfg, pick)` 给出两弧相对瞄准方向的目标角（参战弧 → `0` 对准玩家、非参战弧 → 停靠到 `parkMinDeg..180°` 的侧后方，技能3 → 两弧都是 `0` 视觉合并）；`boss25t5StartSkill` 里区域方向恒以「BOSS → 玩家」为中心（`a0/a1 = aim ± span/2`），故三技能都对准玩家、不空放；`stepBoss25T5` 仅在等待期（`e.moveWait>0`，BOSS 静止）用 `rotateToward` 以 `arcAlignDeg`(180°/s) 对齐，其余时间按 `arc4SpinDeg`/`arc5SpinDeg` 自由自转 → 实测占比 ≈ 4:4:2（38.7/38.7/22.5）。改技能类型/瞄准逻辑须四处同改，见 §7 坑 26。
+> **护盾窗口由「等待期 + 恢复延迟」决定**：移动前/后各有一次等待期（`moveWaitPreMs`/`moveWaitPostMs`，默认 2000ms）期间 BOSS 不位移、**护盾保持存在**（玩家可打本体）；技能释放期间 + 结束后 `shieldRestoreDelayMs`（默认 600ms）内护盾消失（`e.shieldDown`）。实测护盾存在时长占比 ≈ 53.7%。
+
+> **技能5「蓝色漩涡」接线点**：`boss25t5PickSkill`（半血阈值 `s5HpPct`：未过半血只抽 S1/S2/S3，过半血按 S1/S2/S3/S5 权重抽）由 `boss25t5BeginMove` 调 → `boss25t5ChooseSkill` 的 `skillPick===5` 分支调 `boss25t5CastSkill5`（生成场景级漩涡、`activeZoneId=null` 无 zone）；`stepBoss25T5` 的 `state==='skill'` 分支 `skillKind===5`（技能动作时长 = `s5CastMs`，结束后与其它技能一致 `shieldDownT=shieldRestoreDelayMs` + `boss25t5BeginMove`）。**每帧调用点两处**：`stepBoss25T5` 顶部（在 `if (!e.bossActive) return;` **之前**，保证 BOSS 待机时既有漩涡仍推进）与 `game-scene.js:680`（保底），`boss25t5VorticesTick` 内部帧令牌去重。子弹侧（`game-scene.js:472` 起的 filter）依次接 `boss25t5VortexPull`（`:497`，漩涡吸力 + 解冻）/ `boss25t5ZoneBulletForce`（`:498`，技能1/2 吸推 + 按技能配色写 `forceTrail`）/ `boss25t5VortexCapture`（`:499`，已转化弹 → 捕获环绕，保留该弹）/ `boss25t5VortexAbsorb`（`:500`，普通弹扣漩涡 HP、已转化弹直接消灭）；漩涡消散走 `boss25t5ReleaseCaptured`（`boss25t5VortexAbsorb` 击杀时）与 `boss25t5ClearVortices`（`enemy-ai.js:defeatEnemy`）；渲染 `world-render.js:582` 调 `drawBoss25T5Vortices`（在 `:585` 的 `drawBoss25T5Zones` 之前）。
+> **技能1/2 对已转化子弹施力（一次性固定速度+固定距离）+ 像素级命中容差 + 扇形方向固定（不跟随玩家）**：`boss25t5ZoneBulletForce`（`boss25t5.js:1224`）只作用于 `blockedBy != null` 的弹，遍历战斗中 BOSS 的 `s1`/`s2` 区域（相位限 `anim`/`keep`、`b.forceSrc !== z.id`、子弹落在扇形 `[visMin,visMax] × [a0,a1]` 内）→ 授予一次性任务 `b.force={mode,ownerId,speed,remain}` + 写 `b.forceSrc=z.id`；当帧即写速度、解冻（`blockedBoss=false; thawed=true`）、写按技能配色的 `forceTrail`。**速度复用玩家拖拽值、距离 = 玩家距离 × 2**（模块常量 `BULLET_FORCE_DIST_MULT`：s1 `s1DragSpeed` + `s1DragDist`×2，s2 `s2PushSpeed` + `s2PushDist`×2；方向取 BOSS **实时坐标**），每帧按 `speed` 写 `vx/vy` 并扣 `remain`（帧令牌 `b.forceStepT` 去重防同帧重复扣），**距离用尽 / owner 消失 / drag 拖到圆弧1 内缘即停（`vx=vy=0; force=null`）**；**没有速度上限钳制**（速度就是配置的拖拽/击退速度）。返回值 = 本次是否新授予任务（`game-scene` 冻结弹解冻判定依赖）。
+> **命中容差（像素级）**：`boss25t5ZonesTick` 第三趟用 `const padPx = Math.max(0, cfg.zoneHitPadPx||0); const hitPad = (padPx>0 && z.kind!=='s3') ? padPx/Math.max(1,d) : 0;`（`boss25t5.js:723-724`）→ 判定区最多只超出绘制扇形斜线 `padPx`(30) 像素，**不再随距离放大**（旧固定 12° 在 `s2Range=1500` 处 ≈314px）；**s3（紫色秒杀）不参与**。
+> **扇形方向释放时固定、不跟随玩家（旧口径 `zoneAimTrackDeg` 已删除）**：`boss25t5StartSkill` 在释放瞬间按 `aim ± span/2` 写死 `z.a0/z.a1`，之后 `boss25t5ZonesTick` **全程不再改方向** —— 刻意这么做：**扇形若跟随玩家就会一直罩住玩家、玩家无法走出扇区躲避**；方向固定后玩家横向走出扇区即可躲开。命中只保留**像素级**容差 `zoneHitPadPx`(30px，**仅 s1/s2**，s3 为 0)，见上一条。
 
 ### 6.3 新增一种可破坏物
 1. `src/state.js` 加 `normalizeXxx` 与关卡字段（参考 `normalizeBarrel`）。
@@ -294,7 +390,7 @@ enemy-ai.js:defeatEnemy(e)
 - **`aim:'mouse'`** 鼠标准心：`game-scene.js:update` 里 `weaponAngle` 改为指向 `cameras.main.getWorldPoint(pointer)`，发射环小球+瞄准线不再自动旋转。
 - **`charge`** 蓄力射击：按住蓄力（`player.charge` 0..1），松开发射。`fire` 按 charge 把随机散射 `spreadMax*(1-charge)→0`、速度/大小/伤害按 `(1+(mult-1)*charge)` 插值；命中处 `b.damageMult` 生效。发射判断在 `game-scene.js:update` 用 `fireWasDown`（**须在瞄准段覆盖 `previousFireDown` 之前取**，否则同帧读到 false 导致蓄力松开发射失效）——`!fireDown && fireWasDown && charge>0`，不消耗连射 `fireClock`。**蓄力视窗缩放**：蓄力时相机 `chargeZoom` 平滑趋近 `tgt`（当前冥狙 `tgt=1-0.6*charge`，方向由 game-scene 该式决定）；**松开发射瞬间先停顿 `zoomHold=600ms`（保持当前值），停顿结束后再逐渐恢复到 1**；`editor-camera.js:updatePlayCamera` 用 `playZoom()*chargeZoom` 注入缩放（滚动居中仍用 `cam.width/2`，不随 zoom）。
 - **`ampArcs`** 发射环外「表盘红弧」带：子弹跨过弧带圆（半径=`arc.r`，用「上帧位置→当前位置」线段跨越判定）且相对 `weaponAngle` 的**飞行航向角** `<=halfDeg` 时变红 `b.amplified=true` + `colorStr` 变红，命中伤害 `*2`。角度必须用子弹速度方向（`atan2(b.vy,b.vx)`），不能用位置角——接近发射环时不同散射角的子弹位置角都压缩到瞄准方向附近会误判（`game-scene.js:update` 子弹 filter 内检测）。
-- **`orbit`** 环绕六边形：**无子弹**，`appearance.elements[<orbitIndexes>]` 的复合体（如 禅灭 = elements[0]+[1] 的 6 颗六边形）绕玩家转圈撞击敌身。三段动态轨道在 `game-scene.js:update` 的 `mechanic.orbit` 分支维护运行时 `player.orbit`（按住左键→二段 radius 250/角速×2/体积×2，按住≥`phase3HoldMs`→三段 400/×4/×4；松开→`retractMs` 内平滑收拢回基础）。判伤按 `hitIntervalMs` 对同敌节流，伤害走 `playerDamage`（固定=`baseDamage`，不乘体积倍率）；命中可破坏物：箱子 `spawnCrateDebris`/油桶 `explodeBarrel`（一次触发、无节流）。**`fire()` 直接返回 `[]`**。
+- **`orbit`** 环绕六边形：**无子弹**，`appearance.elements[<orbitIndexes>]` 的复合体（如 禅灭 = elements[0]+[1] 的 6 颗六边形）绕玩家转圈撞击敌身。三段动态轨道在 `game-scene.js:update` 的 `mechanic.orbit` 分支维护运行时 `player.orbit`（按住左键→二段 radius 250/角速×2/体积×2，按住≥`phase3HoldMs`→三段 400/×4/×4；松开→`retractMs` 内平滑收拢回基础）。判伤按 `hitIntervalMs` 对同敌节流，伤害走 `playerDamage`（固定=`baseDamage`，不乘体积倍率）；命中可破坏物：箱子 `spawnCrateDebris`/油桶 `explodeBarrel`（一次触发、无节流）。**`fire()` 直接返回 `[]`**。航迹可配：`trailWidth/trailSamples/trailFade/trailColor`，转速整体缩放 `speedScale`（默认 0.8=转速-20%）。
 - 渲染：`entity-art.js:drawWeaponMedium` 在 `chg || mouseAim` 下画**中心瞄准线**（常显、长度近似无限、蓄满变红）+ 两条散射边界线（蓄力中，±当前散射角）+表盘红弧带（**半径=`arc.r`、厚度减半、角度=当前散射角随蓄力减小**）+发射小球改为圆弧（角度=当前散射）。**orbit 武器例外**：`entity-art.js:drawPlayer` 走 `buildOrbitInstance`（weapon-runtime）动态克隆外观渲染（不污染共享 `WEAPONS[id].appearance`）+ `drawOrbitTrail` 画每颗六边形航迹，**跳过 `drawWeaponMedium`**（去掉发射环/小球）。
 - 新机制字段要同步 `weapon-design.js:normalizeMechanic` + `weapon-board.js:scalarFields`（特殊机制/蓄力参数组）+ 命中/渲染分支。示例：`data/weapons/weapon-1788656554163.json`（冥狙）、`data/weapons/weapon-1788679714207.json`（禅灭，orbit）。
 
@@ -307,7 +403,7 @@ enemy-ai.js:defeatEnemy(e)
 5. **`spawnLaser` 通过 `scene.ctx` / `scene.worldSize()` 访问场景**，它是纯函数不是 mixin 方法，第一个参数必须传场景实例。
 6. **墙体旋转**：所有判定都要先经 `wallRotationRad` 转到局部坐标系。新写判定函数别忘了处理 `rotation`，否则旋转墙会判定错位。
 7. **`arc` 形状墙**用 `w/2 ± thickness/2` 的环带 + 角度跨度判定，`circle` 用 `w/2` 当半径而不是 `w`。写新形状记得三处都改：`pointInWall` / `resolveCircleAgainstWalls` / `rayWallDistance`。
-8. **闸门（gate）不在 `level.walls` 里**，是 `this.activeGateWalls()` 动态产出的。子弹/敌人碰撞判定要**同时**查这两个来源（`game-scene.js:update` 已这么做，新加判定别漏）。
+8. **闸门（gate）不在 `level.walls` 里**，是 `this.activeGateWalls()` 动态产出的。子弹/敌人碰撞判定要**同时**查这两个来源（`game-scene.js:update` 已这么做，新加判定别漏）。子弹（玩家弹 + 激光）的墙体集是 `[...l.walls, ...this.bulletGateWalls()]`（`bulletGateWalls`= `shieldOnly || active`，triggers.js:129），玩家移动碰撞/敌弹/寻路仍用 `activeGateWalls`（只含 `active`）。所以「只挡子弹门」（`shieldOnly`）未激活时子弹被拦、玩家可穿——新加子弹判定要用 `bulletGateWalls` 而非 `activeGateWalls`，否则盾门拦不住弹。
 9. **`defeatEnemy` 只置 `alive=false` 不移出数组**。遍历 `this.enemies` 时必须 `if (!e.alive) continue;`。
 10. **敌人寻路网格是关卡加载时一次性构建**（`level-flow.js:restart` 里 `buildGrid`），墙体运行时变化（如开门）**不会**自动重建网格，敌人可能穿过刚关的门附近或绕不必要的路。
 11. **`spawnLaser` 是即时伤害**（发射瞬间就判定完），激光的 `ttl` 只是视觉残留。改激光"持续伤害"需要改成每帧判定。
@@ -318,17 +414,52 @@ enemy-ai.js:defeatEnemy(e)
 16. **敌弹命中宠物在 shield 之后、玩家之前**，且仅 `pet.invincible === false` 时结算。首帧 `draw` 可能先于 `updatePets`，`this.pets` 尚未初始化，`drawPets`/敌弹判定须用 `this.pets || []` 兜底。
 17. **宠物环绕不参与墙体碰撞**（`updatePets` 不调 `resolveMovementCollision`）。半径穿墙时宠物会显示在墙内，仅视觉问题；如需卡墙需自行加回推。
 18. **ampArc 穿弧判定要用子弹航向角而不是位置角**：子弹从发射环（半径=`medium.radius`）出发，接近环时不同散射角的子弹位置角都逼近 `weaponAngle`，用 `atan2(b.y-p.y, b.x-p.x)` 会把弧外子弹误判为穿弧（该白的红了）；半径判定必须用 `arc.r`（带圆半径），用 `ringR`（=发射环=子弹起点）会让首帧 `d0-ringR==0` 恒穿越（该红的全红）。正确几何见 §6.6。
+19. **`rotSpeed*t` 的旋转角在「运行时改 rotSpeed」时会产生角度瞬跳**：`asset-render.js` 的 `renderAsset`/`elementCenter` 都用 `ga = phase + rotSpeed*t*dir`（`t`=场景绝对秒）。运行时把某元素 `rotSpeed` 放大（如 orbit 武器 `buildOrbitInstance` 按 `speedMult` ×2/×4），`ga` 会瞬间跳变（差值≈`ΔrotSpeed×t`）。这个瞬跳是 orbit 六边形「切换轨道时」**刻意保留的移动手感**，但会让历史航迹连出贯穿半径的放射状乱线。处理：① 转速整体缩放用 `mechanic.orbit.speedScale`（默认 0.8=转速-20%）乘到 `rotSpeed`；② 拖尾记录时若某颗新位置与上一帧跨度 `> Math.max(50, radius*0.6)` 视为瞬跳，`arr.length=0` 断开该颗航迹，避免乱线。见 `weapon-runtime.js:buildOrbitInstance` / `game-scene.js` orbit 分支拖尾记录。
+20. **高速子弹会隧穿（tunneling），逐帧「当前位置」点判定会漏检**：玩家子弹默认 500px/s（每帧≈8px），但设计稿武器 `bullet.speed` 被拉大后（如 minigun=9000px/s，每帧≈150px，60fps）会越过墙厚(30px)与敌人命中半径(~20px)，子弹一帧跨过整段墙/敌人 → 表现为「穿墙」且穿墙后打不中敌人/箱子/油桶。**根因**：`game-scene.js:update` 子弹 filter 原来用 `hitWall(w, b.x, b.y)`/`Math.hypot(敌, b)` 只测末点位置。**正确做法**：子弹移动前记录 `obx/oby/odist`，改命中共 4 处为连续碰撞——墙体/crate 用 `rayWallDistance(obx, oby, dx, dy, walls)` 的返回值 `t∈[0,1]` 是否穿越（命中时把 `b.x/b.y` 回退到墙面）；barrel/敌人用 `pointSegmentDistance(目标, obx, oby, b.x, b.y)` 点到线段距离（敌人命中点取线段上最近点）。**残留限制**：`b.ricochet` 分支仍是单点 `hitWall` 判定，高速 ricochet 弹仍可能穿墙不回弹；激光 `spawnLaser` 本就即时命中不受影响。
+21. **`hasLOS` 会跳过「包含任一端点」的门**（`enemy-ai.js:399`，`activeGateWalls()` 里 `pointInWall(g, x0, y0)||pointInWall(g, x1, y1)` 的过滤）。作用：门把玩家包住 / 玩家贴门时，该门不参与视线遮挡，否则 `spawnGate`+`inscreen` 首波在玩家卡门体积时会形成「整片生成区都被门挡住」的伪遮挡 → 0 只（见 level-design skill §7）。注意：只对门生效，静态墙 `level.walls` 仍会挡视线；`hasLOS` 也用于敌人「是否看见玩家」（enemy-ai.js:56），玩家贴门时敌人会更早看到，属良性。
+22. **`boss25t5ZonesTick` 必须每帧对每个存活 BOSS 调用**（`game-scene.js:687`，敌人循环内 `stepEnemy` 之后）。它负责 `e.zones` 的生命周期（`extend→pause→anim→keep→fade`）与命中判定；**漏调 → 技能卡在 `anim`/进不了 `keep`，`stepBoss25T5` 永远等不到 activeZone 结束，BOSS 卡死 `skill` 态且区域永久定格**。
+23. **技能区域是「世界锚定」不是「BOSS 跟随」**。`zone.x/zone.y` 是**释放那一刻写死的 BOSS 坐标**，之后命中/渲染/紫色求交一律以它作扇形顶点，**不要换成实时 `e.x/e.y`**。正因为锚定，BOSS 会走出/走进区域，两个不同时刻释放的区域才可能真实重叠（紫区/黑遮罩的前提）。
+24. **阻挡护盾只拦玩家子弹**。`boss25t5TryBlock` 只在玩家子弹 filter 里生效；禅灭（orbit 武器）的轨道接触伤害走 `mechanic.orbit` 分支的圆-敌判伤，**不经过护盾拦截**——这是有意为之（轨道是实体占位而非子弹），改护盾交互时别顺手把轨道伤害也拦了。
+25. **BOSS 死亡必须清理被拦截弹**。护盾把玩家子弹停在原地变红（`b.blockedBoss`），这些弹对玩家仍是威胁；`enemy-ai.js:defeatEnemy` 的 `boss-2-5t5` 分支会清理它们（`boss25t5UpdateBlocked` 内亦按 `blockedBy` 是否存活判定）。漏了会导致 BOSS 死后红弹滞留、玩家踩到仍扣血。
+26. **策划案的技能2/技能3 条件几何互斥 → 技能2 永不触发（占比失控）**。现象（上一轮）：旧实现只出技能1/技能3，技能2 从不出现。根因：策划原案技能2 条件「玩家处于圆弧5 技能范围内」与技能3 条件「圆弧4/5 重叠 >50%」在几何上**等价**——圆弧4 恒瞄准玩家 ⇒ 玩家落在圆弧5 扇形内 ⟺ 两弧重叠 >50%，两条永远同时成立。**现解法（本轮）**：改用「**权重预选 + 区域恒以玩家方向为中心 + 参战弧等待期对准玩家**」，彻底移除几何判定——`pickWeighted`+`arcTargetsFor`（预选技能与两弧目标角）、`boss25t5StartSkill`（区域方向恒为 `aim ± span/2`）、`stepBoss25T5`（仅等待期用 `rotateToward` 对齐）、`boss25t5-art.js:drawBoss25T5Body`（读两弧相位 + 算合并中心）**四处必须同步改**，否则技能占比或「合并态」视觉不一致（实测占比 s1/s2/s3 ≈ 38.7%/38.7%/22.5%）。**上一轮的「夹角窗口 φ 判定」已废弃**：`boss25t5ChooseSkill` 现在只做 `boss25t5StartSkill(e, cfg, e.skillPick || 1)`，夹角窗口/距离/是否在扇区等几何判定全部移除；导出 `boss25t5MergeHalfDeg`、内部 `arc5OffsetFor` / `arcMerge` 均已删除（旧关卡里的旧键被 `normalizeBoss25T5Config` 丢弃，无害）。
+27. **圆弧对齐只能在等待期做**（`e.state==='move' && e.moveWait>0`，此时 BOSS 静止 → 瞄准角稳定）。现象：若在位移过程中强制对齐，BOSS 环绕时瞄准角以 `spinFastDeg`(180°/s) 持续旋转 → 参战弧被甩开、到不了玩家方向 → 技能空放。正确做法：仅等待期以 `arcAlignDeg`(180°/s) 对齐到 `arc4OffsetDeg`/`arc5OffsetDeg`，位移中两弧按 `arc4SpinDeg`/`arc5SpinDeg` 自由自转，位移后的等待期再对齐一次（实测区域中心偏离玩家方向平均 0.00°/最大 0.00°，参战弧偏离玩家方向平均 1.08°/最大 1.83°）。
+28. **护盾拦截的红子弹可见半径**。现象：护盾把玩家子弹停在原地变红（`b.blockedBoss`），但子弹速度为 0 时拖尾退化为点、只剩默认白色头部圆，小弹几乎看不出是危险弹。正确做法：`boss25t5TryBlock` 置 `b.blockedR=5`，三处渲染各加最小半径兜底——`weapons.js` 的 `radial.drawBullet`（`Math.max(b.blockedR ?? 5, PLAYER_ART.weaponOrbRadius * 1.25)`）、`weapons.js:basic.drawBullet`（`Math.max(b.blockedR ?? 5, 4)`）、`weapon-runtime.js:drawBullet`（`blockedBoss` 时额外叠加 `Math.max(b.blockedR ?? 5, bulletSize*4)` 半径的红色实心圆）。
+29. **三种技能的圆弧绘制必须同口径**（`boss25t5-art.js:drawZone` 统一「多条同心弧」+ `MAX_RINGS=64` 上限）。s1 以 `arcR` 为**最内圈**、圆弧由 `arcR` 铺到 `visMax`（向内收紧）；s2/s3 以 `arcR` 为**最外圈**、圆弧由 `visMin` 铺到 `arcR`（向外扩张），间隔统一 `cfg.s1RingGap`，并用 `MAX_RINGS`(64) 限制圈数（超限等比放大间隔）。**只改 s2/s3 一条弧会与 s1 风格不一致；不设圈数上限则单帧上千次 `strokePath`**（三种技能同一口径）。
+
+30. **漩涡对子弹的伤害口径不能静态 `import economy/damage.js`**。现象：`boss25t5.js` 顶部加 `import { playerDamage } from '../economy/damage.js'` 后 `node --test` 直接抛 `Unexpected token 'export'`，测试基线崩。根因：`boss25t5.js` 被 `state.js` 静态引用（单测会加载它），而 `damage.js` 经 `weapons.js` 静态 `import Phaser from 'phaser'`，node 下（CJS 加载 `phaser.esm.js`）无法解析 ESM `export`。**正确做法**：伤害走 `game-scene` 构造函数注入的 `this.playerDamage`（`game-scene.js:42`，与打敌人同口径；取不到时兜底 1），宠物子弹仍用 `b.petDamage` 覆盖。**同类判据**：任何被 `state.js` 间接引用的纯数据模块都不得 import 战斗表 / Phaser（参见 §7 坑 4 与 `boss25t5.js` 顶部注释）。
+31. **`boss25t5VorticesTick` 必须帧令牌去重，且要放在 `stepBoss25T5` 的 `bossActive` 早退之前**。现象：漏了会出两种 bug——① 若放在 `if (!e.bossActive) return;` **之后**，BOSS 待机时既有漩涡不推进（玩家吸力/周期伤害停摆）；② 两个调用点（`stepBoss25T5` 顶部与 `game-scene.js:671` 保底）同帧各推一次 → 吸力/周期伤害翻倍（甚至同一帧多次命中）。**正确做法**：`boss25t5VorticesTick` 首行用 `this.time.now` 帧令牌（`this.boss25t5VortexTick === now` 直接 return），保证每帧只清/写一次 `player.boss25t5Pull`、只结算一次伤害；调用点放在 `stepBoss25T5` 早退**之前**。另注意它的写入对象 `player.boss25t5Pull` 与 `boss25t5Slow` 一样只被「下一帧」的玩家移动消费（1 帧延迟，可接受）。
+32. **解冻的子弹必须置 `b.thawed` 并让 `boss25t5TryBlock` 首行早退**。现象：`boss25t5VortexPull` / `boss25t5ZoneBulletForce` 把冻结红弹解冻后（`blockedBoss=false`），若不再打标记，该弹的起点正落在护盾面上（`c≈0`）→ 会被护盾**再次冻结** → 表现为一颗永远停在原地、颜色反复闪烁的红弹。**正确做法**：解冻时置 `b.thawed=true`（`boss25t5TryBlock` 首行 `if (b.thawed) return false;`，`boss25t5.js:736`）。注意 `blockedBoss=false` 与 `blockedBy` 是两件事：前者=「不再被护盾拦」，后者=「已转化」（见坑 36）。
+33. **护盾消除红弹要复用 `blockWithShield`，且不得再扣一次盾；必须在 `damagePlayer` 之前判定**。现象/根因：`boss25t5UpdateBlocked` 里若自己扣盾、或先 `damagePlayer` 再判格挡，会「扣两次盾」或「挡下还掉血」。**正确做法**：玩家触碰被拦红弹时**先** `this.blockWithShield(b.x, b.y, cfg.shieldClearCost, radius)`（它内部已含扣盾值 + 命中特效 + 抖屏 + 破盾，**外部不得重复扣**），返回 true → `b.dead = true`（红弹消除、玩家不受伤）；返回 false 才 `this.damagePlayer(b.blockedDamage ?? 10)`。新配置 `shieldClearCost`（默认 10）只决定扣除量；找不到 BOSS 时经 `boss25t5CfgFromBullet` 用 `normalizeBoss25T5Config({})` 兜底（cost=10）。
+
+34. **漩涡对玩家的吸力峰值 `s5PullMax` 必须 < 玩家基础移速（180）**（原名：`s5PullAccel` 必须 < 玩家移速，本轮改名为 `s5PullMax`）。现象：吸力是按「本帧位移 = 输入速度 + pull」直接叠加的（`game-scene.js:236-237`），一旦吸力峰值 ≥ 180，玩家进入吸力强的区域后就再也走不出去；若漩涡同时位于墙外/墙另一侧，会被吸到墙面上钉住，表现为「沿该轴按方向键不动」。**正确做法**：吸力峰值 `s5PullMax` 必须**小于**玩家移速（默认 **160**、`Boss2-Test.json` 实配 **165**，均 < 180，留挣脱余量）；半径边缘处的最小吸力 `s5PullMin`（默认 **40**）无此约束（吸力从半径边缘的 `s5PullMin` 线性升到涡心的 `s5PullMax`，见 §5 吸力公式）。另外 `boss25t5CastSkill5` 的生成点判定必须**先做世界边界钳制、再判可达**——先判可达再钳制时钳制会把点挪到墙另一侧让判定失效（实测 200 次里 123 次「玩家与涡心之间隔墙」）；评分取「可达优先、其次距离最远」。**注意**：本条**不是**「BOSS2 关卡上下不能移动」的原因（那次是视觉参照缺失，见坑 35 与 `level-design` skill §7）。
+35. **「玩家动不了」的排障顺序（含一次误诊）**：① `player.boss25t5Slow`（紫色领域 95% 减速，`boss25t5ZonesTick` 置位、`stepBoss25T5` 每帧先清）② `player.boss25t5Pull`（漩涡吸力）③ `player.boss25t5Force`（技能1 拖拽 / 技能2 击退 / 技能4 击飞的一次性位移）④ **视觉参照缺失**（玩家其实在动，只是屏幕上没有参照物：大地图 + `camera.mode:'center'` + 空场 + `showGridInPlay:false` ⇒ 相机始终把玩家钉在屏幕正中，上下方向唯一在画面里的墙是**比视口还高的竖直长条**，纵向滑动看不出变化；横向滑动该长条却很明显 ⇒ 误判为「只有上下不能移动」）⑤ 最后才怀疑键盘绑定。**判据**：若「某个关卡才出现」「触发某个事件后就好转」，先怀疑 ④——换个有参照物的位置或让一个明显物体进入画面，症状就会消失。详见 `level-design` skill §7。
+
+36. **已转化子弹必须保留 `b.blockedBy`（清掉 = 三处同时失效）**。现象：解冻 / 捕获 / 释放时若顺手 `b.blockedBy = null`，会出现① `boss25t5CfgFromBullet` 找不到 BOSS（`x.id === b.blockedBy` 匹配失败）→ `shieldClearCost` 落到默认 10；② `enemy-ai.js:defeatEnemy` 清不掉残留弹（它按 `x.blockedBy === e.id` 过滤，`:337-338`）；③ `game-scene` 的 `const converted = b.blockedBy != null` 守卫失效 → 转化弹回头去伤害敌人/BOSS。**正确做法**：解冻（`boss25t5VortexPull`）/ 施力（`boss25t5ZoneBulletForce`）/ 捕获（`boss25t5VortexCapture`）/ 释放（`boss25t5ReleaseCaptured`）一律**只动 `blockedBoss`/`captured`/`vx`/`vy`**，`blockedBy` 保持原值 —— 它就是「已转化子弹」的判定标记。
+
+37. **捕获子弹的位置只能由 `boss25t5VorticesTick` 驱动（filter 必须早退）**。现象：`game-scene` 子弹 filter 里若不给 `if (b.captured) return !b.dead;`（`:474`）早退，捕获弹会被继续位移 / 判墙 / 判箱桶 / 判敌人 / 施力，与 tick 写入的环绕坐标互相覆盖 → 表现为环绕环抖动、绕行半径忽大忽小、偶尔穿墙。**正确做法**：filter 第一行按 `captured` 早退（位置与接触全部交给 `boss25t5VorticesTick`）；`boss25t5ReleaseCaptured` / `boss25t5ClearVortices` 只清 `captured` + 速度归零、**不改位置** → 子弹静止停驻原处（仍是威胁、仍可被护盾消除）。
+
+38. **命中外扩容差必须用「像素级」`zoneHitPadPx`，且只加在 s1/s2、s3 严格为 0（旧口径 `zoneHitPadDeg` 已删除）**。现象：把外扩一并加到 s3 会把「紫色秒杀」的误杀范围放大（玩家在扇形外沿擦过即被判死）。**正确做法**：`boss25t5ZonesTick` 第三趟 `const padPx = Math.max(0, cfg.zoneHitPadPx || 0); const hitPad = (padPx > 0 && z.kind !== 's3') ? padPx / Math.max(1, d) : 0;`（`boss25t5.js:735-736`）—— 只用于外扩判定用的角度区间（`a0 - hitPad .. a1 + hitPad`）；`pointInZonePurple` 的紫色判定必须保持**精确不带 pad**（否则紫区/黑遮罩的实际边界与渲染不符），且 s3 恒 `hitPad = 0`。
+
+39. **已转化子弹不再伤害敌人/BOSS（只威胁玩家）**。现象：解冻 / 捕获释放的弹若回到敌人循环，会变成「BOSS 自己的子弹打自己 / 打死自己的漩涡」。**正确做法**：`game-scene` 敌人循环前 `const converted = b.blockedBy != null;` + 循环首行 `if (converted) break;`（`:601`/`:603`）——**保留**墙/箱/桶碰撞（那些分支在它之上），跳过全部敌人/BOSS 伤害。哪天要在敌人循环里加新判定，别忘了这段守卫（见坑 36）。
+
+40. **s1 拖拽到「圆弧1 内缘」必须让子弹停下（一次性任务到此结束）**。现象：`boss25t5ZoneBulletForce` 若让 s1 一直朝 BOSS 拖，子弹会越过圆心再被反向拖 → 在 BOSS 体内来回震荡（视觉上「卡在 BOSS 肚里抖」）。**正确做法**：推进任务时判断 `f.mode === 'drag' && Math.hypot(b-owner) <= cfgOf(owner).innerRadius * (owner.artScale||1)`（拖到圆弧1 内缘）→ 直接 `b.vx = b.vy = 0; b.force = null`（任务结束、不再施加，见 `boss25t5.js:1245-1248`）。
+
+41. **固定角度容差在远距离会放大成几百像素（旧 `zoneHitPadDeg` 的坑，该键已删除）**。现象：按固定角度外扩（旧 12°）会随距离线性放大 —— `s2Range=1500` 处 12° ≈ 314px，判定区远远超出绘制扇形，玩家站扇形外老远也被判中；近处又几乎没有容差，两个极端都不对。**正确做法**：容差按「像素」定、再换算成该距离下的角度 —— `hitPad = padPx / Math.max(1, d)`（`cfg.zoneHitPadPx`，默认 30），保证判定区最多只比绘制扇形的斜线多 30px，远近一致。**别再引入任何「固定角度」形式的容差**。
+
+42. **不要 让扇形跟随玩家（会让玩家无法躲避）—— 方向在释放瞬间写死**（旧口径 `zoneAimTrackDeg` 的「成型期跟随」已废弃）。现象：若让 `z.a0/z.a1` 在 `extend`/`pause`（甚至 `anim`）阶段持续转向玩家，命中判定就变成「追着玩家判死」——玩家无论往哪躲都躲不过，且视觉上扇形一直罩住玩家。**正确做法**：`boss25t5StartSkill` 在释放瞬间按 `aim ± span/2` 写死 `z.a0/z.a1`，之后 `boss25t5ZonesTick` **不再修改方向**（全程不变）→ 玩家横向走出扇区即可躲避；命中只保留**像素级**容差 `zoneHitPadPx`(30px，仅 s1/s2，s3=0，见坑 38)。文件头注释与函数头注释均已同步该口径（「命中判定」段：扇形方向不跟随玩家）。
+
+43. **技能1/2 对子弹的施力必须是「带距离预算的一次性施力」，不能每帧加速度**。现象：旧口径 `s1BulletForce`/`s2BulletForce`（每帧 `vx/vy += …` 加速度）会让子弹越推越快、**永不停下**（还会越界穿墙）。**正确做法**：授予一次性任务 `b.force = { mode, ownerId, speed, remain }`（`remain` = 剩余距离 px；速度复用玩家的 `s1DragSpeed`/`s2PushSpeed`，距离 = 玩家的 `s1DragDist`/`s2PushDist` × 2（模块常量 `BULLET_FORCE_DIST_MULT`））；每帧按 `speed` 定速写 `vx/vy` 并 `remain -= speed*sec`，距离用尽 / owner 消失 / drag 拖到 `innerRadius×artScale` 内缘 → `vx=vy=0; force=null`。`b.forceSrc`（= 区域 id）保证**同一区域只授予一次**（否则子弹停下后会被反复重新推动）；帧令牌 `b.forceStepT` 防同帧重复扣距离。**被漩涡捕获 / 释放时必须清 `b.force`**（`boss25t5VortexCapture`/`boss25t5ReleaseCaptured`），否则「释放后静止停驻」失效 —— 子弹会带着剩余距离继续跑。
 
 ## 8. 验证方式
 
 ```bash
 # 1) 构建必须过（能抓出 import 路径错、导出名错）
-npx vite build          # 基线：built 成功，约 60 modules
+npx vite build          # 基线：built 成功，约 83 modules
 
 # 2) 单测必须与基线一致
-node --test test/       # 基线：16 pass / 5 fail
-                        # 5 个 fail 全是 player-api.test.js 的 'fetch failed'，
-                        # 需要先起 node server.js 才会过，属既有情况、与战斗改动无关
+node --test test/       # 基线：20 tests / 19 pass / 1 fail
+                        # 唯一 fail = player-api round-trip 里旧 schema 的 `mods` 字段
+                        # 被 normalizePlayer 有意丢弃（既有 schema 迁移不一致，与战斗改动无关）
 
 # 3) 未定义标识符自检（build 抓不到，必做）
 #    对你改过的文件，确认所有大写常量与纯函数都有 import
@@ -346,5 +477,6 @@ node server.js          # 然后浏览器打开，编辑器里选关卡 → 试�
 | 敌人行为 / 寻路绕墙 / 波次 | `Level1-Scene1.json` |
 | advanced1 冲锋 / advanced2 点射 | `Level2-Scene1.json`、`Level3-Scene1.json` |
 | 油桶连锁 / 木箱破坏 | 任意含 `barrels`/`crates` 的关卡（用 `node -e` 搜 json） |
+| 原型机-2-5T5 全技能 / 阻挡护盾（停驻变红弹）/ 护盾主动撞红弹消除 / 技能5 蓝色漩涡 + 捕获环绕 / 技能区域 + 黑遮罩 / 紫区减速（**观察点**：护盾存在窗口是否明显变长、技能占比是否约 4:4:2（半血后 4:4:2:2）、**每个技能的区域是否都朝玩家（不空放）**、三种技能的同心弧风格是否一致、区域是否 s1 从外向内 / s2 从内向外**方向性消散**、被拦红弹是否至少 5px、**护盾主动撞红弹能否消除且扣盾不扣血**、**半血后是否出现蓝色漩涡**、**红弹被吸回是否变白带彩色拖尾**、**半血后漩涡是否把转化红弹吸成内层环绕环（贴内圈公转、不扎堆）**、**漩涡被击杀 / BOSS 死亡后环绕弹是否静止停驻原地（仍能被打到、仍能撞死玩家）**、**技能1/2 是否会把区域内的转化红弹吸/推走、且拖尾变蓝（s1）/ 变红（s2）**、**技能1/2 拖/推的转化子弹是否走完固定距离后停下（不再无限加速）**、**技能2 的角度边缘（贴合绘制扇形斜线、外扩 ≤ `zoneHitPadPx`=30px 内）是否仍能命中**、**判定是否只在绘制扇形内（最多多出 ≤30px）**、**扇形方向是否全程不变（能靠横走躲开）**、**进吸力半径即被吸、越靠近涡心吸力越强（min→max）**、**被漩涡捕获后释放的子弹是否静止原地（不再被技能带着跑）**、**漩涡被击杀是否消散**、**入涡是否每 0.5s 掉血**） | `Boss2-Test.json` |
 
 改完必看的现象：子弹拖尾是否正常、命中是否有特效、敌人是否会绕墙而不是贴墙抖动、护盾能否挡下正面来弹、击杀后是否掉落。

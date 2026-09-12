@@ -21,6 +21,7 @@ import Phaser from 'phaser';
 import { CELL, ENEMY_BEHAVIOR } from '../constants.js';
 import { toCell } from '../combat/geometry.js';
 import { findPath, nearestWalkable } from '../../pathfinding.js';
+import { ENEMY_TYPES } from '../../state.js';
 
 // ── 本模块私有常量 ──
 const SPAWN_OFFSCREEN_PX = 10;
@@ -42,10 +43,15 @@ export const SpawningMixin = {
     },
 
     spawnOffscreen(t, count, enemyType) {
+      const type = enemyType || 'basic1';
+      // 母舰：体型巨大，走专用生成（含保证生成兜底），防止视口外环找不到点导致波次空转
+      if (type === 'mothership') {
+        for (let i = 0; i < count; i++) this.spawnMothership(t);
+        return;
+      }
       const v = this.viewRect();
       const baseOff = SPAWN_OFFSCREEN_PX / this.cameras.main.zoomX;
       const { w: ww, h: wh } = this.worldSize();
-      const type = enemyType || 'basic1';
 
       for (let i = 0; i < count; i++) {
         let p = null;
@@ -60,6 +66,42 @@ export const SpawningMixin = {
 
         this.enemies.push(this.initEnemy({ x: p.x, y: p.y, type, triggerId: t.id }));
       }
+    },
+
+    // 母舰专用生成：整圆不穿墙的视口外点极难命中，逐档放宽兜底，保证产出一只
+    spawnMothership(t) {
+      const v = this.viewRect();
+      const baseOff = SPAWN_OFFSCREEN_PX / this.cameras.main.zoomX;
+      const { w: ww, h: wh } = this.worldSize();
+      const type = 'mothership';
+      const b = ENEMY_BEHAVIOR[type] || ENEMY_BEHAVIOR.basic1;
+      const r = b.size / 2;
+
+      // 第一轮：严格校验（整圆不穿墙 + 与玩家连线），视口外环最多 60 次外扩
+      let p = null;
+      for (let attempt = 0; attempt < 60 && !p; attempt++) {
+        const off = baseOff * (1 + Math.floor(attempt / 12));
+        const c = this.sampleRingPoint(v, off, ww, wh);
+        if (this.canSpawnAt(c.x, c.y, type)) p = c;
+      }
+      if (p) {
+        this.enemies.push(this.initEnemy({ x: p.x, y: p.y, type, triggerId: t.id }));
+        return;
+      }
+
+      // 第二轮：放宽为仅圆心可站立 + 与玩家连线通畅（进入视野可达、不卡死）
+      for (let attempt = 0; attempt < 120 && !p; attempt++) {
+        const off = baseOff * (1 + Math.floor(attempt / 12));
+        const c = this.sampleRingPoint(v, off, ww, wh);
+        if (this.pointInWall(c.x, c.y)) continue;
+        if (!this.hasLOS(c.x, c.y, this.player.x, this.player.y)) continue;
+        p = c;
+      }
+
+      // 第三轮兜底：一个可达开放格，保证 push 一只母舰，绝不让波次空转
+      if (!p) p = this.nearestReachablePoint(this.player.x, this.player.y, CELL * 12);
+
+      this.enemies.push(this.initEnemy({ x: p.x, y: p.y, type, triggerId: t.id }));
     },
 
   // ── 可达性与安全校验 ──
@@ -106,10 +148,18 @@ export const SpawningMixin = {
     // 生成点是否安全：世界边界内、不在墙内、与玩家连线无障碍（可被击杀）、可选最小玩家距离
     canSpawnAt(x, y, enemyType = 'basic1', minPlayerDist = 0) {
       const b = ENEMY_BEHAVIOR[enemyType] || ENEMY_BEHAVIOR.basic1;
-      const r = b.size / 2;
+      // 母舰 Hitbox 与画板本体一致：生成点留白用其风筝形包围半径（设计尖端 180 × artScale）
+      const r = enemyType === 'mothership'
+        ? 180 * ((ENEMY_TYPES.mothership && ENEMY_TYPES.mothership.artScale) || 1)
+        : b.size / 2;
       const { w: ww, h: wh } = this.worldSize();
       if (x < r || y < r || x > ww - r || y > wh - r) return false;
       if (this.pointInWall(x, y)) return false;
+      // 整圆穿墙排除：防止大体积敌人（母舰）身体裁剪进墙/地图外
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4;
+        if (this.pointInWall(x + Math.cos(a) * r, y + Math.sin(a) * r)) return false;
+      }
       if (minPlayerDist > 0 && Math.hypot(x - this.player.x, y - this.player.y) < minPlayerDist) return false;
       return this.hasLOS(x, y, this.player.x, this.player.y);
     },

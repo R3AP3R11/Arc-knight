@@ -1,0 +1,55 @@
+{
+  "id": "asset-1788764178616",
+  "name": "母舰",
+  "bgColor": "#949494",
+  "center": {
+    "x": 0,
+    "y": 0
+  },
+  "scale": 1,
+  "elements": [
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 20,
+      "sides": 6,
+      "lineWidth": 12,
+      "color": "#ffffff",
+      "fill": null,
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "pattern": "plain",
+      "tickShortLen": 6,
+      "tickLongLen": 12,
+      "tickDensity": 12,
+      "tickRatio": 1,
+      "tickDir": "in",
+      "points": [
+        {
+          "x": -60,
+          "y": 0
+        },
+        {
+          "x": 0,
+          "y": -180
+        },
+        {
+          "x": 60,
+          "y": 0
+        },
+        {
+          "x": 0,
+          "y": 90
+        }
+      ],
+      "closed": true,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    }
+  ]
+}

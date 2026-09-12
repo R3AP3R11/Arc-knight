@@ -26,6 +26,7 @@
         <button id="petBoard">宠物</button>
         <button id="uilibrary">组件库</button>
         <button id="wireframe">设计稿</button>
+        <button id="cinematic">运镜</button>
       </div>
     </header>
 
@@ -71,6 +72,9 @@
               </div>
               <label>房间大小
                 <input id="roomCellSize" type="number" min="400" max="2400" step="20"/>
+              </label>
+              <label>房间类型
+                <select id="roomCellType"></select>
               </label>
               <label>标记类型
                 <select id="roomCellMarkerType"></select>
@@ -325,6 +329,7 @@
         <select id="artAssetSelect"><option value="">（新建）</option></select>
         <button id="artNew">新建设计</button>
         <button id="artDraw">绘制轮廓</button>
+        <button id="artPixel">像素画板</button>
         <button id="artGenDefaults">生成默认美术方案</button>
         <button id="artSave">保存</button>
       </header>
@@ -338,6 +343,7 @@
             <button id="artCopyOther">复制其他元素</button>
           </div>
           <div class="art-list-actions"><select id="artOutlineSelect"><option value="">选择已保存轮廓…</option></select><button id="artAddOutline">+ 从轮廓库添加</button><button id="artDeleteOutline">删除所选轮廓</button></div>
+          <div class="art-list-actions"><select id="artPixelSelect"><option value="">选择已保存像素…</option></select><button id="artAddPixel">从像素库添加</button><button id="artDeletePixel">删除该像素</button></div>
           <p class="hint">每个元素是一组绕圆心转动的多边形（或圆弧/手绘轮廓）：数量决定一组几个、轨道半径决定离圆心多远、半径决定大小、旋转角速度决定转动快慢、旋转方向可选顺/逆时针。点击画布选中元素后可直接拖动、拖角上手柄缩放。
 「绘制轮廓」在独立画板中逐格点画出轮廓，支持网格吸附与 Ctrl+Z 撤销。已保存的轮廓可从轮廓库下拉一键添加为新元素（或删除所选轮廓），并支持调整轨道半径。</p>
         </aside>
@@ -382,6 +388,40 @@
         <div class="art-preview">
           <h3>数值说明</h3>
           <div id="petHint"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="cinematicsPage" class="artboard-page" hidden>
+      <header class="artboard-bar">
+        <button id="cinematicBack">← 返回关卡编辑</button>
+        <h2>运镜 · 时间轴</h2>
+        <label class="artboard-name">名称<input id="cinematicName" type="text" placeholder="新运镜"/></label>
+        <select id="cinematicSelect"><option value="">（新建）</option></select>
+        <button id="cinematicNew">新建设计</button>
+        <button id="cinematicDelete">删除</button>
+        <button id="cinematicSave">保存</button>
+        <button id="cinematicSetAnchor">设中心锚点</button>
+        <span class="sep"></span>
+        <button id="cinematicPlay">▶ 播放</button>
+        <button id="cinematicStop">■ 停止</button>
+      </header>
+      <div class="artboard-main cinema-main">
+        <aside class="art-element-list">
+          <h3>时间轴</h3>
+          <label>总时长(ms)<input id="cinematicDuration" type="number" min="1" step="50"/></label>
+          <label>慢动作<input id="cinematicTimeScale" type="number" min="0.05" max="1" step="0.05"/></label>
+          <p class="hint">慢动作：0.3=整个运镜期间世界 30% 速度，1=正常。</p>
+          <div id="cinematicKeyframes"></div>
+          <div class="art-list-actions"><button id="cinematicAddKeyframe">+ 加关键帧</button></div>
+          <h3>参照物（运镜锚点）</h3>
+          <div id="cinematicRefs"></div>
+          <div class="art-list-actions"><button id="cinematicAddRef">+ 加参照物</button></div>
+          <p class="hint">关键帧 t 为毫秒；点击刻度回放该帧。点击右侧预览的世界区域可添加参照物（红/蓝块为世界实体）。播放会按 zoom/pan/rotation/alpha 用画布 transform 模拟运镜。</p>
+        </aside>
+        <div class="art-preview">
+          <h3>运镜预览</h3>
+          <canvas id="cinematicPreviewCanvas" width="800" height="600"></canvas>
         </div>
       </div>
     </section>
@@ -437,6 +477,43 @@
         </header>
         <canvas id="drawBoardCanvas" width="600" height="560" tabindex="0"></canvas>
         <p class="hint">三种工具：加点（点击网格添加顶点，点击第一个点使轮廓闭合）、选择（点击已有点选中后可拖动、方向键每次移 1 像素、XY 输入定位、Delete 删除）、填充（选好调色后在闭合回路内点击填充）。编辑已有轮廓时打开即显示当前点集；「参考轮廓→转为轮廓点」会替换当前点集（以所选轮廓为基础重绘）。「应用变换」对整条轮廓做旋转/缩放；**改完点「完成」才会写回画板元素**。Ctrl+Z 撤销上一点；Enter 完成；Esc 取消。</p>
+      </div>
+    </div>
+
+    <div id="pixelBoard" class="draw-board">
+      <div class="draw-board-panel">
+        <header class="draw-board-bar">
+          <h3>像素画板</h3>
+          <div class="draw-group">
+            <label>列<input id="pixelCols" type="number" value="12" min="1" max="64"></label>
+            <label>行<input id="pixelRows" type="number" value="12" min="1" max="64"></label>
+            <button id="pixelApplySize">应用规格</button>
+            <label>格宽<input id="pixelCellSize" type="number" value="8" min="1" step="1"></label>
+            <label>背景<input id="pixelBgColor" type="color" value="#0a1220"></label>
+            <label>网格线<input id="pixelGridColor" type="color" value="#2f5a7a"></label>
+            <label>显示网格<input id="pixelShowGrid" type="checkbox" checked></label>
+          </div>
+          <div class="draw-group">
+            <label>颜色<input id="pixelColor" type="color" value="#ffa914"></label>
+            <button id="pixelEraser">橡皮</button>
+            <button id="pixelFillAll">清空</button>
+            <button id="pixelUndo">撤销</button>
+          </div>
+          <div class="draw-group">
+            <label>旋转°<input id="pixelRotateDeg" type="number" step="5" value="0"></label>
+            <button id="pixelApplyRotate">旋转选中</button>
+          </div>
+          <div class="draw-group">
+            <label>名称<input id="pixelName" type="text" placeholder="像素画名称"></label>
+            <button id="pixelSave">保存为设计稿元素</button>
+            <button id="pixelSaveLibrary">保存为像素设计稿</button>
+            <button id="pixelCancel">取消</button>
+            <button id="pixelDone">完成</button>
+          </div>
+          <label class="inline"><input id="pixelSnapGrid" type="checkbox" checked/> 网格吸附</label>
+        </header>
+        <canvas id="pixelBoardCanvas" width="600" height="560" tabindex="0"></canvas>
+        <p class="hint">选择颜色后点击格子上色，长按拖动连涂；橡皮可擦；框选多格后 Ctrl+C 复制、Ctrl+V 粘贴、方向键移动整块、可在「旋转°」输入角度后点「旋转选中」自由旋转（像素块整体绕中心旋转）；滚轮缩放、中键拖动平移视图；「完成」把像素网格写回设计稿为 shape='pixel' 元素。</p>
       </div>
     </div>
   </div>

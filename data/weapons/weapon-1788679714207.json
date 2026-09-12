@@ -240,9 +240,11 @@
       "attackLerpMs": 120,
       "retractMs": 400,
       "hitIntervalMs": 120,
-      "trailSamples": 8,
-      "trailFade": 0.5,
-      "trailColor": "#ffa914"
+      "trailSamples": 32,
+      "trailFade": 0.9,
+      "trailWidth": 8,
+      "trailColor": "#ffa914",
+      "speedScale": 0.8
     }
   }
 }

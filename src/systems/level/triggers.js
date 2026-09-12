@@ -16,6 +16,8 @@
  */
 
 import { hitTrigger } from '../combat/geometry.js';
+import { roomPassagesForPoint, isGateOnPassage } from '../../rooms.js';
+import { GATE_OUTER_COLOR, GATE_INNER_COLOR } from '../constants.js';
 
 export const TriggersMixin = {
   // ── 事件派发 ──
@@ -34,6 +36,7 @@ export const TriggersMixin = {
     },
 
     dispatchTriggerEvent(t, ev) {
+      const ctx = this.ctx;
       if (ev.type === 'spawnEnemy') {
         this.triggerSpawnEnemy(t, ev);
       } else if (ev.type === 'switchLevel') {
@@ -44,12 +47,26 @@ export const TriggersMixin = {
         this.setGatesActive(ev, false, t);
       } else if (ev.type === 'combat') {
         this.setHudMode('combat');
+      } else if (ev.type === 'bossBattle') {
+        this.startBossBattle(ev);
       } else if (ev.type === 'roomComplete') {
         this.setHudMode('secure', { autoReturn: { mode: 'explore', delay: 1500 } });
       } else if (ev.type === 'complete') {
         this.state = 'end';
         this.settleVictory();
+      } else if (ev.type === 'playCinematic') {
+        this.playCutsceneById(ev.cinematicId, { focusTarget: ev.focusTarget });
       }
+    },
+
+    // Boss 战激活：点亮指定/首个待机 BOSS（母舰或原型机-2-5T5），供 UI 血条（B/C 侧）消费 bossTarget / bossBarReveal
+    startBossBattle(ev) {
+      const boss = (ev.bossId ? this.enemies.find(en => en.id === ev.bossId) : null)
+        || this.enemies.find(en => (en.type === 'mothership' || en.type === 'boss-2-5t5') && !en.bossActive);
+      if (!boss) return;   // 找不到待机 BOSS 则静默返回
+      boss.bossActive = true;
+      this.bossTarget = boss;
+      this.bossBarReveal = 0;
     },
 
     // 本触发器是否还有未生成完的敌人波次
@@ -64,15 +81,22 @@ export const TriggersMixin = {
 
   // ── 门控与波次调度 ──
     setGatesActive(ev, activate, trigger) {
-      if (!this.gates?.length) return;
-      let targets = (Array.isArray(ev.gateIds) ? ev.gateIds : ev.gateId ? [ev.gateId] : [])
-        .map(id => this.gates.find(gt => gt.id === id)).filter(Boolean);
-      if (!targets.length) {
-        const ref = trigger || ev;
-        const nearest = this.gates.reduce((best, gt) =>
-          !best || Math.hypot(gt.x - ref.x, gt.y - ref.y) < Math.hypot(best.x - ref.x, best.y - ref.y) ? gt : best, null);
-        targets = nearest ? [nearest] : [];
+      let targets;
+      if (ev.auto && trigger) {
+        // 自动模式：一键生成/消除触发器所在箱庭通道的门
+        targets = this.autoRoomGates(trigger, activate);
+      } else {
+        if (!this.gates?.length) return;
+        targets = (Array.isArray(ev.gateIds) ? ev.gateIds : ev.gateId ? [ev.gateId] : [])
+          .map(id => this.gates.find(gt => gt.id === id)).filter(Boolean);
+        if (!targets.length) {
+          const ref = trigger || ev;
+          const nearest = this.gates.reduce((best, gt) =>
+            !best || Math.hypot(gt.x - ref.x, gt.y - ref.y) < Math.hypot(best.x - ref.x, best.y - ref.y) ? gt : best, null);
+          targets = nearest ? [nearest] : [];
+        }
       }
+      if (!targets?.length) return;
       for (const gate of targets) {
         if (activate) {
           if (gate.closing) gate.closing = false;
@@ -83,10 +107,44 @@ export const TriggersMixin = {
       }
     },
 
+    // 自动模式：返回触发器所在箱庭房间各通道上的门；生成（activate）时若通道还没门则新建一扇并启用。
+    autoRoomGates(trigger, activate) {
+      const ctx = this.ctx;
+      const layout = ctx.state.level?.roomLayout;
+      if (!layout) return [];
+      const room = roomPassagesForPoint(layout, trigger.x, trigger.y);
+      if (!room?.passages?.length) return [];
+      const gates = this.gates || [];
+      const out = [];
+      for (const p of room.passages) {
+        let gate = gates.find(g => isGateOnPassage(g, p));
+        if (!gate && activate) {
+          gate = {
+            id: `gate-${trigger.id}-${p.edge}`,
+            x: p.cx, y: p.cy, w: p.w, h: 45, rotation: p.rotation,
+            label: 'Barrier Active', color1: GATE_OUTER_COLOR, color2: GATE_INNER_COLOR,
+            active: true, spawnT: 0, visible: true, auto: true
+          };
+          gates.push(gate);
+        }
+        if (gate) out.push(gate);
+      }
+      return out;
+    },
+
     activeGateWalls() {
       if (this.editing) return [];
       return (this.gates || [])
         .filter(gt => gt.active && gt.visible !== false)
+        .map(gt => ({ x: gt.x, y: gt.y, w: gt.w, h: gt.h * 1.42, shape: 'rect', rotation: gt.rotation || 0 }));
+    },
+
+    // 阻挡子弹的门（仅子弹碰撞用）：普通激活门 + 「只挡子弹」门（shieldOnly，触发前不可见且不挡玩家）。
+    // 玩家移动碰撞仍走 activeGateWalls（不含盾门未激活态），使盾门准玩家通过但可挡弹。
+    bulletGateWalls() {
+      if (this.editing) return [];
+      return (this.gates || [])
+        .filter(gt => gt.shieldOnly || (gt.active && gt.visible !== false))
         .map(gt => ({ x: gt.x, y: gt.y, w: gt.w, h: gt.h * 1.42, shape: 'rect', rotation: gt.rotation || 0 }));
     },
 

@@ -17,11 +17,13 @@ import { WEAPONS } from '../combat/weapons.js';
 import { buildGrid } from '../../pathfinding.js';
 import { HUD_IDLE_MS } from '../ui/hud.js';
 import { normalizeWeapons } from '../../player-data.js';
+import { generateRoomLayout } from '../../rooms.js';
 
 // 本模块私有常量（重开 / 切换淡出 / 等级血量加成）
 const PATH_INFLATE = 24;
 const SWITCH_FADE_MS = 500;
 const LEVEL_HP_BONUS = 10;
+const ROOM_REVEAL_MS = 800;   // 未知房间进入后内容渐显时长
 
 export const LevelFlowMixin = {
   // ── 出生边界与开场演出 ──
@@ -114,6 +116,8 @@ export const LevelFlowMixin = {
       this.hudAnim = null;
       this.hudIdleClock = HUD_IDLE_MS;
       this.hudIdleStep = null;
+      this.hudIntro = null;         // 战斗 HUD 入场动画状态机（restart 后重置）
+      this.hudIntroDone = false;
       if (this.waveEvents) {
         this.waveEvents.forEach(ev => ev.remove(false));
       }
@@ -154,6 +158,13 @@ export const LevelFlowMixin = {
       for (const t of (this.guideTexts || new Map()).values()) t.destroy();
       this.guideTexts = new Map();
       this.gates = (l.gates || []).map(gt => ({ ...gt, spawnT: gt.active ? 1 : 0 }));
+      // 未知房间运行时状态：进入前内容不可见，进入后 0.8s 渐显（一次性揭示）
+      const roomLayout = l.roomLayout;
+      this.unknownRooms = (roomLayout?.mode === 'multi')
+        ? generateRoomLayout(roomLayout).rooms
+            .filter(rm => rm.type === 'unknown')
+            .map(rm => ({ c: rm.c, r: rm.r, x: rm.x, y: rm.y, w: rm.w, h: rm.h, revealed: false, revealT: 0 }))
+        : [];
       this.crateDebris = [];
       this.barrelExplosions = [];
 
@@ -278,6 +289,30 @@ export const LevelFlowMixin = {
       if (!this.editing) this.setupPlayCamera();
       if (!this.editing && !this.isMenuLevel()) this.startLevelIntro();
       this.draw();
+    },
+
+    // 未知房间揭示推进：玩家进入房间即一次性揭示，revealT 在 0.8s 内升到 1
+    updateRoomReveal(dt) {
+      if (!this.unknownRooms?.length || !this.player) return;
+      const p = this.player;
+      for (const rm of this.unknownRooms) {
+        if (rm.revealed) {
+          if (rm.revealT < 1) rm.revealT = Math.min(1, rm.revealT + dt / ROOM_REVEAL_MS);
+        } else if (p.x >= rm.x && p.x <= rm.x + rm.w && p.y >= rm.y && p.y <= rm.y + rm.h) {
+          rm.revealed = true;
+        }
+      }
+    },
+
+    // (x,y) 处内容在未知房间揭示状态下的可见透明度：非未知房间/编辑态=1；未进入=0；揭示中=revealT
+    roomRevealAlpha(x, y) {
+      if (this.editing || !this.unknownRooms?.length) return 1;
+      for (const rm of this.unknownRooms) {
+        if (x >= rm.x && x <= rm.x + rm.w && y >= rm.y && y <= rm.y + rm.h) {
+          return rm.revealed ? rm.revealT : 0;
+        }
+      }
+      return 1;
     },
 
     commitPlayer() {

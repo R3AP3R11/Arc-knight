@@ -81,6 +81,7 @@ export async function startServer(options = {}) {
     weapons: path.join(dataRoot, 'weapons'),
     pets: path.join(dataRoot, 'pets'),
     outlines: path.join(dataRoot, 'outlines'),
+    pixels: path.join(dataRoot, 'pixels'),
     uiDesigns: options.uiDesignsDir || path.join(root, 'docs', 'ui-designs')
   };
 
@@ -107,6 +108,7 @@ export async function startServer(options = {}) {
   await fs.mkdir(dirs.weapons, { recursive: true });
   await fs.mkdir(dirs.pets, { recursive: true });
   await fs.mkdir(dirs.outlines, { recursive: true });
+  await fs.mkdir(dirs.pixels, { recursive: true });
   await fs.mkdir(dirs.uiDesigns, { recursive: true });
 
   // 开发模式：levels/ui 属于项目 data/，可写且需要补齐默认内容。
@@ -197,6 +199,7 @@ export async function startServer(options = {}) {
           (parts[1] === 'weapons' && parts.length > 2 && (req.method === 'POST' || req.method === 'DELETE')) ||
           (parts[1] === 'pets' && parts.length > 2 && (req.method === 'POST' || req.method === 'DELETE')) ||
           (parts[1] === 'outlines' && parts.length > 2 && (req.method === 'POST' || req.method === 'DELETE')) ||
+          (parts[1] === 'pixels' && parts.length > 2 && (req.method === 'POST' || req.method === 'DELETE')) ||
           (parts[1] === 'ui-designs' && parts.length > 2 && (req.method === 'POST' || req.method === 'DELETE'))
         );
         if (readOnlyDenied) return json(res, { error: 'Read-only in packaged mode' }, 403);
@@ -370,6 +373,26 @@ export async function startServer(options = {}) {
           }
           if (req.method === 'POST') { await fs.writeFile(await file('outlines', id), JSON.stringify(await body(req), null, 2)); return json(res, { ok: true }); }
           if (req.method === 'DELETE') { await fs.rm(await file('outlines', id), { force: true }); return json(res, { ok: true }); }
+        }
+        if (parts[1] === 'pixels') {
+          if (parts.length === 2 && req.method === 'GET') {
+            let names = [];
+            try { names = await list('pixels'); } catch {}
+            const items = [];
+            for (const id of names) {
+              let name = id;
+              try { const doc = JSON.parse(await fs.readFile(await file('pixels', id), 'utf8')); if (doc && doc.name) name = doc.name; } catch {}
+              items.push({ id, name });
+            }
+            return json(res, { pixels: items });
+          }
+          const id = parts[2]; if (!id || !/^[-\w]+$/.test(id)) return json(res, { error: 'Invalid id' }, 400);
+          if (req.method === 'GET') {
+            try { return json(res, JSON.parse(await fs.readFile(await file('pixels', id), 'utf8'))); }
+            catch { return json(res, { error: 'Not found' }, 404); }
+          }
+          if (req.method === 'POST') { await fs.writeFile(await file('pixels', id), JSON.stringify(await body(req), null, 2)); return json(res, { ok: true }); }
+          if (req.method === 'DELETE') { await fs.rm(await file('pixels', id), { force: true }); return json(res, { ok: true }); }
         }
         if (parts[1] === 'ui-designs') {
           if (parts.length === 2 && req.method === 'GET') {

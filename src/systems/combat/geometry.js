@@ -219,3 +219,69 @@ export function pointSegmentDistance(px, py, x0, y0, x1, y1) {
   const cx = x0 + t * dx, cy = y0 + t * dy;
   return Math.hypot(px - cx, py - cy);
 }
+
+// ── 母舰命中判定：Hitbox 与画板本体一致（按设计稿 4 点风筝形，随朝向旋转）──
+// 母舰设计稿描边轮廓点（相对设计圆心，units = 设计单位）
+const MOTHERSHIP_KITE = [[-60, 0], [0, -180], [60, 0], [0, 90]];
+
+// 母舰世界坐标风筝形端点（e 为运行时敌人，facing 为朝向角，与渲染同公式）
+export function mothershipPolyVerts(e, facing) {
+  const s = e.artScale || 1;
+  const cos = Math.cos(facing), sin = Math.sin(facing);
+  return MOTHERSHIP_KITE.map(([px, py]) => {
+    const rx = px * cos - py * sin;
+    const ry = px * sin + py * cos;
+    return { x: e.x + rx * s, y: e.y + ry * s };
+  });
+}
+
+// 母舰本体包围半径（最长角点到圆心距离 = 设计尖端 180 × artScale），用于生成点留白/兜底
+export function mothershipBoundsR(e) {
+  return 180 * (e.artScale || 1);
+}
+
+export function pointInPolygon(x, y, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+
+function segSegCross(x0, y0, x1, y1, x2, y2, x3, y3) {
+  const d = (x1 - x0) * (y3 - y2) - (y1 - y0) * (x3 - x2);
+  if (Math.abs(d) < 1e-9) return null;
+  const t = ((x2 - x0) * (y3 - y2) - (y2 - y0) * (x3 - x2)) / d;
+  const u = ((x2 - x0) * (y1 - y0) - (y2 - y0) * (x1 - x0)) / d;
+  if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+  return { t, x: x0 + t * (x1 - x0), y: y0 + t * (y1 - y0) };
+}
+
+// 子弹线段命中母舰风筝形：返回首个命中点，否则 null
+export function mothershipBulletHit(e, facing, x0, y0, x1, y1) {
+  const poly = mothershipPolyVerts(e, facing);
+  if (pointInPolygon(x0, y0, poly)) return { x: x0, y: y0 };
+  let bestT = Infinity, bx = null, by = null;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length];
+    const r = segSegCross(x0, y0, x1, y1, a.x, a.y, b.x, b.y);
+    if (r && r.t < bestT) { bestT = r.t; bx = r.x; by = r.y; }
+  }
+  if (bx !== null) return { x: bx, y: by };
+  if (pointInPolygon(x1, y1, poly)) return { x: x1, y: y1 };
+  return null;
+}
+
+// 点到母舰风筝形的最短距离（点在形内返回 0）；用于玩家/护盾圆形与本体的贴触判定
+export function mothershipBodyDist(e, facing, px, py) {
+  const poly = mothershipPolyVerts(e, facing);
+  if (pointInPolygon(px, py, poly)) return 0;
+  let min = Infinity;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length];
+    const d = pointSegmentDistance(px, py, a.x, a.y, b.x, b.y);
+    if (d < min) min = d;
+  }
+  return min;
+}

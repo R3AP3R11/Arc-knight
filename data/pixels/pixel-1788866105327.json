@@ -1,0 +1,183 @@
+{
+  "shape": "pixel",
+  "count": 1,
+  "orbitRadius": 0,
+  "radius": 20,
+  "sides": 6,
+  "cols": 12,
+  "rows": 12,
+  "cellSize": 8,
+  "gridColor": null,
+  "cells": [
+    {
+      "x": 3,
+      "y": 3,
+      "color": "#00ffee"
+    },
+    {
+      "x": 3,
+      "y": 4,
+      "color": "#00ffee"
+    },
+    {
+      "x": 3,
+      "y": 5,
+      "color": "#00ffee"
+    },
+    {
+      "x": 3,
+      "y": 6,
+      "color": "#00ffee"
+    },
+    {
+      "x": 3,
+      "y": 7,
+      "color": "#00ffee"
+    },
+    {
+      "x": 3,
+      "y": 8,
+      "color": "#00ffee"
+    },
+    {
+      "x": 3,
+      "y": 9,
+      "color": "#00ffee"
+    },
+    {
+      "x": 3,
+      "y": 10,
+      "color": "#00ffee"
+    },
+    {
+      "x": 4,
+      "y": 10,
+      "color": "#00ffee"
+    },
+    {
+      "x": 5,
+      "y": 10,
+      "color": "#00ffee"
+    },
+    {
+      "x": 6,
+      "y": 10,
+      "color": "#00ffee"
+    },
+    {
+      "x": 7,
+      "y": 10,
+      "color": "#00ffee"
+    },
+    {
+      "x": 8,
+      "y": 10,
+      "color": "#00ffee"
+    },
+    {
+      "x": 8,
+      "y": 9,
+      "color": "#00ffee"
+    },
+    {
+      "x": 8,
+      "y": 8,
+      "color": "#00ffee"
+    },
+    {
+      "x": 8,
+      "y": 7,
+      "color": "#00ffee"
+    },
+    {
+      "x": 8,
+      "y": 6,
+      "color": "#00ffee"
+    },
+    {
+      "x": 8,
+      "y": 5,
+      "color": "#00ffee"
+    },
+    {
+      "x": 8,
+      "y": 4,
+      "color": "#00ffee"
+    },
+    {
+      "x": 8,
+      "y": 3,
+      "color": "#00ffee"
+    },
+    {
+      "x": 4,
+      "y": 2,
+      "color": "#00ffee"
+    },
+    {
+      "x": 4,
+      "y": 3,
+      "color": "#00ffee"
+    },
+    {
+      "x": 5,
+      "y": 2,
+      "color": "#00ffee"
+    },
+    {
+      "x": 6,
+      "y": 2,
+      "color": "#00ffee"
+    },
+    {
+      "x": 7,
+      "y": 2,
+      "color": "#00ffee"
+    },
+    {
+      "x": 7,
+      "y": 3,
+      "color": "#00ffee"
+    },
+    {
+      "x": 5,
+      "y": 5,
+      "color": "#00ffee"
+    },
+    {
+      "x": 5,
+      "y": 6,
+      "color": "#00ffee"
+    },
+    {
+      "x": 6,
+      "y": 6,
+      "color": "#00ffee"
+    },
+    {
+      "x": 6,
+      "y": 7,
+      "color": "#00ffee"
+    }
+  ],
+  "lineWidth": 4,
+  "color": "#ffa914",
+  "fill": null,
+  "rotSpeed": 0,
+  "phase": 0,
+  "dir": 1,
+  "arcStart": 0,
+  "arcEnd": 300,
+  "pattern": "plain",
+  "tickShortLen": 6,
+  "tickLongLen": 12,
+  "tickDensity": 12,
+  "tickRatio": 1,
+  "tickDir": "in",
+  "points": [],
+  "closed": false,
+  "offsetX": 0,
+  "offsetY": 0,
+  "offsetSpeed": 1,
+  "name": "电池"
+}

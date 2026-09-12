@@ -15,7 +15,7 @@ const ids = [
   'uiConfig', 'uiConfigPage', 'uiConfigBack', 'uiGraphSelect', 'uiNodeType',
   'uiNodeAdd', 'uiConfigSave', 'uiNodeList', 'uiPreviewCanvas', 'levelUi', 'dropRulesEditor',
   'roomPanel', 'roomCols', 'roomRows', 'roomThickness', 'roomWallColor', 'roomRoadWidth', 'roomRoadLength', 'roomGrid',
-  'roomCellPopup', 'roomCellPopupTitle', 'roomCellPopupClose', 'roomCellSize', 'roomCellMarkerType', 'roomCellMarkerIcon',
+  'roomCellPopup', 'roomCellPopupTitle', 'roomCellPopupClose', 'roomCellSize', 'roomCellType', 'roomCellMarkerType', 'roomCellMarkerIcon',
   'pvLevel', 'pvExp', 'pvPoints', 'pvGold', 'pvWeapons', 'pvMods', 'pvPets',
   'pvMoveSpeed', 'pvAttackPower', 'pvCritRate', 'pvAttackSpeed',
   'pvMaxHp', 'pvMaxShield', 'pvDamageReduction', 'pvDodgeRate',
@@ -32,6 +32,11 @@ const ids = [
   'drawRefOutline', 'drawRefOutlineUnderlay', 'drawRefOutlineToPoints', 'drawRefOutlineDelete', 'drawRefClear',
   'drawSelX', 'drawSelY', 'drawDelPoint', 'drawRotateDeg', 'drawScalePct', 'drawApplyTransform',
   'drawOutlineName', 'drawSaveOutline', 'artOutlineSelect', 'artAddOutline', 'artDeleteOutline',
+  'artPixelSelect', 'artAddPixel', 'artDeletePixel',
+  'pixelBoard', 'pixelBoardCanvas', 'pixelCols', 'pixelRows', 'pixelApplySize', 'pixelCellSize',
+  'pixelBgColor', 'pixelGridColor', 'pixelShowGrid', 'pixelColor', 'pixelEraser', 'pixelFillAll',
+  'pixelUndo', 'pixelRotateDeg', 'pixelApplyRotate', 'pixelName', 'pixelSave', 'pixelSaveLibrary', 'pixelCancel',
+  'pixelDone', 'pixelSnapGrid', 'artPixel',
   'weaponBoard', 'weaponPage', 'weaponBack', 'weaponName', 'weaponSelect', 'weaponNew',
   'weaponTemplate', 'weaponSave', 'weaponForm', 'weaponPreviewCanvas',
   'petBoard', 'petPage', 'petBack', 'petName', 'petSelect', 'petNew', 'petSave', 'petForm', 'petHint',
@@ -40,7 +45,11 @@ const ids = [
   'wireframe', 'wireframePage', 'wireframeBack', 'wireframeName', 'wireframeImport',
   'wireframeSave', 'wireframeStatus', 'wireframeXml', 'wireframeList', 'wireframeNote', 'wireframeCanvas',
   'wireframeSelect', 'wireframeLoad', 'wireframeRefresh', 'wireframeDelete',
-  'wireframePageSel', 'wireframePageImport'
+  'wireframePageSel', 'wireframePageImport',
+  'cinematic', 'cinematicsPage', 'cinematicBack', 'cinematicName', 'cinematicSelect', 'cinematicNew',
+  'cinematicSave', 'cinematicSetAnchor', 'cinematicDelete', 'cinematicPlay', 'cinematicStop',
+  'cinematicDuration', 'cinematicTimeScale', 'cinematicKeyframes', 'cinematicAddKeyframe',
+  'cinematicRefs', 'cinematicAddRef', 'cinematicPreviewCanvas'
 ];
 
 export function getDom() {

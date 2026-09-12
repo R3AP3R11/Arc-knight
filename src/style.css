@@ -1522,6 +1522,125 @@ body.pet-mode #petPage {
   display: block;
 }
 
+/* ── 运镜 · 时间轴编辑器 ── */
+body.cinematics-mode main {
+  display: none;
+}
+
+body.cinematics-mode #cinematicsPage {
+  display: block;
+}
+
+.cinema-main .art-element-list label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.cinema-main .art-element-list > label input,
+.cinema-main .art-element-list input,
+.cinema-main .art-element-list select {
+  width: 100%;
+  background: #000;
+  border: 1px solid #fff;
+  color: #fff;
+  padding: 6px;
+  border-radius: 4px;
+}
+
+.cinema-timeline {
+  position: relative;
+  height: 34px;
+  margin-bottom: 12px;
+  background: #0a1420;
+  border: 1px solid #fff;
+  border-radius: 6px;
+}
+
+.cinema-track {
+  position: absolute;
+  top: 16px;
+  left: 10px;
+  right: 10px;
+  height: 2px;
+  background: #2f5a7a;
+}
+
+.cinema-tick {
+  position: absolute;
+  top: 8px;
+  width: 10px;
+  height: 16px;
+  margin-left: -5px;
+  background: #ffa914;
+  border: 1px solid #000;
+  cursor: pointer;
+  text-indent: -9999px;
+  overflow: hidden;
+  padding: 0;
+}
+
+.cinema-tick.sel {
+  background: #ffe14d;
+  box-shadow: 0 0 6px #ffe14d;
+}
+
+.cinema-playhead {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  margin-left: -1px;
+  background: #4da6ff;
+  pointer-events: none;
+}
+
+.cinema-kf {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, auto));
+  gap: 6px;
+  align-items: end;
+  margin-bottom: 8px;
+}
+
+.cinema-kf label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+  color: #9ab;
+}
+
+.cinema-kf input,
+.cinema-kf select {
+  width: 100%;
+  background: #000;
+  border: 1px solid #fff;
+  color: #fff;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.cinema-kf .kf-del {
+  align-self: end;
+}
+
+.cinema-ref-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.cinema-ref-row .ref-del {
+  margin-left: auto;
+}
+
 .weapon-form {
   overflow-y: auto;
   max-height: calc(100vh - 140px);

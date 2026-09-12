@@ -18,6 +18,13 @@ const HUD_RECT_X = (VIEW_W - HUD_RECT_W) / 2;   // 760
 const HUD_RECT_Y = 16;
 const HUD_TRANSITION_MS = 500;   // 0.5s 切换动画
 export const HUD_IDLE_MS = 3000;        // 3s 常态脉冲
+// 战斗 HUD 入场动画（关卡开场结束后触发）：淡入 0.5s → 停留 0.2s → 闪烁（消失 0.3s，再渐显 0.5s 出现）
+const HUD_ENTER_FADE_MS = 500;
+const HUD_ENTER_HOLD_MS = 200;
+const HUD_BLINK_OUT_MS = 300;
+const HUD_BLINK_IN_MS = 500;
+// smoothstep 缓动（ease-in-out）：开头慢、中段自然、结尾缓，全程 0.5s 渐显过程清晰，避免前段跳涨观感像瞬现
+const hudEaseInOut = x => x * x * (3 - 2 * x);
 const HUD_STATES = {
   explore: { color: '#ffffff', label: 'EXPLORE', text: '#000000' },
   combat:  { color: '#ff3b3b', label: 'COMBAT',  text: '#ffffff' },
@@ -85,6 +92,8 @@ export const HudMixin = {
       } else if (this.state === 'playing') {
         this.hudIdleClock = HUD_IDLE_MS;
       }
+
+      this.updateBossBar(dt);
     },
 
     drawHudIndicator() {
@@ -113,6 +122,83 @@ export const HudMixin = {
         this.hudIndicatorText.setColor(textColor);
         this.hudIndicatorText.setVisible(true);
       }
+    },
+
+    // 推进母舰 Boss 血条显示进度（约 0.8s 展开）；目标死亡则清除隐藏。
+    updateBossBar(dt) {
+      const t = this.bossTarget;
+      if (t) {
+        this.bossBarReveal = Math.min(1, (this.bossBarReveal || 0) + dt / 800);
+        this._trackBossGhost();
+        if (!t.alive) { this.bossTarget = null; this.bossGhost = null; }
+      }
+    },
+
+    // Boss 受伤残弧：血条下降记录旧→新比值作为红色残段，约 1s 线性渐隐（对齐玩家血条 ghost）
+    _trackBossGhost() {
+      const t = this.bossTarget;
+      if (!t) return;
+      const ratio = t.maxHp > 0 ? t.hp / t.maxHp : 0;
+      const now = this.time.now;
+      if (ratio < (this._lastBossRatio ?? ratio) - 1e-4) {
+        this.bossGhost = { fromRatio: this._lastBossRatio, toRatio: ratio, start: now };
+      }
+      this._lastBossRatio = ratio;
+      const gh = this.bossGhost;
+      if (gh) {
+        gh.age = now - gh.start;
+        if (gh.age > 1000) this.bossGhost = null;
+      }
+    },
+
+    // 母舰 Boss 血条：位于顶部 EXPLORE 条下方。名称+血条随 reveal 0→1 展开（约 0.8s）。
+    drawBossBar(hudAlpha = 1) {
+      const g = this.uiG;
+      const t = this.bossTarget;
+      if (!t) {
+        if (this.bossNameText) this.bossNameText.setVisible(false);
+        return;
+      }
+      const reveal = Math.min(1, this.bossBarReveal || 0);
+      const name = t.boss?.name || '母舰';
+      const barW = VIEW_W * (2 / 3) * 0.795625;   // 再短5%（≈1018），与左上小地图留出间距
+      const barH = 26;
+      const barX = (VIEW_W - barW) / 2;
+      const barY = HUD_RECT_Y + HUD_RECT_H + 24;
+      const nameY = barY - 20;
+
+      if (!this.bossNameText) {
+        this.bossNameText = this.add.text(0, 0, '', {
+          fontFamily: FONT_TECH,
+          fontSize: '30px', color: '#ffffff'
+        }).setOrigin(0, 0.5).setDepth(1001);
+        this.cameras.main.ignore(this.bossNameText);
+      }
+      this.bossNameText.setText(name);
+      this.bossNameText.setPosition(barX + 4, nameY);
+      this.bossNameText.setAlpha(hudAlpha * reveal);
+      this.bossNameText.setVisible(true);
+
+      if (reveal <= 0.001) return;   // 尚未展开：仅名称渐显
+
+      const w = barW * reveal;                       // 容器从左到右逐步展开
+      g.fillStyle(0x000000, 0.6);
+      g.fillRect(barX, barY, w, barH);
+      const ratio = t.maxHp > 0 ? Math.min(1, Math.max(0, t.hp / t.maxHp)) : 0;
+      // 当前血量：白色
+      g.fillStyle(0xffffff, 1);
+      g.fillRect(barX, barY, w * ratio, barH);
+      // 受伤残弧：最近掉的血量显示红色并渐隐（约1s）
+      const gh = this.bossGhost;
+      if (gh && gh.fromRatio > ratio + 1e-4) {
+        const ghAlpha = Math.max(0, Math.min(1, 1 - (gh.age / 1000)));
+        if (ghAlpha > 0) {
+          g.fillStyle(0xff3b3b, ghAlpha);
+          g.fillRect(barX + w * ratio, barY, (gh.fromRatio - ratio) * w, barH);
+        }
+      }
+      g.lineStyle(2, 0xffffff, 0.85);
+      g.strokeRect(barX, barY, w, barH);
     },
 
     drawHud() {
@@ -217,6 +303,7 @@ export const HudMixin = {
     },
 
     hideHudOverlay() {
+      if (this.bossNameText) this.bossNameText.setVisible(false);
       if (this.weaponLabels) this.weaponLabels.forEach(t => t.setVisible(false));
       if (this.weaponIconImage) this.weaponIconImage.setVisible(false);
       if (this.ammoCurrent) {
@@ -224,6 +311,50 @@ export const HudMixin = {
         this.ammoMax.setVisible(false);
       }
       this.hideMinimapOverlay?.();
+      // 清空小地图持久绘制层（contentG/frameG 每帧重画，离开战斗态不调用 drawMinimap 需手动清空，否则结算/菜单残留上一帧图形）
+      if (this.minimapContentG) { this.minimapContentG.clear(); this.minimapContentG.setAlpha(1); }
+      if (this.minimapFrameG) { this.minimapFrameG.clear(); this.minimapFrameG.setAlpha(1); }
+    },
+
+    // 战斗 HUD 整体入场 alpha（关卡开场 levelIntro 结束后触发）：0(淡入前) → 渐显 0.5s → 停留 0.2s → 闪烁(消失0.15s→出现)
+    hudEnterAlpha() {
+      const now = this.time.now;
+      if (this.levelIntro) return 0;          // 入场动画进行中：HUD 完全不显示
+      if (this.hudIntroDone) return 1;        // 已播完入场动画
+      if (!this.hudIntro) this.hudIntro = { phase: 'fadeIn', start: now };
+      const st = this.hudIntro;
+      const t = now - st.start;
+      switch (st.phase) {
+        case 'fadeIn':
+          if (t >= HUD_ENTER_FADE_MS) { st.phase = 'hold'; st.start = now; return 1; }
+          return hudEaseInOut(t / HUD_ENTER_FADE_MS);   // 全程平滑渐显，开头慢过程明显
+        case 'hold':
+          if (t >= HUD_ENTER_HOLD_MS) { st.phase = 'blinkOut'; st.start = now; return 1; }
+          return 1;
+        case 'blinkOut':
+          if (t >= HUD_BLINK_OUT_MS) { st.phase = 'blinkIn'; st.start = now; return 0; }
+          return 1 - t / HUD_BLINK_OUT_MS;   // 平滑淡出（消失）
+        case 'blinkIn':
+          if (t >= HUD_BLINK_IN_MS) { this.hudIntroDone = true; this.hudIntro = null; return 1; }
+          return hudEaseInOut(t / HUD_BLINK_IN_MS);   // 闪烁后重新出现：同样 0.5s 全程渐显
+      }
+      return 1;
+    },
+
+    // 把入场 alpha 应用到战斗 HUD 的全部独立对象（battle 节点图文 / HUD 文本 / 设置图标 / 小地图持久层与文字）
+    setHudAlpha(a) {
+      const bt = this.uiTexts?.battle;
+      if (bt) for (const t of bt.values()) t.setAlpha(a);
+      const bi = this.uiImages?.battle;
+      if (bi) for (const s of bi.values()) s.setAlpha(a);
+      if (this.hudIndicatorText) this.hudIndicatorText.setAlpha(a);
+      if (this.ammoCurrent) { this.ammoCurrent.setAlpha(a); this.ammoMax.setAlpha(a); }
+      if (this.weaponIconImage) this.weaponIconImage.setAlpha(a);
+      if (this.weaponLabels) for (const t of this.weaponLabels) t.setAlpha(a);
+      if (this.menuIconSprites?.get?.('settings')) this.menuIconSprites.get('settings').setAlpha(a);
+      if (this.minimapContentG) this.minimapContentG.setAlpha(a);
+      if (this.minimapFrameG) this.minimapFrameG.setAlpha(a);
+      if (this.minimapTexts) for (const t of this.minimapTexts.values()) t.setAlpha(a);
     },
 
     updateWeaponLabels() {

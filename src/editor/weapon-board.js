@@ -288,8 +288,20 @@ function shapeFieldEdit(el, type, index) {
       ['offsetX', '偏移X', 'number', el.offsetX], ['offsetY', '偏移Y', 'number', el.offsetY],
       ['offsetSpeed', '偏移速度', 'number', el.offsetSpeed]
     ].map(([k, l, t, v]) => miniField(k, l, t, v, index)).join('') +
-      miniSelect('pattern', '显示形式', el.pattern || 'plain', [['plain', '普通圆弧'], ['clock', '钟表表盘']], index) +
+      miniSelect('pattern', '显示形式', el.pattern || 'plain', [['plain', '普通圆弧'], ['clock', '钟表表盘'], ['hands', '长短针']], index) +
       (el.pattern === 'clock' ? [
+        ['tickLongLen', '长针长度', 'number', el.tickLongLen],
+        ['tickShortLen', '短针长度', 'number', el.tickShortLen],
+        ['tickDensity', '刻度密度(总针数)', 'number', el.tickDensity],
+        ['tickRatio', '长短针比例', 'number', el.tickRatio]
+      ].map(([k, l, t, v]) => miniField(k, l, t, v, index)).join('') +
+        miniSelect('tickDir', '刻度方向', el.tickDir || 'in', [['in', '朝圆心'], ['out', '向外'], ['both', '双向']], index)
+        : '') +
+      (el.pattern === 'hands' ? [
+        ['handLongRadius', '长针轨道半径', 'number', el.handLongRadius],
+        ['handShortRadius', '短针轨道半径', 'number', el.handShortRadius],
+        ['handLongColor', '长针颜色', 'color', el.handLongColor || el.color],
+        ['handShortColor', '短针颜色', 'color', el.handShortColor || el.color],
         ['tickLongLen', '长针长度', 'number', el.tickLongLen],
         ['tickShortLen', '短针长度', 'number', el.tickShortLen],
         ['tickDensity', '刻度密度(总针数)', 'number', el.tickDensity],

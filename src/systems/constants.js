@@ -79,12 +79,23 @@ export const ENEMY_BEHAVIOR = {
   basic1: { size: 30, approach: 200, engage: 50, engageDelay: 0.4, colorRange: 300, orbit: null, charge: null, spin: 0, onEnterOrbit: { minDur: 0.5, maxDur: 1, minDeg: 60, maxDeg: 120 } },
   basic2: { size: 30, approach: 200, engage: 50, engageDelay: 0.4, colorRange: 300, orbit: { period: 2, duration: 1, degPerSec: 30 }, charge: null, spin: 4 },
   advanced1: { size: 48, approach: 200, engage: 160, engageDelay: 0.4, colorRange: 200, orbit: { period: 1, duration: 0.5, degPerSec: 80 }, charge: { pause: 0.6, speed: 200 }, spin: 0, lineWidth: 6 },
-  advanced2: { size: 40, attackRange: 500, fireInterval: 400, burstInterval: 3000, burstCount: 3, speed: 30, dormantSpin: 20, orbitMin: 30, orbitMax: 40, growDuration: 0.5, orbit: null, charge: null, spin: 0, onEnterOrbit: null }
+  advanced2: { size: 40, attackRange: 500, fireInterval: 400, burstInterval: 3000, burstCount: 3, speed: 30, dormantSpin: 20, orbitMin: 30, orbitMax: 40, growDuration: 0.5, orbit: null, charge: null, spin: 0, onEnterOrbit: null },
+  mothership: { size: 260, speed: 30, spawnInterval: 5000, spawnRadius: 220, orbit: null, charge: null, onEnterOrbit: null, spin: 0 },
+  // 原型机-2-5T5（Boss）：不走通用行为机，行为在 systems/combat/boss25t5.js（size 用于碰撞半径 r=80）
+  'boss-2-5t5': { size: 160, orbit: null, charge: null, onEnterOrbit: null, spin: 0 }
 };
+
+// 母舰本体周身投放敌人：等概率随机抽取一组，按 count 逐个在母舰身周落点生成
+export const MOTHERSHIP_SPAWN_TABLE = [
+  { type: 'basic1', count: 5 },
+  { type: 'basic2', count: 6 },
+  { type: 'advanced1', count: 2 },
+  { type: 'advanced2', count: 1 }
+];
 
 // ── 编辑器手柄与闸门（Gate）外观 ──
 export const ROTATE_HANDLE_OFFSET = 28;
 export const GATE_SPAWN_MS = 500;
-export const GATE_OUTER_COLOR = '#FFE6BE';
-export const GATE_INNER_COLOR = '#FFCB85';
+export const GATE_OUTER_COLOR = '#ffa200';
+export const GATE_INNER_COLOR = '#ffa200';
 export const GATE_OFFSET_RATIO = 0.14;

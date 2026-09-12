@@ -13,7 +13,7 @@ import { renderAsset, designRadius } from '../art/asset-render.js';
 
 // 小地图视窗布局常量（左上角区域当前空闲）
 const MM_X = 16, MM_Y = 16;          // 视窗左上角（UI 坐标）
-const MM_VIEW_W = 480, MM_VIEW_H = 270;  // 视窗固定尺寸（玩家始终居中）
+const MM_VIEW_W = 480 * 0.85, MM_VIEW_H = 270;  // 视窗固定尺寸，宽度短 15% 避免遮 boss 血条
 const MM_CELL = 80;                  // 箱庭正方形边长（统一，大小差异不体现）
 const MM_GAP = 45;                   // 箱庭间连线（通道）长度
 const MM_BG = 0x000000;              // 视窗底色（黑底）
@@ -167,6 +167,13 @@ export const MinimapMixin = {
       cg.lineStyle(1.5, MM_BORDER, 1);
       cg.strokeRect(sx, sy, MM_CELL, MM_CELL);
 
+      // 未知房间：未进入前以「未知」占位，不提前暴露内容/标记；进入揭示后显示真实标记
+      const revealA = (rm.type === 'unknown') ? this.roomRevealAlpha(rm.x + rm.w / 2, rm.y + rm.h / 2) : 1;
+      if (revealA <= 0) {
+        ensure(`mm_unknown_${rm.c}_${rm.r}`, MM_TEXT_SIZE, MM_TEXT_COLOR)
+          .setOrigin(0.5).setPosition(cx, cy).setText('未知');
+        continue;
+      }
       const marker = rm.marker;
       if (!marker) continue;
       const icon = marker.icon;

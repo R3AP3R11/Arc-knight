@@ -5,6 +5,10 @@ export const MIN_WALL_SIZE = 8;
 export const MINIMAP_MARKER_TYPES = ['combat', 'idol', 'chest', 'vendor', 'boss'];
 export const MINIMAP_MARKER_LABELS = { combat: '战斗', idol: '神像', chest: '宝箱', vendor: '商人', boss: 'BOSS' };
 
+// 多箱庭房间类型（房间面板按此消费）：unknown=未知房间（进入前内容不可见，进入后 0.8s 渐显）
+export const ROOM_TYPES = ['normal', 'unknown'];
+export const ROOM_TYPE_LABELS = { normal: '普通房间', unknown: '未知房间' };
+
 // 多箱庭小地图标记归一化：非法/空 → null；type 不在白名单 → 丢弃整个 marker；icon 字符串否则空串
 export function normalizeRoomMarker(value) {
   if (!value || typeof value !== 'object') return null;
@@ -15,12 +19,16 @@ export function normalizeRoomMarker(value) {
 
 import { normalizeRoomLayout } from './rooms.js';
 import { isKnownWeapon } from './systems/art/weapon-registry.js';
+import { normalizeBoss25T5Config } from './systems/combat/boss25t5.js';
 
 export const ENEMY_TYPES = {
   basic1: { name: '基础敌人1', hp: 30, damage: 10 },
   basic2: { name: '基础敌人2', hp: 50, damage: 15 },
   advanced1: { name: '进阶敌人1', hp: 80, damage: 20 },
-  advanced2: { name: '进阶敌人2', hp: 100, damage: 15 }
+  advanced2: { name: '进阶敌人2', hp: 100, damage: 15 },
+  mothership: { name: '母舰', hp: 1500, damage: 0, art: 'asset-1788764178616', artScale: 2 },
+  // 原型机-2-5T5（Boss）：art 直接写字符串字面量，避免 state.js ↔ combat 模块的循环引用；artScale 由关卡/编辑器决定
+  'boss-2-5t5': { name: '原型机-2-5T5', hp: 1500, damage: 0, art: 'asset-1788964413981' }
 };
 
 export const DEFAULT_DROPS = { gold: 1, exp: 1, diamond: 0 };
@@ -84,11 +92,26 @@ export function normalizeEnemy(enemy, index) {
     artScale: (() => { const n = Number(enemy?.artScale); return Number.isFinite(n) && n > 0 ? n : 1; })(),
     hp: Number(enemy?.hp ?? def.hp),
     damage: Number(enemy?.damage ?? def.damage),
+    // BOSS 被击败时播放的运镜 id（母舰用顶层字段；编辑器母舰分支写的就是这里，
+    // 若不在 normalize 里保留，落盘→读回会被静默丢弃，导致运镜不生效）
+    cutsceneId: (typeof enemy?.cutsceneId === 'string' ? enemy.cutsceneId : ''),
     drops: {
       gold: Math.max(0, Number(enemy?.drops?.gold ?? DEFAULT_DROPS.gold)),
       exp: Math.max(0, Number(enemy?.drops?.exp ?? DEFAULT_DROPS.exp)),
       diamond: Math.max(0, Number(enemy?.drops?.diamond ?? DEFAULT_DROPS.diamond))
-    }
+    },
+    // Boss 配置（母舰 / 原型机-2-5T5；非 Boss 敌人为 null，无害）——按 type 分派，字段各自保留
+    boss: type === 'boss-2-5t5'
+      ? normalizeBoss25T5Config(enemy?.boss)
+      : (enemy?.boss && typeof enemy.boss === 'object') ? {
+        spawnInterval: Number(enemy.boss.spawnInterval) || 0,
+        spawnTable: Array.isArray(enemy.boss.spawnTable)
+          ? enemy.boss.spawnTable
+            .map(s => ({ type: ENEMY_TYPES[s?.type] ? s.type : null, count: Math.max(1, Math.floor(Number(s?.count) || 1)) }))
+            .filter(s => s.type)
+          : [],
+        name: (typeof enemy.boss.name === 'string' && enemy.boss.name) ? enemy.boss.name : ''
+      } : null
   };
 }
 
@@ -252,7 +275,7 @@ export function normalizeIcon(icon, index) {
   };
 }
 
-export const EVENT_TYPES = ['complete', 'roomComplete', 'combat', 'spawnEnemy', 'switchLevel', 'spawnGate', 'removeGate'];
+export const EVENT_TYPES = ['complete', 'roomComplete', 'combat', 'spawnEnemy', 'switchLevel', 'spawnGate', 'removeGate', 'bossBattle', 'playCinematic'];
 
 function normalizeSpawnWaves(s) {
   const def = {
@@ -311,12 +334,18 @@ function normalizeTriggerEvent(ev, trigger) {
     };
   }
 
+  if (type === 'playCinematic') {
+    const cinematicId = typeof ev.cinematicId === 'string' ? ev.cinematicId : '';
+    const focusTarget = typeof ev.focusTarget === 'string' && ev.focusTarget ? ev.focusTarget : '';
+    return { type, when, cinematicId, focusTarget };
+  }
+
   // spawnGate | removeGate
   const raw = Array.isArray(ev.gateIds) ? ev.gateIds
     : ev.gateId ? [ev.gateId]
     : Array.isArray(trigger?.gateIds) ? trigger.gateIds
     : trigger?.gateId ? [trigger.gateId] : [];
-  return { type, when, gateIds: raw.filter(Boolean) };
+  return { type, when, auto: ev.auto === true, gateIds: raw.filter(Boolean) };
 }
 
 export function normalizeTrigger(trigger, index) {
@@ -347,6 +376,39 @@ export function normalizeTrigger(trigger, index) {
   return base;
 }
 
+// 运镜动画（过场运镜特效）定义归一：补默认字段、过滤非法 id/keyframes、按 t 升序
+function normalizeCinematic(value, index) {
+  if (!value || typeof value !== 'object' || !value.id) return null;
+  const durationMs = Math.max(0, Number(value.durationMs) || 0);
+  const rawKeyframes = Array.isArray(value.keyframes) ? value.keyframes : [];
+  const keyframes = rawKeyframes
+    .map(k => {
+      if (!k || typeof k !== 'object') return null;
+      const t = Number(k.t);
+      if (!Number.isFinite(t)) return null;
+      return {
+        t: Math.max(0, Math.min(t, durationMs)),
+        zoom: Number.isFinite(Number(k.zoom)) ? Number(k.zoom) : 1,
+        panX: Number.isFinite(Number(k.panX)) ? Number(k.panX) : 0,
+        panY: Number.isFinite(Number(k.panY)) ? Number(k.panY) : 0,
+        rotation: Number.isFinite(Number(k.rotation)) ? Number(k.rotation) : 0,
+        alpha: Number.isFinite(Number(k.alpha)) ? Number(k.alpha) : 0,
+        ease: k.ease == null ? 'linear' : String(k.ease)
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.t - b.t);
+  const rawTimeScale = Number(value.timeScale);
+  const timeScale = Number.isFinite(rawTimeScale) ? Math.min(1, Math.max(0.05, rawTimeScale)) : 1;
+  return {
+    id: String(value.id),
+    name: value.name == null ? '' : String(value.name),
+    durationMs,
+    timeScale,
+    keyframes
+  };
+}
+
 // 美术方案 → 武器类型强绑定（切换方案即切换弹道）
 // default 仅为示例方案，正式游戏不使用
 export const SCHEME_WEAPONS = {
@@ -372,6 +434,7 @@ export const DEFAULT_LEVEL = {
   spawn: { x: 130, y: 300, scheme: 'default', hp: 100, maxHp: 100, level: 1, exp: 0, expToNext: 100, gold: 0, weapons: ['radial'] },
   dropRules: {},
   triggers: [],
+  cinematics: [],
   crates: [],
   barrels: [],
   chests: [],
@@ -451,9 +514,10 @@ function normalizeGate(value, index) {
     h: Math.max(10, Number(value.h) || 45),
     rotation: Number(value.rotation) || 0,
     label: value.label ?? 'Barrier Active',
-    color1: value.color1 || '#FFE6BE',
-    color2: value.color2 || '#FFCB85',
+    color1: value.color1 || '#ffa200',
+    color2: value.color2 || '#ffa200',
     active: value.active === true,
+    shieldOnly: value.shieldOnly === true,
     visible: value.visible !== false
   };
 }
@@ -500,6 +564,7 @@ export function normalizeLevel(value) {
     })),
     enemies: (Array.isArray(data.enemies) ? data.enemies : clone(DEFAULT_LEVEL.enemies)).map(normalizeEnemy),
     triggers: (Array.isArray(data.triggers) ? data.triggers : []).map(normalizeTrigger),
+    cinematics: (Array.isArray(data.cinematics) ? data.cinematics : clone(DEFAULT_LEVEL.cinematics)).map(normalizeCinematic).filter(Boolean),
     crates: (Array.isArray(data.crates) ? data.crates : []).map(normalizeCrate),
     barrels: (Array.isArray(data.barrels) ? data.barrels : []).map(normalizeBarrel),
     chests: (Array.isArray(data.chests) ? data.chests : []).map(normalizeChest),

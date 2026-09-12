@@ -1,0 +1,137 @@
+{
+  "shape": "pixel",
+  "count": 1,
+  "orbitRadius": 0,
+  "radius": 20,
+  "sides": 6,
+  "cols": 12,
+  "rows": 12,
+  "cellSize": 8,
+  "gridColor": null,
+  "cells": [
+    {
+      "x": 3,
+      "y": 5,
+      "color": "#00ff11"
+    },
+    {
+      "x": 4,
+      "y": 5,
+      "color": "#00ff11"
+    },
+    {
+      "x": 5,
+      "y": 5,
+      "color": "#00ff11"
+    },
+    {
+      "x": 6,
+      "y": 5,
+      "color": "#00ff11"
+    },
+    {
+      "x": 7,
+      "y": 5,
+      "color": "#00ff11"
+    },
+    {
+      "x": 8,
+      "y": 5,
+      "color": "#00ff11"
+    },
+    {
+      "x": 3,
+      "y": 6,
+      "color": "#00ff11"
+    },
+    {
+      "x": 4,
+      "y": 6,
+      "color": "#00ff11"
+    },
+    {
+      "x": 5,
+      "y": 6,
+      "color": "#00ff11"
+    },
+    {
+      "x": 6,
+      "y": 6,
+      "color": "#00ff11"
+    },
+    {
+      "x": 7,
+      "y": 6,
+      "color": "#00ff11"
+    },
+    {
+      "x": 8,
+      "y": 6,
+      "color": "#00ff11"
+    },
+    {
+      "x": 5,
+      "y": 3,
+      "color": "#00ff11"
+    },
+    {
+      "x": 5,
+      "y": 4,
+      "color": "#00ff11"
+    },
+    {
+      "x": 6,
+      "y": 7,
+      "color": "#00ff11"
+    },
+    {
+      "x": 5,
+      "y": 8,
+      "color": "#00ff11"
+    },
+    {
+      "x": 5,
+      "y": 7,
+      "color": "#00ff11"
+    },
+    {
+      "x": 6,
+      "y": 8,
+      "color": "#00ff11"
+    },
+    {
+      "x": 6,
+      "y": 4,
+      "color": "#00ff11"
+    },
+    {
+      "x": 6,
+      "y": 3,
+      "color": "#00ff11"
+    }
+  ],
+  "lineWidth": 4,
+  "color": "#ffa914",
+  "fill": null,
+  "rotSpeed": 0,
+  "phase": 0,
+  "dir": 1,
+  "arcStart": 0,
+  "arcEnd": 300,
+  "pattern": "plain",
+  "tickShortLen": 6,
+  "tickLongLen": 12,
+  "tickDensity": 12,
+  "tickRatio": 1,
+  "tickDir": "in",
+  "handLongRadius": 20,
+  "handShortRadius": 20,
+  "handLongColor": "#ffa914",
+  "handShortColor": "#ffa914",
+  "points": [],
+  "closed": false,
+  "offsetX": 0,
+  "offsetY": 0,
+  "offsetSpeed": 1,
+  "name": "恢复图标"
+}

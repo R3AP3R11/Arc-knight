@@ -9,6 +9,7 @@ import { CELL, FONT_TECH, BARREL_TEX_KEY, CHEST_CLOSED_KEY, CHEST_OPEN_KEY, CHES
 import { wallCorners, wallRotationRad } from '../combat/geometry.js';
 import { color, drawCrate, drawCrateDebris, drawPortalShape, drawWormhole, drawEnemyShape, drawDropDiamond, drawWallShape, drawShieldArc, drawPlayer } from './entity-art.js';
 import { drawGates } from '../editor/editor-geometry.js';
+import { drawBoss25T5Zones, drawBoss25T5Vortices } from './boss25t5-art.js';
 import { WEAPONS } from '../combat/weapons.js';
 import { DEFAULT_WALL_COLOR } from '../../state.js';
 import { ensureDesigns } from '../art/design-store.js';
@@ -113,7 +114,9 @@ export const WorldRenderMixin = {
         }
 
         sprite.setPosition(img.x, img.y);
-        sprite.setVisible(this.editing || img.visible !== false);
+        const ra = this.roomRevealAlpha(img.x, img.y);
+        sprite.setAlpha(ra);
+        sprite.setVisible((this.editing || img.visible !== false) && ra > 0);
         const tw = sprite.frame?.width || img.w;
         const th = sprite.frame?.height || img.h;
         sprite.setScale(img.w / tw, img.h / th);
@@ -164,6 +167,9 @@ export const WorldRenderMixin = {
         img.setPosition(b.x, b.y);
         const tw = img.frame?.width || 60;
         img.setScale((b.r * 2) / tw);
+        const ra = this.roomRevealAlpha(b.x, b.y);
+        img.setAlpha(ra);
+        img.setVisible(ra > 0);
       }
 
       for (const [id, img] of this.barrelSprites) {
@@ -192,7 +198,9 @@ export const WorldRenderMixin = {
         const tw = img.frame?.width || 1024;
         const th = img.frame?.height || 755;
         img.setScale(Math.min(v.w / tw, v.h / th));
-        img.setVisible(v.visible !== false);
+        const ra = this.roomRevealAlpha(v.x, v.y);
+        img.setAlpha(ra);
+        img.setVisible(v.visible !== false && ra > 0);
       }
 
       for (const [id, img] of this.vendorSprites) {
@@ -221,7 +229,9 @@ export const WorldRenderMixin = {
         const tw = img.frame?.width || 1145;
         const th = img.frame?.height || 1098;
         img.setScale(Math.min(v.w / tw, v.h / th));
-        img.setVisible(v.visible !== false);
+        const ra = this.roomRevealAlpha(v.x, v.y);
+        img.setAlpha(ra);
+        img.setVisible(v.visible !== false && ra > 0);
       }
 
       for (const [id, img] of this.idolSprites) {
@@ -266,7 +276,9 @@ export const WorldRenderMixin = {
         }
 
         sprite.setPosition(ic.x, ic.y);
-        sprite.setVisible(this.editing || ic.visible !== false);
+        const ra = this.roomRevealAlpha(ic.x, ic.y);
+        sprite.setAlpha(ra);
+        sprite.setVisible((this.editing || ic.visible !== false) && ra > 0);
         const tw = sprite.frame?.width || ic.w;
         const th = sprite.frame?.height || ic.h;
         sprite.setScale(Math.min(ic.w / tw, ic.h / th));
@@ -301,8 +313,9 @@ export const WorldRenderMixin = {
         t.setPosition(p.x, p.y);
         t.setRotation(Phaser.Math.DegToRad(p.rotation || 0));
         t.setFontSize(Math.max(10, Math.round(p.h * 0.26)));
-        t.setAlpha(PORTAL_ALPHA);
-        t.setVisible(true);
+        const ra = this.roomRevealAlpha(p.x, p.y);
+        t.setAlpha(PORTAL_ALPHA * ra);
+        t.setVisible(ra > 0);
       }
 
       for (const [id, t] of this.portalTexts) {
@@ -338,7 +351,9 @@ export const WorldRenderMixin = {
         // 开启态内容在画布内留白更多，按内容宽比补偿，使开启/常态视觉同宽
         const correction = opened ? CHEST_OPEN_SCALE_CORRECTION : 1;
         img.setScale(CHEST_SIZE / tw * correction);
-        img.setVisible(true);
+        const ra = this.roomRevealAlpha(c.x, c.y);
+        img.setAlpha(ra);
+        img.setVisible(ra > 0);
       }
 
       for (const [id, img] of this.chestSprites) {
@@ -406,7 +421,7 @@ export const WorldRenderMixin = {
 
       const crates = this.editing ? (l.crates || []) : this.crates.filter(c => c.alive);
       crates.forEach(c => {
-        drawCrate(g, c.x, c.y);
+        drawCrate(g, c.x, c.y, this.roomRevealAlpha(c.x, c.y));
         if (this.editing && ctx.state.selected === c) {
           g.lineStyle(2, 0xffe083);
           g.strokeRect(c.x - c.w / 2, c.y - c.h / 2, c.w, c.h);
@@ -441,7 +456,7 @@ export const WorldRenderMixin = {
 
       const portals = this.editing ? (l.portals || []) : (this.portals || []).filter(p => p.spawned && p.visible !== false);
       portals.forEach(p => {
-        drawPortalShape(g, p.x, p.y, p.w, p.h, p.rotation || 0);
+        drawPortalShape(g, p.x, p.y, p.w, p.h, p.rotation || 0, this.roomRevealAlpha(p.x, p.y));
         if (this.editing && ctx.state.selected === p) {
           g.lineStyle(2, 0xffe083);
           g.strokeCircle(p.x, p.y, p.interactRadius || 90);
@@ -543,16 +558,18 @@ export const WorldRenderMixin = {
       } else {
         this.drawSpawnEffects(g);
         this.drawLockEffects(g);
-        this.enemies.forEach(e => { if (e.alive) drawEnemyShape(g, e, true, this.player, (this.time?.now || 0) / 1000); });
+        this.enemies.forEach(e => { if (e.alive) drawEnemyShape(g, e, true, this.player, (this.time?.now || 0) / 1000, this.roomRevealAlpha(e.x, e.y)); });
         this.hitEffects.forEach(h => {
           g.fillStyle(h.color || 0xffffff, Math.max(0, h.ttl / HIT_FX_TTL));
           g.fillCircle(h.x, h.y, HIT_FX_RADIUS);
         });
         this.drops.forEach(d => {
-          if (d.type === 'gold') drawDropDiamond(g, d.x, d.y, 0xffd54f);
-          else if (d.type === 'diamond') drawDropDiamond(g, d.x, d.y, 0x00e5ff);
+          const da = this.roomRevealAlpha(d.x, d.y);
+          if (da <= 0) return;
+          if (d.type === 'gold') drawDropDiamond(g, d.x, d.y, 0xffd54f, da);
+          else if (d.type === 'diamond') drawDropDiamond(g, d.x, d.y, 0x00e5ff, da);
           else {
-            g.fillStyle(d.type === 'charge' ? color(WEAPONS[d.weapon]?.ringColor || '#3a7bff') : 0xffffff);
+            g.fillStyle(d.type === 'charge' ? color(WEAPONS[d.weapon]?.ringColor || '#3a7bff') : 0xffffff, da);
             g.fillCircle(d.x, d.y, 3);
           }
         });
@@ -560,6 +577,12 @@ export const WorldRenderMixin = {
 
       if (!this.editing) {
         if (!this.isMenuLevel()) {
+          // BOSS「原型机-2-5T5」技能5 蓝色漩涡：画在技能区域黑遮罩之前（遮罩须盖住漩涡），
+          // 也一定在 drawPlayer 之前 → 图层「玩家之下、其余世界元素之上」。
+          drawBoss25T5Vortices(g, this.boss25t5Vortices || [], (this.time?.now || 0) / 1000);
+          // BOSS「原型机-2-5T5」技能区域 + 黑色遮罩：紧贴 drawPlayer 之前调用，
+          // 保证图层在「玩家之下、其余世界元素之上」（本体已在上方敌人循环绘制，天然在遮罩之下）。
+          this.enemies.forEach(e => { if (e.type === 'boss-2-5t5' && e.alive) drawBoss25T5Zones(g, e, (this.time?.now || 0) / 1000); });
           drawPlayer(g, this.player, (this.time?.now || 0) / 1000);
           drawShieldArc(g, this.player);
           this.drawPets(g, (this.time?.now || 0) / 1000);

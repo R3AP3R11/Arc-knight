@@ -65,6 +65,12 @@ export const loadOutline = id => get(`/outlines/${id}`);
 export const saveOutline = (id, outline) => post(`/outlines/${id}`, outline);
 export const deleteOutline = id => remove(`/outlines/${id}`);
 
+// 像素库 API（data/pixels/）
+export const listPixels = () => get('/pixels');
+export const loadPixel = id => get(`/pixels/${id}`);
+export const savePixel = (id, pixel) => post(`/pixels/${id}`, pixel);
+export const deletePixel = id => remove(`/pixels/${id}`);
+
 // UI 设计稿 API（docs/ui-designs/，供 AI 读取的控件位置+动画/逻辑描述）
 export const listUiDesigns = () => get('/ui-designs');
 export const loadUiDesign = id => get(`/ui-designs/${id}`);

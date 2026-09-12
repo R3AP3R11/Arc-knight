@@ -37,6 +37,12 @@
         "offsetSpeed": 5,
         "arcStart": 0,
         "arcEnd": 360,
+        "pattern": "plain",
+        "tickShortLen": 6,
+        "tickLongLen": 12,
+        "tickDensity": 12,
+        "tickRatio": 1,
+        "tickDir": "in",
         "points": [],
         "closed": false
       },
@@ -57,6 +63,12 @@
         "offsetSpeed": 5,
         "arcStart": 0,
         "arcEnd": 360,
+        "pattern": "plain",
+        "tickShortLen": 6,
+        "tickLongLen": 12,
+        "tickDensity": 12,
+        "tickRatio": 1,
+        "tickDir": "in",
         "points": [],
         "closed": false
       },
@@ -77,6 +89,12 @@
         "offsetSpeed": 5,
         "arcStart": 0,
         "arcEnd": 160,
+        "pattern": "plain",
+        "tickShortLen": 6,
+        "tickLongLen": 12,
+        "tickDensity": 12,
+        "tickRatio": 1,
+        "tickDir": "in",
         "points": [],
         "closed": false
       }
@@ -97,8 +115,8 @@
     "count": 1,
     "spreadDeg": 0,
     "baseAngleOffset": 0,
-    "range": 1200,
-    "speed": 3000,
+    "range": 2500,
+    "speed": 9000,
     "fadeDuration": 800,
     "spreadRandom": 0,
     "randomColor": true,
@@ -117,12 +135,12 @@
     "size": 2,
     "trail": {
       "type": "cone",
-      "length": 500,
-      "width": 2,
+      "length": 2500,
+      "width": 1,
       "color": "#ffa914",
       "fade": 1,
-      "tailWidth": 2,
-      "midWidth": 12,
+      "tailWidth": 1,
+      "midWidth": 8,
       "midAt": 0.6,
       "particleSize": 3,
       "particleGap": 6,
@@ -151,5 +169,11 @@
         }
       }
     }
+  },
+  "mechanic": {
+    "aim": "auto",
+    "charge": null,
+    "ampArcs": [],
+    "orbit": null
   }
 }

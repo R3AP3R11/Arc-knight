@@ -6,7 +6,7 @@
 
 import Phaser from 'phaser';
 import { MIN_WALL_SIZE } from '../../state.js';
-import { FONT_TECH_SC, CHEST_SIZE, ROTATE_HANDLE_OFFSET, GATE_OUTER_COLOR, GATE_INNER_COLOR, GATE_OFFSET_RATIO } from '../constants.js';
+import { FONT_TECH, CHEST_SIZE, ROTATE_HANDLE_OFFSET, GATE_OUTER_COLOR, GATE_INNER_COLOR, GATE_OFFSET_RATIO } from '../constants.js';
 import { wallRotationRad, wallCorners, hitWall, hitTrigger } from '../combat/geometry.js';
 import { color, fillRotatedRoundedRect } from '../ui/entity-art.js';
 
@@ -83,11 +83,11 @@ export function drawGates(scene, g, level, selected) {
     let text = scene.gateTexts?.get(gt.id);
     if (!text) {
       text = scene.add.text(gt.x, gt.y, gt.label || 'Barrier Active', {
-        fontFamily: FONT_TECH_SC,
+        fontFamily: FONT_TECH,
         fontSize: '14px',
         color: '#12233f',
         letterSpacing: 2
-      }).setOrigin(0.5).setDepth(10);
+      }).setOrigin(0.5).setDepth(12);
       if (scene.uiCam) scene.uiCam.ignore(text);
       scene.gateTexts.set(gt.id, text);
     }

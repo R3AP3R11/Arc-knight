@@ -381,10 +381,23 @@ export const UiRuntimeMixin = {
         // 骑士之家：不显示战斗 HUD
         this.hideHudOverlay();
       } else {
-        renderGraph(this.uiG, ui.battle, this.uiState, BINDINGS, uiCtx({ texts: this.uiTexts?.battle, images: this.uiImages?.battle, buttons: this.buttons }));
-        if (this.player) this.drawHud();
-        this.drawHudIndicator();
-        this.drawMinimap(this.uiG);
+        // 战斗 HUD（battle 节点图 + 血盾条/弹药/充能/设置 + 顶部 EXPLORE 条 + 小地图）整体入场：
+        // 关卡开场动画(levelIntro)期间不显示，结束后淡入 0.5s → 停留 0.2s → 闪烁(消失0.15s→出现)。
+        const hudAlpha = this.hudEnterAlpha();
+        if (hudAlpha <= 0.001) {
+          // 入场中 / 闪烁消失：HUD 完全隐藏（hideHudOverlay 顺带清空小地图持久层）
+          this.hideHudOverlay();
+          this.hudIndicatorText?.setVisible(false);
+        } else {
+          this.uiG.setAlpha(hudAlpha);                      // uiG 图形层（battle 节点图 / 血盾条 / EXPLORE 条）随 alpha 淡入
+          renderGraph(this.uiG, ui.battle, this.uiState, BINDINGS, uiCtx({ texts: this.uiTexts?.battle, images: this.uiImages?.battle, buttons: this.buttons }));
+          if (this.player) this.drawHud();
+          this.drawHudIndicator();
+          this.drawBossBar(hudAlpha);
+          this.drawMinimap(this.uiG);
+          if (hudAlpha < 0.999) this.uiG.setAlpha(1);   // 恢复，供后续 transition/levelIntro 黑幕全透明
+          this.setHudAlpha(hudAlpha);                   // 独立对象（文本/设置图标/小地图持久层）各自控制透明度
+        }
       }
 
       if (this.transition) {

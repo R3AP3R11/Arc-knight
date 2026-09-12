@@ -51,13 +51,17 @@ export function normalizeWeaponShape(el = {}, index = 0) {
     offsetSpeed: clampN(el.offsetSpeed ?? 1, 0, 5),
     arcStart: num(el.arcStart, 0),
     arcEnd: num(el.arcEnd, 360),
-    // 钟表表盘花纹（与 asset-render.normalizeElement 对齐）：沿弧均布径向刻度，长短针按比例
-    pattern: el.pattern === 'clock' ? 'clock' : 'plain',
+    // 钟表/长短针花纹（与 asset-render.normalizeElement 对齐）：沿弧均布径向刻度，长短针按比例
+    pattern: (el.pattern === 'clock' || el.pattern === 'hands') ? el.pattern : 'plain',
     tickShortLen: Math.max(0, num(el.tickShortLen, 6)),
     tickLongLen: Math.max(0, num(el.tickLongLen, 12)),
     tickDensity: Math.round(clampN(num(el.tickDensity, 12), 2, 120)),
     tickRatio: Math.round(clampN(el.tickRatio, 1, 24)),
     tickDir: (el.tickDir === 'out' || el.tickDir === 'both') ? el.tickDir : 'in',
+    handLongRadius: Math.max(0, num(el.handLongRadius, num(el.radius, 10))),   // hands：长针轨道半径
+    handShortRadius: Math.max(0, num(el.handShortRadius, num(el.radius, 10))), // hands：短针轨道半径
+    handLongColor: String(el.handLongColor || el.color || '#ffffff'),  // hands：长针颜色
+    handShortColor: String(el.handShortColor || el.color || '#ffffff'),// hands：短针颜色
     points: Array.isArray(el.points) ? el.points.map(p => ({ x: num(p?.x, 0), y: num(p?.y, 0) })) : [],
     closed: !!el.closed
   };
@@ -160,7 +164,9 @@ function normalizeOrbit(value) {
     hitIntervalMs: Math.max(1, num(v.hitIntervalMs, 120)),
     trailSamples: clampInt(v.trailSamples, 4, 120),
     trailFade: Math.max(0, Math.min(1, num(v.trailFade, 0.9))),
-    trailColor: String(v.trailColor || '#ffa914')
+    trailWidth: Math.max(0.5, Math.min(60, num(v.trailWidth, 2))),   // 航迹线宽
+    trailColor: String(v.trailColor || '#ffa914'),
+    speedScale: Math.max(0.1, num(v.speedScale, 0.8))   // 公转转速整体缩放（0.8=转速-20%）
   };
 }
 function normalizeMechanic(value = {}) {

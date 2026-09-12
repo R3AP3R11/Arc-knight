@@ -17,10 +17,11 @@ import { showWireframe, initWireframe } from '../ui-wireframe.js';
 import { showArtboard, initArtboard } from './artboard.js';
 import { showWeaponBoard, initWeaponBoard } from './weapon-board.js';
 import { showPetBoard, initPetBoard } from './pet-board.js';
+import { showCinematicsBoard, initCinematicsBoard } from './cinematics-board.js';
 import { MIN_ROOM_SIZE, MAX_ROOM_SIZE, MIN_ROOM_THICKNESS, MAX_ROOM_THICKNESS, MIN_ROAD_WIDTH, MAX_ROAD_WIDTH, MIN_ROAD_LENGTH, MAX_ROAD_LENGTH } from '../rooms.js';
 import { ctx } from './context.js';
 import { pushUndo, undo, copySelected, pasteClipboard } from './history.js';
-import { applyRooms, renderRoomPanel, updateRoomNumber, updateRoomPanelSize, toggleRoomCell, openRoomCellPopup, closeRoomCellPopup, applyRoomMarker } from './room-panel.js';
+import { applyRooms, renderRoomPanel, updateRoomNumber, updateRoomPanelSize, toggleRoomCell, openRoomCellPopup, closeRoomCellPopup, applyRoomMarker, applyRoomType } from './room-panel.js';
 import { bindDropRules } from './drop-rules-panel.js';
 import { bindPlayerPanels } from './player-panels.js';
 import { redraw, sync, setMode, restoreEditorSnapshot, selectLevel, refreshLevels, rememberLevel } from './level-flow.js';
@@ -212,6 +213,10 @@ export function bind() {
     if (!ctx.popupCell) return;
     applyRoomMarker(ctx.popupCell.c, ctx.popupCell.r);
   };
+  dom.roomCellType.onchange = () => {
+    if (!ctx.popupCell) return;
+    applyRoomType(ctx.popupCell.c, ctx.popupCell.r);
+  };
   dom.roomCols.onfocus = pushUndo;
   dom.roomCols.oninput = e => updateRoomPanelSize('cols', e.target.value);
   dom.roomRows.onfocus = pushUndo;
@@ -343,10 +348,14 @@ export function bind() {
   dom.petBoard.onclick = () => showPetBoard(true, dom, state);
   initPetBoard(dom, state);
 
+  // 运镜 · 时间轴编辑器工作台
+  dom.cinematic.onclick = () => showCinematicsBoard(true, dom, state);
+  initCinematicsBoard(dom, state);
+
   // Ctrl+Z 撤销 / Ctrl+C 复制 / Ctrl+V 粘贴（仅编辑器模式；画板/武器工作台及其独立面板不参与关卡撤销）
   document.addEventListener('keydown', e => {
     const mod = e.ctrlKey || e.metaKey;
-    if (state.mode !== 'editor' || document.body.classList.contains('artboard-mode') || document.body.classList.contains('weapon-mode') || document.body.classList.contains('pet-mode')) return;
+    if (state.mode !== 'editor' || document.body.classList.contains('artboard-mode') || document.body.classList.contains('weapon-mode') || document.body.classList.contains('pet-mode') || document.body.classList.contains('cinematics-mode')) return;
     if (mod && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
       e.preventDefault();
       undo();

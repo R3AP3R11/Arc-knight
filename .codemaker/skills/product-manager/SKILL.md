@@ -6,7 +6,7 @@ description: 收到任何新需求、迭代、改动、bug 修复请求时**先�
 # 产品经理 · 需求路由与 skill 维护指南
 
 > 你是本项目的需求入口。任何需求进来，**先用这份 skill 完成归类与指路，再去读对应的分类 skill 动手**。
-> 不要凭直觉直接改代码 —— 本项目有 63 个源文件、19 个 mixin、大量跨文件同步点，漏改一处就会出运行时崩溃（`vite build` 抓不到）。
+> 不要凭直觉直接改代码 —— 本项目有 80 个源文件、20 个 mixin、大量跨文件同步点，漏改一处就会出运行时崩溃（`vite build` 抓不到）。
 
 ---
 
@@ -30,17 +30,19 @@ description: 收到任何新需求、迭代、改动、bug 修复请求时**先�
 **技术栈**：Phaser 4 + Vite，纯 ESM（`package.json` 里 `"type":"module"`），Electron 打包，`server.js` 提供开发期 JSON 读写 API。
 **形态**：游戏 + 关卡编辑器二合一，同一个 `EditorScene` 靠 `this.editing` / `ctx.state.mode`（`editor`/`play`/`trial`）分流。
 
-### 代码分布（`src/` 共 63 文件 / 16834 行）
+### 代码分布（`src/` 共 80 文件 / 23868 行，实测）
 
 | 分类 | 目录 | 文件数 | 行数 | 对应 skill |
 |---|---|---|---|---|
-| 战斗相关 | `src/systems/combat/` | 6 | 1055 | `combat` |
+| 战斗相关 | `src/systems/combat/` | 7 | 2657 | `combat` |
 | 数值_经济 | `src/systems/economy/` + `player-data.js` | 5 | 627 | `economy-numbers` |
-| 关卡设计 | `src/systems/level/` + `rooms.js` | 5 | 1403 | `level-design` |
+| 关卡设计 | `src/systems/level/` + `rooms.js` | 5 | 1592 | `level-design` |
 | 系统玩法 | `src/systems/gameplay/` | 3 | 1718 | `gameplay-systems` |
-| UI交互 | `src/systems/ui/` + `ui-layer/ui-bindings/ui-config/ui-preview/ui.js` | 12 | 4425 | `ui-interaction` |
-| 引擎(编辑器) | `src/systems/editor/` + `src/editor/` + `server.js` + `src/systems/art/` | 31 | 6577 | `engine-editor` |
-| 共享 | `game-scene.js`(589) `state.js`(527) `constants.js`(91) `pathfinding.js`(105) `api.js`(67) `main.js`(93) | 6 | 1472 | 见 §3.3 |
+| UI交互 | `src/systems/ui/` + `ui-layer/ui-bindings/ui-config/ui-preview/ui.js` | 14 | 5503 | `ui-interaction` |
+| 引擎(编辑器) | `src/systems/editor/` + `src/editor/` + `server.js` + `src/systems/art/` | 33 | 8697 | `engine-editor` |
+| 共享 | `game-scene.js`(900) `state.js`(605) `constants.js`(102) `pathfinding.js`(105) `api.js`(79) `main.js`(97) | 6 | 1888 | 见 §3.3 |
+
+> 上表合计 73 文件 / 22682 行（「引擎」行含 1 个 `src/` 外的 `server.js`(487)），另有 7 个 `src/` 根目录 UI 文件未单列（`ui-editor`/`ui-interact`/`ui-library`/`ui-library-panel`/`ui-mxgraph`/`ui-page-profiles`/`ui-wireframe` = 1672 行），合计 80 文件 / 23868 行（含 1 个 1 行残留文件 `src/src/ui.js`）。改动分类边界时**用 `node` 重测**，别沿用旧值。
 
 ### 架构不变量（改任何分类都必须遵守）
 
@@ -56,10 +58,9 @@ description: 收到任何新需求、迭代、改动、bug 修复请求时**先�
 ### 基线（每次改完必须回到这个状态）
 
 ```bash
-npx vite build      # 成功，约 79 modules
-node --test test/   # 无 server：16 pass / 5 fail；起 server 后 19 pass / 1 fail
-                    # 5 个 fail 全是 test/player-api.test.js 的 'fetch failed'（需先起 node server.js）。
-                    # 起 server 后剩 1 个 fail 为 player-api round-trip 里旧 schema 的 `mods` 字段
+npx vite build      # 成功，约 83 modules
+node --test test/   # 20 tests / 19 pass / 1 fail
+                    # 唯一 fail 为 test/player-api.test.js 的 round-trip 里旧 schema 的 `mods` 字段
                     # 被 normalizePlayer 有意丢弃（既有的 schema 迁移不一致，非本改件任务引入）
 ```
 
@@ -102,6 +103,7 @@ node --test test/   # 无 server：16 pass / 5 fail；起 server 后 19 pass / 1
 | 武器、弹道、子弹、激光、开火、弹夹 | 战斗相关 | `combat` |
 | 敌人、AI、行为、寻路、绕路、冲锋、点射 | 战斗相关 | `combat` |
 | 护盾、格挡、破盾、受击 | 战斗相关 | `combat` |
+| 原型机 / 2-5T5 / BOSS技能 / 阻挡护盾 / 技能区域 | 战斗相关 | `combat` |
 | 木箱、油桶、爆炸、破坏 | 战斗相关 | `combat` |
 | 关卡、场景、地图、房间生成 | 关卡设计 | `level-design` |
 | 触发器、事件、波次、刷怪、门/gate | 关卡设计 | `level-design` |
@@ -158,6 +160,18 @@ node --test test/   # 无 server：16 pass / 5 fail；起 server 后 19 pass / 1
 | 关卡设计 | 关卡 json 能配出来 + 波次能刷出来 |
 | 数值_经济 | 掉落规则是否要为新类型单独配 |
 
+**示例：「新增一种特殊 BOSS（非母舰范式，参照原型机-2-5T5）」**
+| 分类 | 落点 | 必要性 |
+|---|---|---|
+| 战斗相关（主） | 新模块 `combat/bossXxx.js`：数据契约（`*_DEFAULTS` + `normalizeXxxConfig`，**不 import Phaser**，供 `state.js` 引用）+ `XxxMixin`（状态机/区域生命周期/护盾拦截） | 必须 |
+| 战斗相关 | `state.js:ENEMY_TYPES` + `constants.js:ENEMY_BEHAVIOR`(size) + `state.js:normalizeEnemy` 按 type 分派 boss 归一 + `enemy-ai.js:initEnemy` 显式初始化运行时字段 + `stepEnemy` 派发 + `defeatEnemy` 运镜/清理拦截弹 | 必须 |
+| 战斗相关 | `game-scene.js`：子弹 filter（护盾拦截/受击门控/每帧 `UpdateBlocked`）+ 敌人循环每帧 `ZonesTick`（**漏调=技能卡死**）+ 接触伤害排除自身 + 玩家移速消费 | 必须 |
+| 战斗相关 | 技能种类：权重 `skillWeightS*`（`pickWeighted` 预选）+ `arcTargetsFor` 目标角 → `bossXxxStartSkill`（区域恒朝玩家、不空放）→ `stepXxx`（**仅等待期** `arcAlignDeg` 把参战弧对准玩家）；护盾窗口：`moveWaitPreMs/PostMs`（等待期护盾保持存在）+ `shieldRestoreDelayMs`（技能后恢复延迟）；**技能5 漩涡 + 捕获环绕**（半血后加入）：`boss25t5CastSkill5`/`boss25t5VorticesTick`（两个调用点，帧令牌去重）/`boss25t5VortexPull`/`boss25t5VortexAbsorb`/`boss25t5VortexCapture`/`boss25t5ReleaseCaptured`（场景级 `scene.boss25t5Vortices`；捕获弹位置**只能由 `boss25t5VorticesTick` 驱动**，消散时释放为静止停驻）+ 渲染 `drawBoss25T5Vortices`；**技能1/2 对区域内已转化子弹施力**：`boss25t5ZoneBulletForce`（**一次性固定速度+固定距离**：速度复用玩家 `s1DragSpeed`/`s2PushSpeed`，距离 = 玩家 `s1DragDist`/`s2PushDist` × 2（模块常量 `BULLET_FORCE_DIST_MULT`）；运行时 `b.force`/`b.forceSrc`/`b.forceStepT`）+ 拖尾字段 `b.forceTrail`（配色 `s1/s2/s5BulletTrail*`）+ 命中**像素级**容差 `zoneHitPadPx`（**仅 s1/s2**，s3 不参与）+ 扇形方向**释放瞬间写死、不跟随玩家**（可横向走出扇区躲避）；技能5 玩家吸力三键 `s5PullRadius`(吸力半径) / `s5PullMin`(半径边缘处吸力) / `s5PullMax`(涡心处吸力、向量累加后的速度上限；**必须 < 玩家移速 180**)；**护盾消红弹**：`shieldClearCost` + `boss25t5UpdateBlocked`（复用 `blockWithShield`）；已转化子弹必须保留 `b.blockedBy`。详见 `combat` §7 坑 26-43 | 按需 |
+| UI交互 | 新渲染模块 `ui/bossXxx-art.js` + `entity-art.js:drawEnemyShape` 分支 + `world-render.js` 在 `drawPlayer` **之前**调区域绘制（图层顺序） | 必须 |
+| 引擎(编辑器) | `editor/entity-properties.js` 敌人分支按 `entity.type` 追加 `boss.*` 面板字段（字段名须与运行时读取路径逐字一致） | 必须 |
+| 关卡设计 | `level/triggers.js:startBossBattle` 的 BOSS 查找含新 type；关卡放带 `bossBattle` 事件的触发器 | 必须 |
+| 引擎(编辑器) | `editor/editor-camera.js:_resolveFocusTarget` 的 `focusTarget==='boss'` 查找含新 type（开场/击破运镜） | 按需 |
+
 **示例：「新增一个触发器事件类型」**
 | 分类 | 落点 |
 |---|---|
@@ -208,7 +222,7 @@ node -e "const fs=require('fs');const f='你改的文件路径';const c=fs.readF
 node -e "const fs=require('fs'),p=require('path');const fl=[];(function w(d){for(const f of fs.readdirSync(d)){const q=p.join(d,f);fs.statSync(q).isDirectory()?w(q):q.endsWith('.js')&&fl.push(q.replace(/\\/g,'/'))}})('src/systems');const o=new Map();for(const f of fl){const c=fs.readFileSync(f,'utf8');const i=c.search(/export const \w+Mixin = \{/);if(i<0)continue;c.slice(i).split(/\r?\n/).forEach(l=>{const m=l.match(/^    ([A-Za-z_$][\w$]*)\s*\(/);if(m){if(!o.has(m[1]))o.set(m[1],[]);o.get(m[1]).push(f)}})}let d=0;for(const [n,v] of o)if(v.length>1){console.log('❌ 同名:',n,'->',v.join(' , '));d++}console.log('mixin 方法数',o.size,'冲突',d)"
 ```
 
-改了 `server.js` 或存档相关：额外起 `node server.js` 再跑一遍 `node --test test/`，5 个 fetch 用例应转绿。
+改了 `server.js` 或存档相关：额外起 `node server.js` 再跑一遍 `node --test test/`，确认 round-trip 用例表现一致（当前基线的唯一 fail 是旧 schema `mods` 字段被丢弃，与是否起服无关）。
 
 手动冒烟（`node server.js` 后开页面）：
 | 验什么 | 关卡 |
@@ -271,6 +285,7 @@ node -e "const fs=require('fs');for(const d of fs.readdirSync('.codemaker/skills
 | 「敌人太难了，削弱一下」 | 数值_经济 | `state.js:ENEMY_TYPES`（血/伤）+ `constants.js:ENEMY_BEHAVIOR`（速度/距离） |
 | 「加一把霰弹枪」 | 战斗相关 | `combat/weapons.js` → 见 §3.4 |
 | 「敌人会绕后偷袭」 | 战斗相关 | `combat/enemy-ai.js:stepEnemy` + `ENEMY_BEHAVIOR` |
+| 「BOSS 原型机-2-5T5 的数值/技能」 | 战斗相关 | `combat/boss25t5.js`（`BOSS25T5_DEFAULTS` 全部可配数值 + `Boss25T5Mixin` 状态机/区域/护盾）+ 编辑器属性面板 `editor/entity-properties.js` 的 `boss.*` 字段（跨文件接线见 §3.4「特殊 BOSS」示例）；技能种类落点 权重 `skillWeightS*` + `arcTargetsFor`，区域恒朝玩家（`boss25t5StartSkill`）+ 参战弧等待期对齐（`arcAlignDeg`，`stepBoss25T5`），护盾窗口落点 `moveWaitPreMs/PostMs`+`shieldRestoreDelayMs`；技能5 漩涡（半血后加入，场景级 `scene.boss25t5Vortices`）落点 `boss25t5CastSkill5`/`boss25t5VorticesTick`/`boss25t5VortexPull`/`boss25t5VortexAbsorb` + **捕获环绕 `boss25t5VortexCapture`/`boss25t5ReleaseCaptured`** + 渲染 `drawBoss25T5Vortices`；**技能1/2 对区域内已转化子弹施力 `boss25t5ZoneBulletForce`（一次性固定速度+固定距离：速度复用玩家 `s1DragSpeed`/`s2PushSpeed`，距离 = 玩家 `s1DragDist`/`s2PushDist` × 2（`BULLET_FORCE_DIST_MULT`）；`b.force`/`b.forceSrc`/`b.forceStepT`）+ 拖尾字段 `b.forceTrail`（配色 `s1/s2/s5BulletTrail*`）+ 命中**像素级**容差 `zoneHitPadPx`（仅 s1/s2）+ 扇形方向**释放瞬间写死、不跟随玩家**（可横向走出躲避）**；玩家吸力三键 `s5PullRadius` / `s5PullMin`(半径边缘) / `s5PullMax`(涡心处吸力+速度上限；**必须 < 玩家移速 180**)；护盾消红弹落点 `shieldClearCost` + `boss25t5UpdateBlocked`；面板字段 81 个 `boss.*`（+`artScale` 共 82 项，`entity-properties.js` 实测 644 行） |
 | 「子弹打墙要反弹」 | 战斗相关 | 已有 `ricochet` 改件；扩展看 `geometry.js:reflectBulletAgainstWall` |
 | 「做第 4 大关」 | 关卡设计 | 新建 `data/levels/Level4-Scene*.json` + `ui/screens.js:drawLevelSelect` 的关卡数 |
 | 「打完一波关门放第二波」 | 关卡设计 | `level/triggers.js` 波次 + `spawnGate`/`removeGate` 事件 |
@@ -331,8 +346,8 @@ Rollup 不做未定义标识符检查。已发生过 3 起：`workshop.js` 缺 4
 - [ ] 需求已澄清，验收标准明确
 - [ ] 已宣告主分类 + 同步点，并读过对应 skill 的第 2/3/6/7 章
 - [ ] 代码改动遵守 §2 五条架构不变量
-- [ ] `npx vite build` 通过（约 79 modules）
-- [ ] `node --test test/` 与基线一致（无 server：16 pass / 5 fail，fail 全为 `fetch failed`；起 server 后为 19 pass / 1 fail，后者是旧 schema `mods` 字段的既有不一致）
+- [ ] `npx vite build` 通过（约 83 modules）
+- [ ] `node --test test/` 与基线一致（20 tests / 19 pass / 1 fail，唯一 fail 是旧 schema `mods` 字段的既有不一致）
 - [ ] 未定义标识符自检通过（§4 步骤 5 ③）
 - [ ] mixin 同名冲突自检通过（§4 步骤 5 ④）
 - [ ] 手动冒烟过了对应关卡

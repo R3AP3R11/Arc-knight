@@ -16,10 +16,12 @@
  * 内部 this 恒为 EditorScene 实例，语义与原类内方法完全一致。
  */
 import Phaser from 'phaser';
-import { CELL, ENEMY_BEHAVIOR } from '../constants.js';
-import { toCell, resolveCircleAgainstWalls, rayWallDistance } from './geometry.js';
+import { CELL, ENEMY_BEHAVIOR, MOTHERSHIP_SPAWN_TABLE, HIT_FX_TTL } from '../constants.js';
+import { toCell, resolveCircleAgainstWalls, rayWallDistance, pointInWall, mothershipBoundsR } from './geometry.js';
 import { findPath, nearestWalkable } from '../../pathfinding.js';
 import { ENEMY_TYPES } from '../../state.js';
+// 原型机-2-5T5：仅为「敌人初始化时归一化 e.bossCfg」而 import（纯 JS，无 Phaser 依赖）
+import { normalizeBoss25T5Config } from './boss25t5.js';
 
 // ── 本模块私有常量 ──
 const PATH_REPATH_INTERVAL = 0.25;
@@ -120,6 +122,17 @@ export const EnemyAiMixin = {
       if (e.frozen) {
         const dist = Math.hypot(e.x - p.x, e.y - p.y);
         e.red = dist < b.colorRange;
+        return;
+      }
+
+      if (e.type === 'mothership') {
+        this.stepMothership(e, dt, b, sec);
+        return;
+      }
+
+      // 原型机-2-5T5：专属状态机（内部自持 bossActive 待机判定，不走通用行为机）
+      if (e.type === 'boss-2-5t5') {
+        this.stepBoss25T5(e, dt, b, sec);
         return;
       }
 
@@ -246,6 +259,41 @@ export const EnemyAiMixin = {
       }
     },
 
+  // ── 母舰 ──
+    stepMothership(e, dt, b, sec) {
+      if (e.hitFlashT > 0) e.hitFlashT = Math.max(0, e.hitFlashT - dt);
+      if (!e.bossActive) return;   // 待机：未激活不移动、不召唤
+      const ang = Phaser.Math.Angle.Between(e.x, e.y, this.player.x, this.player.y);
+      e.x += Math.cos(ang) * b.speed * sec;
+      e.y += Math.sin(ang) * b.speed * sec;
+      e.spawnClock = (e.spawnClock || 0) + dt;
+      if (e.spawnClock >= e.boss.spawnInterval) {
+        e.spawnClock = 0;
+        this.spawnMothershipMinions(e);
+      }
+    },
+
+    spawnMothershipMinions(e) {
+      const table = (e.boss?.spawnTable && e.boss.spawnTable.length) ? e.boss.spawnTable : MOTHERSHIP_SPAWN_TABLE;
+      const pick = table[Math.floor(Math.random() * table.length)];
+      const r = mothershipBoundsR(e);   // 围绕可见本体（风筝形包围半径）投放，非小圆
+      for (let i = 0; i < pick.count; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const d = r * (0.6 + Math.random() * 0.9);
+        const x = e.x + Math.cos(a) * d;
+        const y = e.y + Math.sin(a) * d;
+        let p = this.canSpawnAt(x, y, pick.type) ? { x, y } : null;
+        if (!p) p = this.findClearSpawnNearPlayer(pick.type);
+        if (p) this.enemies.push(this.initEnemy({ x: p.x, y: p.y, type: pick.type, triggerId: e.triggerId || null }));
+      }
+    },
+
+    mothershipSelfDestruct(e) {
+      if (!e.alive) return;
+      this.defeatEnemy(e);
+      this.hitEffects.push({ x: e.x, y: e.y, ttl: HIT_FX_TTL });
+    },
+
   // ── 开火与死亡 ──
     fireEnemyBullet(e, b) {
       const bx = e.x + Math.cos(e.orbitAngle) * e.orbitRadius;
@@ -270,6 +318,36 @@ export const EnemyAiMixin = {
       this.killTally = this.killTally || {};
       this.killTally[e.type] = (this.killTally[e.type] || 0) + 1;
       this.spawnDrops(e);
+      // BOSS 被击败 → 播放其绑定的运镜，镜头锁定到 BOSS 死亡位置（opts.x/y 优先于 focusTarget）
+      // 母舰取 e.cutsceneId，原型机-2-5T5 取 e.bossCfg.cutsceneId（两条都要保留）
+      const bossCutsceneId = e.type === 'boss-2-5t5'
+        ? (e.bossCfg?.cutsceneId || e.cutsceneId)   // 面板写 boss.*；手写关卡顶层也能生效
+        : e.cutsceneId;
+      if ((e.type === 'mothership' || e.type === 'boss-2-5t5') && e.bossActive && bossCutsceneId) {
+        const clip = ctx?.state?.level?.cinematics?.find(c => c.id === bossCutsceneId);
+        if (clip) {
+          this.cameras.main.flash(120, 255, 255, 255);   // 击杀白闪增强冲击
+          this.playCutscene(clip, { focusTarget: 'boss', x: e.x, y: e.y });
+        }
+      }
+      // 原型机-2-5T5 死亡：清掉它护盾拦截后停驻在场上的红子弹。
+      // 注意：defeatEnemy 通常在子弹 filter 内部被调用，此时 `this.bullets = ...` 的重赋值会被
+      // 外层 filter 的返回值覆盖 —— 故同时把这些弹标记 dead，保证下一帧 filter 一定移除它们。
+      if (e.type === 'boss-2-5t5') {
+        for (const x of (this.bullets || [])) if (x.blockedBy === e.id) x.dead = true;
+        this.bullets = (this.bullets || []).filter(x => x.blockedBy !== e.id);
+        // 死亡后 boss25t5ZonesTick 不再被调用（敌人循环 `if (!e.alive) continue`），技能区域会永久定格
+        // （黑mask/紫色区不消失）；同时清掉残留的玩家拖拽/击退位移与减速标记。
+        e.zones = [];
+        e.skill4Fx = null;
+        // 技能5「蓝色漩涡」是场景级实体（this.boss25t5Vortices），BOSS 死亡必须清掉，
+        // 否则漩涡会永久留场、继续吸子弹/伤玩家（同时清掉玩家吸力，避免残留位移）。
+        this.boss25t5ClearVortices();
+        if (this.player) {
+          if (this.player.boss25t5Force?.ownerId === e.id) this.player.boss25t5Force = null;
+          this.player.boss25t5Slow = false;
+        }
+      }
     },
 
   // ── 回填：敌人初始化 / 位移碰撞回推 / 视线判定 ──
@@ -284,6 +362,10 @@ export const EnemyAiMixin = {
         alive: true,
         hp: e.hp ?? def.hp,
         maxHp: e.hp ?? def.hp,
+        art: def.art ?? e.art,
+        artScale: def.artScale ?? e.artScale ?? 1,
+        spawnClock: 0,
+        hitFlashT: 0,
         damage: e.damage ?? def.damage,
         attackRange: e.attackRange ?? b.attackRange,
         viewTimer: 0,
@@ -311,7 +393,41 @@ export const EnemyAiMixin = {
         burstTimer: 0,
         burstShots: 0,
         wanderDir: Math.random() < 0.5 ? -1 : 1,
-        wanderT: 0
+        wanderT: 0,
+        ...(e.type === 'mothership' ? {
+          bossActive: false,
+          boss: {
+            spawnInterval: (e.boss?.spawnInterval > 0 ? e.boss.spawnInterval : (ENEMY_BEHAVIOR.mothership?.spawnInterval || 5000)),
+            spawnTable: (Array.isArray(e.boss?.spawnTable) && e.boss.spawnTable.length ? e.boss.spawnTable : MOTHERSHIP_SPAWN_TABLE),
+            name: (e.boss?.name || '母舰')
+          }
+        } : {}),
+        // 原型机-2-5T5：契约字段全部显式初始化（键名与 boss25t5.js 的 `??=` 兜底一一对应，
+        // 使状态机首帧即拿到完整字段，不依赖 `??=`）。artScale 仍走上方既有 `def.artScale ?? e.artScale ?? 1`。
+        ...(e.type === 'boss-2-5t5' ? {
+          bossActive: false,
+          bossCfg: normalizeBoss25T5Config(e.boss),
+          shieldAlpha: 1,
+          shieldDown: false,
+          shieldDownT: 0,
+          state: 'move',
+          moveKind: 0,
+          moveT: 0,
+          moveDur: 0,
+          moveDir: 1,
+          moveWait: 0,        // 移动前/后等待期剩余毫秒（护盾保持存在的可攻击窗口）
+          moveDone: false,    // 位移是否已走完（走完后进入后置等待）
+          arc4Phase: 0,       // 圆弧4 自转相位（等待期被转到「本次技能目标角」）
+          arc4OffsetDeg: 0,   // 圆弧4 目标角（相对瞄准方向，度；0 = 对准玩家）
+          arc5OffsetDeg: 0,   // 圆弧5 目标角（同上）
+          arc5Phase: 0,
+          skillKind: 0,
+          skillPhase: 'idle',
+          skillT: 0,
+          skill4Cooldown: 0,
+          zones: [],
+          activeZoneId: null
+        } : {})
       };
     },
 
@@ -358,7 +474,9 @@ export const EnemyAiMixin = {
     const ctx = this.ctx;
       const dx = x1 - x0, dy = y1 - y0;
       const walls = ctx.state.level.walls;
-      const gateWalls = this.activeGateWalls();
+      // 门若包含任一端点（玩家刚走过的门还没被推开/正卡在门体积内），该门不算隔断视线，
+      // 否则端点贴门时会产生「整片区域都被门挡住」的伪遮挡 → 触发 inscreen 第一波生成 0 只
+      const gateWalls = this.activeGateWalls().filter(g => !pointInWall(g, x0, y0) && !pointInWall(g, x1, y1));
       return rayWallDistance(x0, y0, dx, dy, walls) > 1
         && rayWallDistance(x0, y0, dx, dy, gateWalls) > 1;
     },

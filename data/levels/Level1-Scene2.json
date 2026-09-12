@@ -9,9 +9,37 @@
   },
   "camera": {
     "width": 1920,
-    "mode": "deadzone"
+    "mode": "center"
   },
   "walls": [
+    {
+      "id": "wall-1788833871877",
+      "x": 2670,
+      "y": 3450,
+      "w": 12.939111310550686,
+      "h": 250.978174641861,
+      "shape": "rect",
+      "thickness": 30,
+      "visible": true,
+      "color": "#ffffff",
+      "rotation": 45,
+      "startAngle": 0,
+      "endAngle": 360
+    },
+    {
+      "id": "wall-1788833905668",
+      "x": 3120,
+      "y": 3900,
+      "w": 12.939111310550686,
+      "h": 250.9781746418611,
+      "shape": "rect",
+      "thickness": 30,
+      "visible": true,
+      "color": "#ffffff",
+      "rotation": 45,
+      "startAngle": 0,
+      "endAngle": 360
+    },
     {
       "id": "room-0-1-top",
       "x": 810,
@@ -255,9 +283,9 @@
     {
       "id": "room-1-1-road-v-l",
       "x": 2681,
-      "y": 4730,
+      "y": 4805,
       "w": 30,
-      "h": 960,
+      "h": 1110,
       "shape": "rect",
       "thickness": 30,
       "rotation": 0,
@@ -270,9 +298,9 @@
     {
       "id": "room-1-1-road-v-r",
       "x": 3099,
-      "y": 4730,
+      "y": 4805,
       "w": 30,
-      "h": 960,
+      "h": 1110,
       "shape": "rect",
       "thickness": 30,
       "rotation": 0,
@@ -404,9 +432,9 @@
     },
     {
       "id": "room-1-2-top-a",
-      "x": 2498,
-      "y": 5195,
-      "w": 396,
+      "x": 2573,
+      "y": 5345,
+      "w": 246,
       "h": 30,
       "shape": "rect",
       "thickness": 30,
@@ -419,9 +447,9 @@
     },
     {
       "id": "room-1-2-top-b",
-      "x": 3282,
-      "y": 5195,
-      "w": 396,
+      "x": 3207,
+      "y": 5345,
+      "w": 246,
       "h": 30,
       "shape": "rect",
       "thickness": 30,
@@ -435,8 +463,8 @@
     {
       "id": "room-1-2-bottom",
       "x": 2890,
-      "y": 6345,
-      "w": 1180,
+      "y": 6195,
+      "w": 880,
       "h": 30,
       "shape": "rect",
       "thickness": 30,
@@ -449,10 +477,10 @@
     },
     {
       "id": "room-1-2-left",
-      "x": 2315,
+      "x": 2465,
       "y": 5770,
       "w": 30,
-      "h": 1120,
+      "h": 820,
       "shape": "rect",
       "thickness": 30,
       "rotation": 0,
@@ -464,10 +492,10 @@
     },
     {
       "id": "room-1-2-right",
-      "x": 3465,
+      "x": 3315,
       "y": 5770,
       "w": 30,
-      "h": 1120,
+      "h": 820,
       "shape": "rect",
       "thickness": 30,
       "rotation": 0,
@@ -1515,8 +1543,8 @@
   ],
   "enemies": [],
   "spawn": {
-    "x": 810,
-    "y": 3690,
+    "x": 450,
+    "y": 3330,
     "scheme": "default",
     "hp": 100,
     "maxHp": 100,
@@ -1530,17 +1558,302 @@
     "id": "spawn"
   },
   "dropRules": {},
-  "triggers": [],
-  "crates": [],
+  "triggers": [
+    {
+      "id": "trigger-1788792207315",
+      "x": 2441.16020249973,
+      "y": 3690.4931233929947,
+      "w": 165.67959500053433,
+      "h": 481.76880491978227,
+      "shape": "rect",
+      "color": "#f3b63f",
+      "visible": false,
+      "once": true,
+      "cooldown": 0,
+      "resumeOnReturn": true,
+      "events": [
+        {
+          "type": "spawnGate",
+          "when": "enter",
+          "auto": true,
+          "gateIds": [
+            "gate-trigger-1788792207315-left",
+            "gate-trigger-1788792207315-right",
+            "gate-trigger-1788792207315-bottom"
+          ]
+        },
+        {
+          "type": "combat",
+          "when": "enter"
+        },
+        {
+          "type": "spawnEnemy",
+          "when": "enter",
+          "spawn": {
+            "stopOnExit": false,
+            "resumeOnReturn": false,
+            "waves": [
+              {
+                "enemyType": "basic1",
+                "mode": "inscreen",
+                "count": 10,
+                "playerMinRadius": 200,
+                "zoneId": "spawnzone-1-2-1",
+                "waitForClear": true,
+                "shape": "polygon",
+                "sides": 6,
+                "radius": 120,
+                "thickness": 10,
+                "circleCount": 8,
+                "drawDuration": 500,
+                "fadeDuration": 500,
+                "preDelay": 0,
+                "postDelay": 1000
+              },
+              {
+                "enemyType": "basic2",
+                "mode": "inscreen",
+                "count": 10,
+                "playerMinRadius": 200,
+                "zoneId": "spawnzone-1-2-1",
+                "waitForClear": true,
+                "shape": "polygon",
+                "sides": 6,
+                "radius": 120,
+                "thickness": 10,
+                "circleCount": 8,
+                "drawDuration": 500,
+                "fadeDuration": 500,
+                "preDelay": 0,
+                "postDelay": 1000
+              }
+            ]
+          }
+        },
+        {
+          "type": "roomComplete",
+          "when": "enemiesCleared"
+        },
+        {
+          "type": "removeGate",
+          "when": "enemiesCleared",
+          "auto": true,
+          "gateIds": [
+            "gate-trigger-1788792207315-left",
+            "gate-trigger-1788792207315-right",
+            "gate-trigger-1788792207315-bottom"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "trigger-2-1-2",
+      "x": 4541.3283452307105,
+      "y": 3696.6427347826348,
+      "w": 221.33761561806386,
+      "h": 568.4201650730297,
+      "shape": "rect",
+      "color": "#f3b63f",
+      "visible": false,
+      "once": true,
+      "cooldown": 0,
+      "resumeOnReturn": true,
+      "events": [
+        {
+          "type": "spawnGate",
+          "when": "enter",
+          "auto": true,
+          "gateIds": [
+            "gate-trigger-2-1-2-left",
+            "gate-trigger-2-1-2-right"
+          ]
+        }
+      ]
+    }
+  ],
+  "crates": [
+    {
+      "id": "crate-1788833929003",
+      "x": 2880,
+      "y": 3360,
+      "w": 50,
+      "h": 50,
+      "hp": 1
+    },
+    {
+      "id": "crate-1788833930163",
+      "x": 2940,
+      "y": 3360,
+      "w": 50,
+      "h": 50,
+      "hp": 1
+    },
+    {
+      "id": "crate-1788833931027",
+      "x": 3000,
+      "y": 3360,
+      "w": 50,
+      "h": 50,
+      "hp": 1
+    },
+    {
+      "id": "crate-1788833932130",
+      "x": 3060,
+      "y": 3360,
+      "w": 50,
+      "h": 50,
+      "hp": 1
+    },
+    {
+      "id": "crate-1788834173028",
+      "x": 2940,
+      "y": 3960,
+      "w": 50,
+      "h": 50,
+      "hp": 1
+    },
+    {
+      "id": "crate-1788834174092",
+      "x": 2880,
+      "y": 3960,
+      "w": 50,
+      "h": 50,
+      "hp": 1
+    },
+    {
+      "id": "crate-1788834174860",
+      "x": 2820,
+      "y": 3960,
+      "w": 50,
+      "h": 50,
+      "hp": 1
+    },
+    {
+      "id": "crate-1788834175493",
+      "x": 2760,
+      "y": 3960,
+      "w": 50,
+      "h": 50,
+      "hp": 1
+    }
+  ],
   "barrels": [],
-  "chests": [],
+  "chests": [
+    {
+      "id": "chest-1788878307443",
+      "x": 2895,
+      "y": 5730,
+      "trigger": "start",
+      "triggerId": "",
+      "openRadius": 50,
+      "guide": false,
+      "guideRange": 600,
+      "guideIcon": "",
+      "rewards": []
+    }
+  ],
   "portals": [],
   "vendors": [],
-  "idols": [],
+  "idols": [
+    {
+      "id": "idol-1788792140474",
+      "x": 810,
+      "y": 3690,
+      "w": 400,
+      "h": 400,
+      "interactRadius": 130,
+      "visible": true,
+      "guide": false,
+      "guideRange": 600,
+      "guideIcon": "",
+      "guideStopAfterUse": true
+    }
+  ],
   "icons": [],
   "background": null,
-  "images": [],
-  "gates": [],
+  "images": [
+    {
+      "id": "image-1788834027640",
+      "src": "/uploads/1788834027635-687093.png",
+      "x": 2889,
+      "y": 3690,
+      "w": 1120,
+      "h": 1120,
+      "visible": true
+    }
+  ],
+  "gates": [
+    {
+      "id": "gate-trigger-1788792207315-left",
+      "x": 2330,
+      "y": 3690,
+      "w": 388,
+      "h": 45,
+      "rotation": -90,
+      "label": "Barrier Active",
+      "color1": "#ffa200",
+      "color2": "#ffa200",
+      "active": false,
+      "shieldOnly": false,
+      "visible": true
+    },
+    {
+      "id": "gate-trigger-1788792207315-right",
+      "x": 3450,
+      "y": 3690,
+      "w": 388,
+      "h": 45,
+      "rotation": -90,
+      "label": "Barrier Active",
+      "color1": "#ffa200",
+      "color2": "#ffa200",
+      "active": false,
+      "shieldOnly": false,
+      "visible": true
+    },
+    {
+      "id": "gate-trigger-1788792207315-bottom",
+      "x": 2890,
+      "y": 4250,
+      "w": 388,
+      "h": 45,
+      "rotation": 0,
+      "label": "Barrier Active",
+      "color1": "#ffa200",
+      "color2": "#ffa200",
+      "active": false,
+      "shieldOnly": false,
+      "visible": true
+    },
+    {
+      "id": "gate-trigger-2-1-2-left",
+      "x": 4410,
+      "y": 3690,
+      "w": 388,
+      "h": 45,
+      "rotation": -90,
+      "label": "Barrier Active",
+      "color1": "#ffa200",
+      "color2": "#ffa200",
+      "active": false,
+      "shieldOnly": false,
+      "visible": true
+    },
+    {
+      "id": "gate-trigger-2-1-2-right",
+      "x": 5530,
+      "y": 3690,
+      "w": 388,
+      "h": 45,
+      "rotation": -90,
+      "label": "Barrier Active",
+      "color1": "#ffa200",
+      "color2": "#ffa200",
+      "active": false,
+      "shieldOnly": false,
+      "visible": true
+    }
+  ],
   "roomLayout": {
     "mode": "multi",
     "cols": 8,
@@ -1554,81 +1867,107 @@
         "c": 0,
         "r": 1,
         "size": 1120,
-        "marker": null
+        "marker": null,
+        "type": "normal"
       },
       {
         "c": 1,
         "r": 1,
         "size": 1120,
-        "marker": null
+        "marker": {
+          "type": "combat",
+          "icon": ""
+        },
+        "type": "normal"
       },
       {
         "c": 2,
         "r": 1,
         "size": 1120,
-        "marker": null
+        "marker": null,
+        "type": "normal"
       },
       {
         "c": 1,
         "r": 2,
-        "size": 1120,
-        "marker": null
+        "size": 820,
+        "marker": null,
+        "type": "unknown"
       },
       {
         "c": 3,
         "r": 1,
         "size": 1120,
-        "marker": null
+        "marker": null,
+        "type": "normal"
       },
       {
         "c": 3,
         "r": 0,
         "size": 1920,
-        "marker": null
+        "marker": null,
+        "type": "normal"
       },
       {
         "c": 4,
         "r": 1,
         "size": 1120,
-        "marker": null
+        "marker": null,
+        "type": "normal"
       },
       {
         "c": 3,
         "r": 2,
         "size": 1120,
-        "marker": null
+        "marker": null,
+        "type": "normal"
       },
       {
         "c": 3,
         "r": 3,
         "size": 1120,
-        "marker": null
+        "marker": null,
+        "type": "normal"
       },
       {
         "c": 4,
         "r": 3,
         "size": 1120,
-        "marker": null
+        "marker": null,
+        "type": "normal"
       },
       {
         "c": 3,
         "r": 4,
         "size": 1120,
-        "marker": null
+        "marker": null,
+        "type": "normal"
       },
       {
         "c": 2,
         "r": 3,
         "size": 1120,
-        "marker": null
+        "marker": null,
+        "type": "normal"
       },
       {
         "c": 5,
         "r": 1,
         "size": 1120,
-        "marker": null
+        "marker": null,
+        "type": "normal"
       }
     ]
   },
-  "spawnZones": []
+  "spawnZones": [
+    {
+      "id": "spawnzone-1-2-1",
+      "x": 2880,
+      "y": 3690,
+      "w": 620.5825827519429,
+      "h": 645.7787654658492,
+      "color": "#7ee787",
+      "visible": true
+    }
+  ]
 }

@@ -86,7 +86,9 @@ export function renderEntityProperties() {
     ['spawnEnemy', '召唤敌人'],
     ['switchLevel', '切换关卡'],
     ['spawnGate', '生成能量门'],
-    ['removeGate', '消除能量门']
+    ['removeGate', '消除能量门'],
+    ['bossBattle', 'BOSS战斗'],
+    ['playCinematic', '播放运镜']
   ];
   const gateOptions = state.level.gates.map((g, i) => [g.id, `${i + 1}. ${g.id}`]);
   const artOptions = [['', '（默认美术）'], ...getArtChoices().map(c => [c.id, c.name])];
@@ -135,6 +137,105 @@ export function renderEntityProperties() {
       ['x', 'X 坐标', 'number'],
       ['y', 'Y 坐标', 'number']
     ];
+    // 母舰：额外显示 Boss 配置（大小/召唤间隔/召唤表/击败运镜），仅母舰展示
+    if (entity.type === 'mothership') {
+      fields.push(
+        ['artScale', '大小', 'number'],
+        ['boss.spawnInterval', '召唤间隔(ms)', 'number'],
+        ['bossSpawnText', '召唤表（type*count,...）', 'text'],
+        ['cutsceneId', '被击败运镜 id', 'text']
+      );
+    }
+    // 原型机-2-5T5：全部数值走 boss.* 配置对象（[组名] 前缀便于辨认），artScale 用顶层字段
+    if (entity.type === 'boss-2-5t5') {
+      fields.push(
+        ['artScale', '大小', 'number'],
+        ['boss.name', '基础-名称', 'text'],
+        ['boss.moveSpeed', '移动-速度(px/s)', 'number'],
+        ['boss.moveWaitPreMs', '移动-前置等待(ms)', 'number'],
+        ['boss.moveWaitPostMs', '移动-后置等待(ms)', 'number'],
+        ['boss.approachMinMs', '移动-接近时长下限(ms)', 'number'],
+        ['boss.approachMaxMs', '移动-接近时长上限(ms)', 'number'],
+        ['boss.spinFastDeg', '移动-快速环绕角速度(°/s)', 'number'],
+        ['boss.spinFastMs', '移动-快速环绕时长(ms)', 'number'],
+        ['boss.spinSlowDeg', '移动-慢速环绕角速度(°/s)', 'number'],
+        ['boss.spinSlowMs', '移动-慢速环绕时长(ms)', 'number'],
+        ['boss.fleeMinMs', '移动-远离时长下限(ms)', 'number'],
+        ['boss.fleeMaxMs', '移动-远离时长上限(ms)', 'number'],
+        ['boss.shieldRadius', '护盾-半径', 'number'],
+        ['boss.shieldFadeMs', '护盾-渐显渐隐时长(ms)', 'number'],
+        ['boss.shieldRestoreDelayMs', '护盾-技能后恢复延迟(ms)', 'number'],
+        ['boss.blockedBulletDamage', '护盾-滞留子弹伤害', 'number'],
+        ['boss.shieldClearCost', '护盾-消除红弹扣盾值', 'number'],
+        ['boss.arcRadius', '圆弧-半径', 'number'],
+        ['boss.arcSpanDeg', '圆弧-张角(°)', 'number'],
+        ['boss.arc5SpinDeg', '圆弧5-自转角速度(°/s)', 'number'],
+        ['boss.arc4SpinDeg', '圆弧4-自转角速度(°/s)', 'number'],
+        ['boss.arcAlignDeg', '圆弧-对准玩家角速度(°/s)', 'number'],
+        ['boss.innerRadius', '圆弧1-内圈半径', 'number'],
+        ['boss.arc2Radius', '圆弧2-范围半径', 'number'],
+        ['boss.s1Range', '技能1-范围', 'number'],
+        ['boss.s1ExtendMs', '技能1-延长时长(ms)', 'number'],
+        ['boss.s1PauseMs', '技能1-停顿时长(ms)', 'number'],
+        ['boss.s1TightenMs', '技能1-收紧时长(ms)', 'number'],
+        ['boss.s1RingGap', '技能1-圆弧间隔(px)', 'number'],
+        ['boss.s1DragSpeed', '技能1-拖拽速度(px/s)', 'number'],
+        ['boss.s1DragDist', '技能1-拖拽距离', 'number'],
+        ['boss.s1KeepMs', '技能1-区域保留(ms)', 'number'],
+        ['boss.s1FadeMs', '技能1-区域淡出(ms)', 'number'],
+        ['boss.s1BossSpeedMult', '技能1-BOSS移速倍率', 'number'],
+        ['boss.s1BulletTrailWidth', '技能1-子弹拖尾宽度(px)', 'number'],
+        ['boss.s1BulletTrailLength', '技能1-子弹拖尾长度(px)', 'number'],
+        ['boss.s1BulletTrailColor', '技能1-子弹拖尾颜色', 'color'],
+        ['boss.zoneHitPadPx', '技能1/2-命中像素容差(px)', 'number'],
+        ['boss.s2Range', '技能2-范围', 'number'],
+        ['boss.s2ExtendMs', '技能2-延长时长(ms)', 'number'],
+        ['boss.s2PauseMs', '技能2-停顿时长(ms)', 'number'],
+        ['boss.s2ExpandMs', '技能2-扩张时长(ms)', 'number'],
+        ['boss.s2PushSpeed', '技能2-击退速度(px/s)', 'number'],
+        ['boss.s2PushDist', '技能2-击退距离', 'number'],
+        ['boss.s2Damage', '技能2-伤害', 'number'],
+        ['boss.s2KeepMs', '技能2-区域保留(ms)', 'number'],
+        ['boss.s2FadeMs', '技能2-区域淡出(ms)', 'number'],
+        ['boss.s2BulletTrailWidth', '技能2-子弹拖尾宽度(px)', 'number'],
+        ['boss.s2BulletTrailLength', '技能2-子弹拖尾长度(px)', 'number'],
+        ['boss.s2BulletTrailColor', '技能2-子弹拖尾颜色', 'color'],
+        ['boss.mergeOverlapPct', '技能3-合并重叠阈值(%)', 'number'],
+        ['boss.parkMinDeg', '非参战圆弧-停靠夹角下限(°)', 'number'],
+        ['boss.skillWeightS1', '技能权重-技能1', 'number'],
+        ['boss.skillWeightS2', '技能权重-技能2', 'number'],
+        ['boss.skillWeightS3', '技能权重-技能3', 'number'],
+        ['boss.skillWeightS5', '技能权重-技能5(半血后)', 'number'],
+        ['boss.s3Range', '技能3-范围', 'number'],
+        ['boss.s3ExtendMs', '技能3-延长时长(ms)', 'number'],
+        ['boss.s3PauseMs', '技能3-停顿时长(ms)', 'number'],
+        ['boss.s3ExpandMs', '技能3-扩张时长(ms)', 'number'],
+        ['boss.s4PushSpeed', '技能4-击飞速度(px/s)', 'number'],
+        ['boss.s4PushDist', '技能4-击飞距离', 'number'],
+        ['boss.s4Damage', '技能4-伤害', 'number'],
+        // 技能5「蓝色漩涡」（半血后才加入技能池）：生成 / 生命 / 吸力 / 拖尾
+        ['boss.s5HpPct', '技能5-加入技能组血量阈值(%)', 'number'],
+        ['boss.s5CastMs', '技能5-释放时长(ms)', 'number'],
+        ['boss.s5SpawnDist', '技能5-生成距玩家距离(px)', 'number'],
+        ['boss.s5Radius', '技能5-漩涡半径(px)', 'number'],
+        ['boss.s5Hp', '技能5-漩涡生命值', 'number'],
+        ['boss.s5PullRadius', '技能5-玩家吸力生效半径(px)', 'number'],
+        ['boss.s5PullMin', '技能5-最小吸力(px/s，半径边缘处)', 'number'],
+        ['boss.s5PullMax', '技能5-最大吸力(px/s，涡心处，需<玩家移速180)', 'number'],
+        ['boss.s5BulletPull', '技能5-子弹吸力(px/s²)', 'number'],
+        ['boss.s5HitIntervalMs', '技能5-入漩涡受伤间隔(ms)', 'number'],
+        ['boss.s5HitDamage', '技能5-入漩涡伤害', 'number'],
+        ['boss.s5BulletTrailWidth', '技能5-子弹拖尾宽度(px)', 'number'],
+        ['boss.s5BulletTrailLength', '技能5-子弹拖尾长度(px)', 'number'],
+        ['boss.s5BulletTrailColor', '技能5-子弹拖尾颜色', 'color'],
+        ['boss.s5CaptureMax', '技能5-漩涡最多捕获子弹数', 'number'],
+        ['boss.s5CaptureOrbitRatio', '技能5-捕获环绕半径比例', 'number'],
+        ['boss.s5CaptureSpinDeg', '技能5-捕获环绕角速度(°/s)', 'number'],
+        // 原型机-2-5T5 的运镜 id 写进 boss.*（运行时 enemy-ai.js:defeatEnemy 读 e.bossCfg.cutsceneId；
+        // 母舰走的顶层 cutsceneId 是另一条路径，由 state.js:normalizeEnemy 保留）
+        ['boss.cutsceneId', '被击败运镜 id', 'text']
+      );
+    }
   } else if (l.triggers.includes(entity)) {
     fields = [
       ['x', 'X 坐标', 'number'],
@@ -199,6 +300,7 @@ export function renderEntityProperties() {
       ['color2', '内色块颜色', 'color'],
       ['label', '门上文字', 'text'],
       ['active', '初始激活', 'boolean'],
+      ['shieldOnly', '只挡子弹(不可见/不挡玩家)', 'boolean'],
       ['visible', '可见', 'boolean']
     ];
   } else if ((l.spawnZones || []).includes(entity)) {
@@ -392,7 +494,15 @@ export function renderEntityProperties() {
   dom.entityFields.innerHTML = fields.map(([key, label, inputType, options]) => {
     const value = key === '__waveCount'
       ? ((entity.spawn || {}).waves || []).length
-      : getNested(entity, key) ?? '';
+      : key === 'bossSpawnText'
+        ? (Array.isArray(entity.boss?.spawnTable)
+            ? entity.boss.spawnTable.map(({ type, count }) => `${type}*${count}`).join(',')
+            : 'basic1*5,basic2*6,advanced1*2,advanced2*1')
+        : key === 'artScale'
+          ? (getNested(entity, key) ?? 2)
+          : key === 'boss.spawnInterval'
+            ? (getNested(entity, key) ?? 5000)
+            : getNested(entity, key) ?? '';
     if (inputType === 'select') {
       const opts = options.map(([v, name]) =>
         `<option value="${v}" ${value === v ? 'selected' : ''}>${name}</option>`).join('');
@@ -414,6 +524,14 @@ export function renderEntityProperties() {
   }).join('');
 
   bindEntityFieldInputs(entity);
+
+  // 母舰：被击败运镜 id 的说明 hint
+  if (l.enemies.includes(entity) && entity.type === 'mothership') {
+    const hint = document.createElement('p');
+    hint.className = 'hint';
+    hint.textContent = 'BOSS 被击败时播放的运镜动画 id（留空则不触发）';
+    dom.entityFields.appendChild(hint);
+  }
 
   if ((l.icons || []).includes(entity)) {
     const uploadBtn = document.createElement('button');
@@ -468,6 +586,19 @@ export function bindEntityFieldInputs(entity) {
         while (waves.length < target) waves.push({});
         while (waves.length > target) waves.pop();
         renderEntityProperties();
+        return;
+      }
+      // 母舰召唤表：文本 "type*count,..." → 数组 [{type,count}] 写回 boss.spawnTable
+      if (field === 'bossSpawnText') {
+        const boss = entity.boss || (entity.boss = {});
+        boss.spawnTable = String(input.value).split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
+          .map(part => {
+            const [type, count] = part.split('*').map(x => x.trim());
+            return { type: type || '', count: Math.max(1, Math.floor(Number(count) || 1)) };
+          });
+        saveDraft(state.levelId, state.level).catch(() => setStatus(dom, '保存失败', true));
         return;
       }
       if (input.dataset.ms !== undefined) {

@@ -1,7 +1,7 @@
 /**
  * 文件职责：编辑器 / 试玩相机控制（世界与视口尺寸、缩放适配、滚轮、试玩跟随、编辑器视图钳制）
  * 归属分类：引擎(编辑器)需求
- * 主要导出：EditorCameraMixin（11 个方法）
+ * 主要导出：EditorCameraMixin（18 个方法）
  * 依赖：phaser、systems/constants.js（ctx 经 this.ctx）
  */
 import Phaser from 'phaser';
@@ -88,6 +88,8 @@ export const EditorCameraMixin = {
 
     updatePlayCamera() {
     const ctx = this.ctx;
+      // 运镜过场期间让权：不覆写相机，交由 _stepCutscene 驱动
+      if (this.cinematicActive) return;
       const cam = this.cameras.main;
       // 蓄力武器（冥狙）：蓄力时视窗逐渐放大（最多+60%），发射后 0.6s 内恢复（chargeZoom 因子）
       const z = this.playZoom() * (this.chargeZoom || 1);
@@ -177,5 +179,178 @@ export const EditorCameraMixin = {
       this.clampEditorView();
       this.showZoom();
       this.draw();
+    },
+
+  // ── 运镜过场（Cinematic / Cutscene 播放器）──
+    // 按 id 从关卡运镜定义表查询并播放；找不到则无操作并告警。
+    playCutsceneById(id, opts = {}) {
+      const clip = this.ctx?.state?.level?.cinematics?.find(c => c.id === id);
+      if (!clip) {
+        console.warn(`[cutscene] 未找到运镜定义: ${id}`);
+        return;
+      }
+      this.playCutscene(clip, opts);
+    },
+
+    // 核心运镜播放器：仅试玩/播放模式生效；编辑器模式告警并 no-op。
+    // 通过 this.time.addEvent(loop) 驱动 _stepCutscene，避免与 updatePlayCamera 抢帧。
+    playCutscene(clip, opts = {}) {
+      const mode = this.ctx?.state?.mode;
+      if (mode !== 'play' && mode !== 'trial') {
+        console.warn(`[cutscene] 仅试玩/播放模式可运镜，当前模式: ${mode}`);
+        return;
+      }
+      if (!clip) { console.warn('[cutscene] 运镜定义为空'); return; }
+
+      // 清理可能残留的运镜计时器（不触发 onComplete / setupPlayCamera）
+      if (this.cinematicTimer) { this.cinematicTimer.remove(); this.cinematicTimer = null; }
+      this.cinematicActive = false;
+
+      const cam = this.cameras.main;
+      // 保存运镜前的相机状态，便于结束恢复。
+      const prev = { zoom: cam.zoomX, scrollX: cam.scrollX, scrollY: cam.scrollY, rotation: cam.rotation };
+
+      // 全屏黑色蒙层（叠加层：setScrollFactor(0) 固定于视口，depth 极高）。
+      if (!this.cinematicFade) {
+        this.cinematicFade = this.add.rectangle(0, 0, cam.width, cam.height, 0x000000, 0)
+          .setOrigin(0, 0).setScrollFactor(0).setDepth(9999);
+      } else {
+        this.cinematicFade.setSize(cam.width, cam.height);
+        this.cinematicFade.setFillStyle(0x000000, 0);
+      }
+      this.cinematicFade.setVisible(true);
+
+      // 关键帧按 t 升序排序，并补齐默认值（zoom=1 / pan=0 / rotation=0 / alpha=0 / ease='linear'）。
+      const kfs = (clip.keyframes || []).slice().sort((a, b) => a.t - b.t).map(kf => ({
+        zoom: kf.zoom ?? 1, panX: kf.panX ?? 0, panY: kf.panY ?? 0,
+        rotation: kf.rotation ?? 0, alpha: kf.alpha ?? 0, ease: kf.ease ?? 'linear', t: kf.t,
+      }));
+      if (!kfs.length) { // 无关键帧：直接结束并恢复。
+        this.stopCutscene(opts);
+        return;
+      }
+
+      this.cinematicActive = true;
+      this.cinematicClip = clip;
+      this.cinematicKfs = kfs;
+      this.cinematicStart = this.time.now;
+      this.cinematicPrev = prev;
+      this.cinematicOpts = opts;
+      this.cinematicFocus = this._resolveFocusTarget(opts.focusTarget, opts);
+      this.cinematicTimeScale = (clip.timeScale ?? 1) || 1;
+
+      // 立即应用首个关键帧视觉，随后由计时器推进。
+      this._applyCutsceneState(this._cutsceneStateAt(0));
+      this.cinematicTimer = this.time.addEvent({
+        delay: 16, loop: true, callback: () => this._stepCutscene(),
+      });
+    },
+
+    // 解析运镜动态目标：opts.x/y 直接坐标 > focusTarget==='boss' 取当前激活 BOSS 坐标 > null。
+    _resolveFocusTarget(target, opts = {}) {
+      if (opts.x != null && opts.y != null) return { x: opts.x, y: opts.y };
+      if (target === 'boss') {
+        const boss = this.bossTarget
+          || (this.enemies || []).find(e => (e.type === 'mothership' || e.type === 'boss-2-5t5') && e.bossActive);
+        if (boss) return { x: boss.x, y: boss.y };
+      }
+      return null;
+    },
+
+    // 运镜推进（由 time 计时器每帧回调）：按 time.now 线性推进插值。
+    _stepCutscene() {
+      if (!this.cinematicActive) {
+        if (this.cinematicTimer) { this.cinematicTimer.remove(); this.cinematicTimer = null; }
+        return;
+      }
+      const kfs = this.cinematicKfs || [];
+      if (!kfs.length) { this.stopCutscene(this.cinematicOpts || {}); return; }
+      const T = this.time.now - this.cinematicStart;
+      const dur = this.cinematicClip?.durationMs ?? kfs[kfs.length - 1].t ?? 0;
+      if (T >= dur) { // 已结束：施加末帧，然后停止。
+        this._applyCutsceneState(kfs[kfs.length - 1]);
+        this.stopCutscene(this.cinematicOpts || {});
+        return;
+      }
+      this._applyCutsceneState(this._cutsceneStateAt(T));
+    },
+
+    // 在时刻 T 求相邻关键帧插值。
+    _cutsceneStateAt(T) {
+      const kfs = this.cinematicKfs || [];
+      if (!kfs.length) return null;
+      let a = kfs[0], b = kfs[kfs.length - 1];
+      for (let i = 0; i < kfs.length - 1; i++) {
+        if (T >= kfs[i].t && T <= kfs[i + 1].t) { a = kfs[i]; b = kfs[i + 1]; break; }
+      }
+      const span = (b.t - a.t) || 1;
+      const p = Phaser.Math.Clamp((T - a.t) / span, 0, 1);
+      const eased = this._easeValue(a.ease || 'linear', p);
+      const lerp = (v0, v1) => v0 + (v1 - v0) * eased;
+      return {
+        zoom: lerp(a.zoom, b.zoom),
+        panX: lerp(a.panX, b.panX),
+        panY: lerp(a.panY, b.panY),
+        rotation: lerp(a.rotation, b.rotation),
+        alpha: lerp(a.alpha, b.alpha),
+      };
+    },
+
+    // 应用插值状态到相机与蒙层。
+    _applyCutsceneState(s) {
+      if (!s) return;
+      const cam = this.cameras.main;
+      let px = s.panX, py = s.panY;
+      if (this.cinematicFocus) {           // 有动态目标 → pan 换算为镜头中心（视口左上角世界坐标）
+        px = this.cinematicFocus.x - cam.width / 2;
+        py = this.cinematicFocus.y - cam.height / 2;
+      }
+      cam.setZoom(s.zoom);
+      cam.scrollX = px;
+      cam.scrollY = py;
+      cam.setRotation(Phaser.Math.DegToRad(s.rotation));
+      if (this.cinematicFade) this.cinematicFade.setFillStyle(0x000000, s.alpha);
+    },
+
+    // 运镜结束 / 停止：撤销蒙层、清状态、恢复播放相机并回调。
+    stopCutscene(opts = {}) {
+      const cam = this.cameras.main;
+      if (this.cinematicTimer) { this.cinematicTimer.remove(); this.cinematicTimer = null; }
+      this.cinematicActive = false;
+      if (this.cinematicFade) {
+        this.cinematicFade.setFillStyle(0x000000, 0);
+        this.cinematicFade.setVisible(false);
+      }
+      opts.onComplete?.();
+      // 恢复播放态（setupPlayCamera 更稳），并清除运镜带来的旋转。
+      cam.setRotation(0);
+      this.setupPlayCamera();
+      this.cinematicClip = null;
+      this.cinematicKfs = null;
+      this.cinematicOpts = null;
+      this.cinematicPrev = null;
+      this.cinematicFocus = null;
+      this.cinematicTimeScale = 1;
+    },
+
+    // 缓动插值：linear / sine / quad / cubic（In / Out / InOut）。缺省线性。
+    _easeValue(ease, t) {
+      const E = Phaser.Math.Easing;
+      const p = Phaser.Math.Clamp(t, 0, 1);
+      switch (ease) {
+        case 'sineIn': return E.Sine.In(p);
+        case 'sineOut': return E.Sine.Out(p);
+        case 'sineInOut': return E.Sine.InOut(p);
+        case 'quadIn': return E.Quadratic.In(p);
+        case 'quadOut': return E.Quadratic.Out(p);
+        case 'quadInOut': return E.Quadratic.InOut(p);
+        case 'cubicIn': return E.Cubic.In(p);
+        case 'cubicOut': return E.Cubic.Out(p);
+        case 'cubicInOut': return E.Cubic.InOut(p);
+        case 'easeOut': return E.Sine.Out(p);
+        case 'easeInOut': return E.Sine.InOut(p);
+        case 'linear':
+        default: return p;
+      }
     },
 };

@@ -1,0 +1,183 @@
+{
+  "shape": "pixel",
+  "count": 1,
+  "orbitRadius": 0,
+  "radius": 20,
+  "sides": 6,
+  "cols": 12,
+  "rows": 12,
+  "cellSize": 8,
+  "gridColor": null,
+  "cells": [
+    {
+      "x": 5,
+      "y": 3,
+      "color": "#fff700"
+    },
+    {
+      "x": 6,
+      "y": 3,
+      "color": "#fff700"
+    },
+    {
+      "x": 4,
+      "y": 4,
+      "color": "#fff700"
+    },
+    {
+      "x": 5,
+      "y": 5,
+      "color": "#fff700"
+    },
+    {
+      "x": 6,
+      "y": 5,
+      "color": "#fff700"
+    },
+    {
+      "x": 7,
+      "y": 6,
+      "color": "#fff700"
+    },
+    {
+      "x": 6,
+      "y": 7,
+      "color": "#fff700"
+    },
+    {
+      "x": 5,
+      "y": 7,
+      "color": "#fff700"
+    },
+    {
+      "x": 2,
+      "y": 3,
+      "color": "#fff700"
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "color": "#fff700"
+    },
+    {
+      "x": 2,
+      "y": 5,
+      "color": "#fff700"
+    },
+    {
+      "x": 2,
+      "y": 6,
+      "color": "#fff700"
+    },
+    {
+      "x": 2,
+      "y": 7,
+      "color": "#fff700"
+    },
+    {
+      "x": 4,
+      "y": 1,
+      "color": "#fff700"
+    },
+    {
+      "x": 5,
+      "y": 1,
+      "color": "#fff700"
+    },
+    {
+      "x": 6,
+      "y": 1,
+      "color": "#fff700"
+    },
+    {
+      "x": 7,
+      "y": 1,
+      "color": "#fff700"
+    },
+    {
+      "x": 9,
+      "y": 3,
+      "color": "#fff700"
+    },
+    {
+      "x": 9,
+      "y": 4,
+      "color": "#fff700"
+    },
+    {
+      "x": 9,
+      "y": 5,
+      "color": "#fff700"
+    },
+    {
+      "x": 9,
+      "y": 6,
+      "color": "#fff700"
+    },
+    {
+      "x": 9,
+      "y": 7,
+      "color": "#fff700"
+    },
+    {
+      "x": 4,
+      "y": 9,
+      "color": "#fff700"
+    },
+    {
+      "x": 5,
+      "y": 9,
+      "color": "#fff700"
+    },
+    {
+      "x": 6,
+      "y": 9,
+      "color": "#fff700"
+    },
+    {
+      "x": 7,
+      "y": 9,
+      "color": "#fff700"
+    },
+    {
+      "x": 3,
+      "y": 8,
+      "color": "#fff700"
+    },
+    {
+      "x": 8,
+      "y": 8,
+      "color": "#fff700"
+    },
+    {
+      "x": 3,
+      "y": 2,
+      "color": "#fff700"
+    },
+    {
+      "x": 8,
+      "y": 2,
+      "color": "#fff700"
+    }
+  ],
+  "lineWidth": 4,
+  "color": "#ffa914",
+  "fill": null,
+  "rotSpeed": 0,
+  "phase": 0,
+  "dir": 1,
+  "arcStart": 0,
+  "arcEnd": 300,
+  "pattern": "plain",
+  "tickShortLen": 6,
+  "tickLongLen": 12,
+  "tickDensity": 12,
+  "tickRatio": 1,
+  "tickDir": "in",
+  "points": [],
+  "closed": false,
+  "offsetX": 0,
+  "offsetY": 0,
+  "offsetSpeed": 1,
+  "name": "商城"
+}

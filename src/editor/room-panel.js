@@ -8,7 +8,7 @@
  */
 import { setStatus } from '../ui.js';
 import { generateRoomLayout, spawnInRooms, ROOM_SIZE, MAX_PANEL_SIZE } from '../rooms.js';
-import { MINIMAP_MARKER_TYPES, MINIMAP_MARKER_LABELS } from '../state.js';
+import { MINIMAP_MARKER_TYPES, MINIMAP_MARKER_LABELS, ROOM_TYPES, ROOM_TYPE_LABELS } from '../state.js';
 import { getArtChoices } from '../systems/art/design-store.js';
 import { ctx } from './context.js';
 import { pushUndo } from './history.js';
@@ -53,13 +53,15 @@ export function renderRoomPanel() {
 
   const selected = new Set(layout.cells.map(cell => `${cell.c},${cell.r}`));
   const sizeOf = new Map(layout.cells.map(cell => [`${cell.c},${cell.r}`, cell.size]));
+  const typeOf = new Map(layout.cells.map(cell => [`${cell.c},${cell.r}`, cell.type || 'normal']));
   dom.roomGrid.style.gridTemplateColumns = `repeat(${layout.cols}, 1fr)`;
   dom.roomGrid.innerHTML = Array.from({ length: layout.rows }, (_, r) =>
     Array.from({ length: layout.cols }, (_, c) => {
       const key = `${c},${r}`;
       const on = selected.has(key);
       const size = on ? sizeOf.get(key) : ROOM_SIZE;
-      return `<button class="room-cell${on ? ' selected' : ''}" data-c="${c}" data-r="${r}" title="房间 (${c + 1},${r + 1})，大小 ${size}">${on ? `<i>${size}</i>` : ''}</button>`;
+      const unknown = on && typeOf.get(key) === 'unknown';
+      return `<button class="room-cell${on ? ' selected' : ''}${unknown ? ' unknown' : ''}" data-c="${c}" data-r="${r}" title="房间 (${c + 1},${r + 1})，大小 ${size}${unknown ? '，未知房间' : ''}">${on ? `<i>${size}${unknown ? ' ?' : ''}</i>` : ''}</button>`;
     }).join('')
   ).join('');
 }
@@ -117,6 +119,11 @@ export function openRoomCellPopup(c, r) {
   dom.roomCellPopupTitle.textContent = `房间 (${c + 1},${r + 1}) 设置`;
   dom.roomCellSize.value = cell.size;
 
+  // 房间类型下拉（普通房间 / 未知房间）
+  const roomTypeEl = dom.roomCellType;
+  roomTypeEl.innerHTML = ROOM_TYPES.map(t => `<option value="${t}">${ROOM_TYPE_LABELS[t] || t}</option>`).join('');
+  roomTypeEl.value = cell.type || 'normal';
+
   // 标记类型下拉（无 + 5 类中文标签）
   const typeEl = dom.roomCellMarkerType;
   typeEl.innerHTML = `<option value="">无</option>${MINIMAP_MARKER_TYPES.map(t => `<option value="${t}">${MINIMAP_MARKER_LABELS[t] || t}</option>`).join('')}`;
@@ -140,6 +147,20 @@ export function applyRoomMarker(c, r) {
   if (!cell) return;
   const type = dom.roomCellMarkerType.value;
   cell.marker = type ? { type, icon: dom.roomCellMarkerIcon.value || '' } : null;
+  pushUndo();
+  applyRooms();
+  renderRoomPanel();
+}
+
+// 写回房间类型：读弹窗下拉；非法回落 normal
+export function applyRoomType(c, r) {
+  const dom = ctx.dom;
+  const layout = state.level.roomLayout;
+  if (!layout) return;
+  const cell = layout.cells.find(x => x.c === c && x.r === r);
+  if (!cell) return;
+  const type = dom.roomCellType.value;
+  cell.type = ROOM_TYPES.includes(type) ? type : 'normal';
   pushUndo();
   applyRooms();
   renderRoomPanel();

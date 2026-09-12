@@ -33,7 +33,8 @@ export function normalizeRoomLayout(value) {
       c: Math.floor(Number(cell?.c)),
       r: Math.floor(Number(cell?.r)),
       size: clampRoomSize(cell?.size),
-      marker: normalizeRoomMarker(cell?.marker)
+      marker: normalizeRoomMarker(cell?.marker),
+      type: cell?.type === 'unknown' ? 'unknown' : 'normal'
     }))
     .filter(cell => Number.isInteger(cell.c) && Number.isInteger(cell.r)
       && cell.c >= 0 && cell.c < cols && cell.r >= 0 && cell.r < rows);
@@ -64,7 +65,7 @@ export function generateRoomLayout(layout) {
   // 归一化：整体平移到最小格为原点
   const minC = Math.min(...layout.cells.map(cell => cell.c), 0);
   const minR = Math.min(...layout.cells.map(cell => cell.r), 0);
-  const cells = layout.cells.map(cell => ({ c: cell.c - minC, r: cell.r - minR, size: cell.size, marker: cell.marker }));
+  const cells = layout.cells.map(cell => ({ c: cell.c - minC, r: cell.r - minR, size: cell.size, marker: cell.marker, type: cell.type }));
   const maxC = cells.length ? Math.max(...cells.map(cell => cell.c)) : -1;
   const maxR = cells.length ? Math.max(...cells.map(cell => cell.r)) : -1;
 
@@ -106,7 +107,7 @@ export function generateRoomLayout(layout) {
     const oy = rowY[r] + (rowSize[r] - sh) / 2;
     const right = ox + sw, bottom = oy + sh;
     const cx = ox + sw / 2, cy = oy + sh / 2;
-    rooms.push({ c, r, x: ox, y: oy, w: sw, h: sh, marker: cell.marker });
+    rooms.push({ c, r, x: ox, y: oy, w: sw, h: sh, marker: cell.marker, type: cell.type });
 
     const nbL = cellByKey.get(`${c - 1},${r}`);
     const nbR = cellByKey.get(`${c + 1},${r}`);
@@ -171,4 +172,44 @@ export function spawnInRooms(spawn, rooms) {
   if (!spawn || !rooms?.length) return false;
   return rooms.some(rm => spawn.x >= rm.x && spawn.x <= rm.x + rm.w
     && spawn.y >= rm.y && spawn.y <= rm.y + rm.h);
+}
+
+// 计算一个坐标点落在哪个箱庭房间，并返回该房间四个边缘的通道开口几何。
+// 返回 null（非多箱庭 / 不在任何房间内）；否则 { c, r, x, y, w, h, passages: [{ edge, cx, cy, w, rotation, roadLen }] }。
+// 门应放置在通道开口中心 (cx, cy)，w=开口宽度（门长），rotation=-90（左右开口/竖直门）或 0（上下开口/水平门）。
+export function roomPassagesForPoint(layout, x, y) {
+  if (!layout || layout.mode !== 'multi' || !Array.isArray(layout.cells) || !layout.cells.length) return null;
+  const { rooms } = generateRoomLayout(layout);
+  const room = rooms.find(r => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
+  if (!room) return null;
+
+  // generateRoomLayout 内部先把格子平移到最小格为原点，rooms 的 c/r 是平移后的坐标；此处用同款偏移做邻接判定
+  const minC = Math.min(...layout.cells.map(cell => cell.c), 0);
+  const minR = Math.min(...layout.cells.map(cell => cell.r), 0);
+  const cells = layout.cells.map(cell => ({ c: cell.c - minC, r: cell.r - minR, size: cell.size }));
+  const has = (c, r) => cells.some(cell => cell.c === c && cell.r === r);
+  const nbSize = (c, r) => (cells.find(cell => cell.c === c && cell.r === r)?.size) || room.w;
+  const eff = size => Math.max(8, Math.min(layout.roadWidth, room.w - 16, size - 16));
+  const cx = room.x + room.w / 2, cy = room.y + room.h / 2;
+  const roadLen = layout.roadLength || 0;
+  const passages = [];
+  if (has(room.c - 1, room.r)) passages.push({ edge: 'left', cx: room.x, cy, w: eff(nbSize(room.c - 1, room.r)), rotation: -90, roadLen });
+  if (has(room.c + 1, room.r)) passages.push({ edge: 'right', cx: room.x + room.w, cy, w: eff(nbSize(room.c + 1, room.r)), rotation: -90, roadLen });
+  if (has(room.c, room.r - 1)) passages.push({ edge: 'top', cx, cy: room.y, w: eff(nbSize(room.c, room.r - 1)), rotation: 0, roadLen });
+  if (has(room.c, room.r + 1)) passages.push({ edge: 'bottom', cx, cy: room.y + room.h, w: eff(nbSize(room.c, room.r + 1)), rotation: 0, roadLen });
+  return { c: room.c, r: room.r, x: room.x, y: room.y, w: room.w, h: room.h, passages };
+}
+
+// 判定门实体是否位于某个通道开口上（方向一致 + 中心对齐 + 落在道路走廊内）
+export function isGateOnPassage(g, p) {
+  const rot = ((Math.round(g.rotation || 0) % 180) + 180) % 180;
+  const vertical = rot === 90;
+  const wantVertical = p.edge === 'left' || p.edge === 'right';
+  if (vertical !== wantVertical) return false;
+  // across 是「垂直门/水平门沿通道法线方向的容差」：只允许门中心贴近本房间自己的开口，
+  // 不能蹭到相邻箱庭房间另一端的开口（那个位置距本开口约 roadLen，原逻辑把 roadLen 当容差导致误配）。
+  // 取门自身进深 + 墙厚 + 余量，钳制在 [120,200]，仍远小于房间/走廊间距。
+  const across = Math.max(120, Math.min(200, (g.h || 45) + 80));
+  if (wantVertical) return Math.abs(g.y - p.cy) <= p.w / 2 + 30 && Math.abs(g.x - p.cx) <= across;
+  return Math.abs(g.x - p.cx) <= p.w / 2 + 30 && Math.abs(g.y - p.cy) <= across;
 }

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 // 模块级纯函数、常量与各类 mixin 已外提至 src/systems/ 下，按战斗 / 经济 / UI / 编辑器分类
 import { BARREL_ICON, BARREL_TEX_KEY, CHEST_CLOSED_KEY, CHEST_OPEN_KEY, VENDOR_TEX_KEY, VENDOR_ICON, IDOL_TEX_KEY, IDOL_ICON, BARREL_EXPLOSION_MS, PLAYER_ART, SHIELD, HIT_FX_TTL, GATE_SPAWN_MS } from './systems/constants.js';
-import { hitWall, reflectBulletAgainstWall } from './systems/combat/geometry.js';
+import { hitWall, reflectBulletAgainstWall, rayWallDistance, pointSegmentDistance, mothershipBulletHit, mothershipBodyDist } from './systems/combat/geometry.js';
 import { WEAPONS, spawnLaser } from './systems/combat/weapons.js';
 import { playerDamage, activeMods } from './systems/economy/damage.js';
 import { buildOrbitInstance } from './systems/art/weapon-runtime.js';
@@ -10,6 +10,7 @@ import { color, updatePlayerMoveLean } from './systems/ui/entity-art.js';
 import { EditorInputMixin } from './systems/editor/editor-input.js';
 import { EditorCameraMixin } from './systems/editor/editor-camera.js';
 import { EnemyAiMixin } from './systems/combat/enemy-ai.js';
+import { Boss25T5Mixin } from './systems/combat/boss25t5.js';
 import { PlayerCombatMixin } from './systems/combat/player-combat.js';
 import { DestructiblesMixin } from './systems/combat/destructibles.js';
 import { PetMixin } from './systems/combat/pet-runtime.js';
@@ -38,7 +39,7 @@ import { WorkshopMixin } from './systems/gameplay/workshop.js';
 
 export function createGameScene(ctx) {
   class EditorScene extends Phaser.Scene {
-    constructor() { super('scene'); this.editing = ctx.state.mode === 'editor'; this.ctx = ctx; }
+    constructor() { super('scene'); this.editing = ctx.state.mode === 'editor'; this.ctx = ctx; this.playerDamage = playerDamage; }
 
     create() {
       this.bgG = this.add.graphics().setDepth(0);
@@ -52,6 +53,9 @@ export function createGameScene(ctx) {
       this.levelImageSprites = new Map();
       this.levelImageLoading = new Set();
       this.iconLoading = new Set();
+      // 原型机-2-5T5 技能5「蓝色漩涡」：场景级数组（不挂在 BOSS 实体上 → 技能结束/多 BOSS 都不影响）。
+      // 元素契约见 systems/combat/boss25t5.js 顶部注释（渲染端按 id/x/y/r/hp/maxHp/t/hitT 取值）。
+      this.boss25t5Vortices = [];
       this.gateTexts = new Map();
       if (!this.textures.exists(VENDOR_TEX_KEY)) {
         this.load.image(VENDOR_TEX_KEY, VENDOR_ICON);
@@ -140,6 +144,9 @@ export function createGameScene(ctx) {
 
 
     update(_, dt) {
+      // 运镜级全局慢动作：运镜 timeScale<1 时，所有走 dt 的世界模拟同步变慢
+      const slowmo = this.cinematicTimeScale || 1;
+      if (slowmo !== 1) dt *= slowmo;
       if (this.editing) {
         this.updateEditorKeys();
         return this.draw();
@@ -220,9 +227,16 @@ export function createGameScene(ctx) {
       const r = this.player.r;
       const baseSpeed = 180;
       const moveSpeed = this.player.combat?.moveSpeed ?? 1;
-      this.player.x = Phaser.Math.Clamp(this.player.x + dx / n * baseSpeed * moveSpeed * dt / 1000, r, ww - r);
-      this.player.y = Phaser.Math.Clamp(this.player.y + dy / n * baseSpeed * moveSpeed * dt / 1000, r, wh - r);
+      // 原型机-2-5T5「紫色领域」减速 95%：标记由 boss25t5ZonesTick 每帧先清后置（1 帧延迟可接受）
+      const slow = this.player.boss25t5Slow ? 0.05 : 1;
+      // 原型机-2-5T5 技能5「蓝色漩涡」吸力：{vx,vy}（px/s）由 boss25t5VorticesTick 每帧先清零再写入，
+      // 这里按与 slow 同样的写法叠加到本帧位移（取不到时按 0，不会产生 NaN）
+      const pull = this.player.boss25t5Pull;
+      const pullVx = pull?.vx || 0, pullVy = pull?.vy || 0;
+      this.player.x = Phaser.Math.Clamp(this.player.x + (dx / n * baseSpeed * moveSpeed * slow + pullVx) * dt / 1000, r, ww - r);
+      this.player.y = Phaser.Math.Clamp(this.player.y + (dy / n * baseSpeed * moveSpeed * slow + pullVy) * dt / 1000, r, wh - r);
       this.resolveMovementCollision(this.player, r);
+      this.updateRoomReveal(dt);
 
       const pointer = this.input.activePointer;
       const rawFireDown = pointer.leftButtonDown();
@@ -305,8 +319,12 @@ export function createGameScene(ctx) {
           if (fireDown) {
             for (let i = 0; i < orbit.hexCount; i++) {
               const c = elementCenter(dyn, e0, i, this.player.x, this.player.y, tt, this.player.artScale || 1);
-              (o.hexTrails[i] = o.hexTrails[i] || []).push({ x: c.x, y: c.y });
-              while (o.hexTrails[i].length > orbit.trailSamples) o.hexTrails[i].shift();
+              const arr = (o.hexTrails[i] = o.hexTrails[i] || []);
+              const last = arr[arr.length - 1];
+              // 瞬移跳变（切轨/调速时 rotSpeed*t 角度瞬跳）跨度大：断开该颗航迹，避免连出贯穿半径的放射状乱线
+              if (last && Math.hypot(c.x - last.x, c.y - last.y) > Math.max(50, o.radius * 0.6)) arr.length = 0;
+              arr.push({ x: c.x, y: c.y });
+              while (arr.length > orbit.trailSamples) arr.shift();
             }
           } else if (o.hexTrails.length) {
             o.hexTrails = [];
@@ -320,12 +338,16 @@ export function createGameScene(ctx) {
               const hitR = (e0.radius || 10) * (c.worldScale || this.player.artScale || 1);
               for (const e of this.enemies) {
                 if (!e.alive) continue;
+                if (e.type === 'mothership' && !e.bossActive) continue;
+                // 原型机-2-5T5 同理：未激活（待机）时轨道六边形也不可命中它
+                if (e.type === 'boss-2-5t5' && !e.bossActive) continue;
                 if (Math.hypot(e.x - c.x, e.y - c.y) < hitR + e.r) {
                   const last = this.orbitHit.get(e.id) ?? -Infinity;
                   if (now - last >= orbit.hitIntervalMs) {
                     this.orbitHit.set(e.id, now);
                     const dmg = playerDamage(this, this.player.weaponType);
                     e.hp -= dmg;
+                    if (e.type === 'mothership' || e.type === 'boss-2-5t5') e.hitFlashT = 100;
                     this.hitEffects.push({ x: c.x, y: c.y, ttl: HIT_FX_TTL });
                     if (e.hp <= 0) this.defeatEnemy(e);
                   }
@@ -448,14 +470,42 @@ export function createGameScene(ctx) {
       const l = ctx.state.level;
 
       this.bullets = this.bullets.filter(b => {
+        // ① 被技能5 漩涡捕获的转化子弹：位置/接触由漩涡 tick 驱动（不前进、不参与任何碰撞）→ 原样保留。
+        if (b.captured) return !b.dead;
+        // 被原型机-2-5T5 护盾拦截的红子弹：停驻原地、不前进、不参与任何碰撞（墙/箱/桶/敌/护盾），
+        // 仅在玩家触碰（boss25t5UpdateBlocked 置 b.dead）或 BOSS 死亡（defeatEnemy 清理）时移除。
+        // 例外：被漩涡吸力或技能1/2 施力够得着时会被解冻（两块内部都会置 blockedBoss=false / thawed /
+        // forceTrail，见 boss25t5VortexPull / boss25t5ZoneBulletForce），此后按转化子弹继续走下面的常规处理。
+        if (b.blockedBoss) {
+          if (this.boss25t5VortexPull(b, dt) || this.boss25t5ZoneBulletForce(b, dt)) b.blockedBoss = false;
+          else return !b.dead;
+        }
         // 撞墙渐隐中的子弹：停驻原地（不前进、不碰撞），仅按 fadeDuration 递减透明度
         if (b.wallFade) {
           WEAPONS[b.weaponType]?.stepBullet?.(b, dt, this);
           return !b.dead && b.x > 0 && b.x < ww && b.y > 0 && b.y < wh;
         }
+        const obx = b.x, oby = b.y, odist = b.dist;
         b.x += b.vx * dt / 1000;
         b.y += b.vy * dt / 1000;
         b.dist += Math.hypot(b.vx, b.vy) * dt / 1000;
+
+        // 原型机-2-5T5 技能5「蓝色漩涡」：对场上**所有**子弹施吸力（含已转化/未转化）；
+        // 技能1/2 区域内的已转化子弹另受 boss25t5ZoneBulletForce 施力（吸/推）。
+        // 施力后：已转化子弹落进漩涡半径 → 捕获环绕（保留该弹）；普通子弹落进漩涡半径 → 扣漩涡 HP 并消灭。
+        // 位置：位移之后、护盾拦截与墙体判定之前（被吸走/捕获的弹不再参与后续碰撞）。
+        this.boss25t5VortexPull(b, dt);
+        this.boss25t5ZoneBulletForce(b, dt);
+        if (this.boss25t5VortexCapture(b)) return true;     // 已转化子弹：捕获环绕（保留该弹）
+        if (this.boss25t5VortexAbsorb(b)) return false;     // 普通玩家子弹：扣漩涡 HP 并消灭
+
+        // 原型机-2-5T5 阻挡护盾拦截：子弹本帧位移线段（obx,oby→b.x,b.y）穿过护盾圆面 →
+        // 停在护盾上、vx=vy=0、变红、打上 blockedBoss/blockedBy/blockedDamage（后续不前进、不判墙体/敌人）。
+        for (const e of this.enemies) {
+          if (!e.alive || e.type !== 'boss-2-5t5' || !e.bossActive) continue;
+          if (this.boss25t5TryBlock(e, b, obx, oby)) return true;
+        }
+
         WEAPONS[b.weaponType]?.stepBullet?.(b, dt, this);
 
         // 蓄力武器「表盘红弧」穿环：子弹本帧位移线段跨过红弧带圆（半径=arc.r）→ 变红 + 伤害翻倍（一次性）。
@@ -483,7 +533,7 @@ export function createGameScene(ctx) {
         // 反弹改件：撞墙时反射速度而非销毁
         if (b.ricochet) {
           const hitW = l.walls.find(w => hitWall(w, b.x, b.y, 3))
-            || this.activeGateWalls().find(w => hitWall(w, b.x, b.y, 3));
+            || this.bulletGateWalls().find(w => hitWall(w, b.x, b.y, 3));
           if (hitW) {
             b.x -= b.vx * dt / 1000;
             b.y -= b.vy * dt / 1000;
@@ -494,8 +544,21 @@ export function createGameScene(ctx) {
           }
         }
 
-        const hitWallNow = l.walls.some(w => hitWall(w, b.x, b.y, 3))
-          || this.activeGateWalls().some(w => hitWall(w, b.x, b.y, 3));
+        // 连续碰撞：用「上一帧→当前帧」线段检测墙体，避免高速子弹单帧跨过整段墙造成隧穿
+        // （minigun 子弹速度 9000px/s 时每帧位移 ≈150px，远超墙厚 30px，逐帧点判定必然漏检）
+        const wallAll = [...l.walls, ...this.bulletGateWalls()];
+        let hitWallNow = false;
+        {
+          const dxw = b.x - obx, dyw = b.y - oby;
+          const tw = rayWallDistance(obx, oby, dxw, dyw, wallAll);
+          if (tw !== null && tw >= 0 && tw <= 1) {
+            hitWallNow = true;
+            // 线段穿过了墙：把子弹回退到墙面，避免子弹在墙另一侧渐隐/消失
+            b.x = obx + dxw * tw;
+            b.y = oby + dyw * tw;
+            b.dist = odist + Math.hypot(dxw, dyw) * tw;
+          }
+        }
 
         // 撞墙且配置了消失时长：停驻在原地渐隐，而不是直接销毁
         if (hitWallNow && b.fadeDuration > 0) {
@@ -509,7 +572,11 @@ export function createGameScene(ctx) {
 
         if (!hit) {
           for (const c of this.crates) {
-            if (c.alive && hitWall(c, b.x, b.y, 3)) {
+            if (!c.alive) continue;
+            const dxc = b.x - obx, dyc = b.y - oby;
+            const tc = rayWallDistance(obx, oby, dxc, dyc, [c]);
+            if (tc !== null && tc >= 0 && tc <= 1) {
+              if (tc < 1) { b.x = obx + dxc * tc; b.y = oby + dyc * tc; }
               c.alive = false;
               this.hitEffects.push({ x: b.x, y: b.y, ttl: HIT_FX_TTL });
               this.spawnCrateDebris(c);
@@ -521,7 +588,7 @@ export function createGameScene(ctx) {
 
         if (!hit) {
           for (const br of this.barrels) {
-            if (br.alive && Math.hypot(br.x - b.x, br.y - b.y) < br.r + 4) {
+            if (br.alive && pointSegmentDistance(br.x, br.y, obx, oby, b.x, b.y) < br.r + 4) {
               this.explodeBarrel(br);
               hit = true;
               break;
@@ -529,13 +596,45 @@ export function createGameScene(ctx) {
           }
         }
 
+        // 已转化子弹（blockedBy != null，由护盾红弹解冻 / 捕获释放而来）不再伤害敌人 / BOSS：
+        // 只保留墙 / 箱 / 桶碰撞（箱/桶分支在上面，已执行过）。
+        const converted = b.blockedBy != null;
         for (const e of this.enemies) {
-          if (e.alive && Math.hypot(e.x - b.x, e.y - b.y) < e.r + 5) {
+          if (converted) break;   // 已转化子弹跳过全部敌人命中循环
+          if (!e.alive) continue;
+          let hx, hy, hitNow = false;
+          if (e.type === 'boss-2-5t5') {
+            // 原型机-2-5T5：圆判定，半径 = e.r（=80 = 美术 圆弧1 内圈）。
+            // ① 护盾「存在」时子弹已在上面被 boss25t5TryBlock 拦下并 return，这里再兜一层 boss25t5ShieldActive；
+            // ② 未激活（bossActive=false）的 BOSS 完全免疫子弹 —— 与母舰口径一致（不可漏到下方通用 else 分支）。
+            if (e.bossActive && !this.boss25t5ShieldActive(e)
+                && pointSegmentDistance(e.x, e.y, obx, oby, b.x, b.y) < e.r + 5) {
+              const dxe = b.x - obx, dye = b.y - oby;
+              const lenE = dxe * dxe + dye * dye;
+              const te = lenE ? Math.max(0, Math.min(1, ((e.x - obx) * dxe + (e.y - oby) * dye) / lenE)) : 0;
+              hx = obx + dxe * te; hy = oby + dye * te;
+              hitNow = true;
+            }
+          } else if (e.type === 'mothership' && e.bossActive) {
+            // 母舰：Hitbox 与画板本体一致（风筝形），随朝向旋转
+            const mfacing = Phaser.Math.Angle.Between(e.x, e.y, this.player.x, this.player.y) + Math.PI / 2;
+            const hp = mothershipBulletHit(e, mfacing, obx, oby, b.x, b.y);
+            if (hp) { hx = hp.x; hy = hp.y; hitNow = true; }
+          } else if (pointSegmentDistance(e.x, e.y, obx, oby, b.x, b.y) < e.r + 5) {
+            // 命中点取线段上距敌人最近处，特效贴近实际交汇点
+            const dxe = b.x - obx, dye = b.y - oby;
+            const lenE = dxe * dxe + dye * dye;
+            const te = lenE ? Math.max(0, Math.min(1, ((e.x - obx) * dxe + (e.y - oby) * dye) / lenE)) : 0;
+            hx = obx + dxe * te; hy = oby + dye * te;
+            hitNow = true;
+          }
+          if (hitNow) {
             let dmg = b.petDamage != null ? b.petDamage : playerDamage(this, b.weaponType);
             if (b.damageMult) dmg *= b.damageMult;   // 蓄力伤害倍率
             if (b.amplified) dmg *= 2;               // 穿表盘红弧伤害翻倍
             e.hp -= dmg;
-            this.hitEffects.push({ x: b.x, y: b.y, ttl: HIT_FX_TTL });
+            if (e.type === 'mothership' || e.type === 'boss-2-5t5') e.hitFlashT = 100;
+            this.hitEffects.push({ x: hx, y: hy, ttl: HIT_FX_TTL });
             if (e.hp <= 0) {
               // 分裂改件：击杀后从敌位置向周围 3 方向发小号子弹
               if (b.split) {
@@ -572,14 +671,54 @@ export function createGameScene(ctx) {
         return !b.dead && !hit && b.x > 0 && b.x < ww && b.y > 0 && b.y < wh;
       });
 
+      // 被护盾拦截、停驻在原地的红子弹：玩家触碰 → 先试护盾格挡（命中护盾则消除该弹 + 扣盾值），
+      // 未挡住才扣 blockedDamage 并移除（须在 filter 之后跑）
+      this.boss25t5UpdateBlocked(dt);
+
+      // 原型机-2-5T5 技能5「蓝色漩涡」：每帧推进一次（存活计时 / 玩家吸力 / 玩家入漩涡周期伤害）。
+      // 与 stepBoss25T5 里的那次调用互为保底（mixin 内部带帧令牌去重 → 同一帧只推进一次）。
+      this.boss25t5VorticesTick(dt);
+
       for (const e of this.enemies) {
         if (!e.alive) continue;
         this.stepEnemy(e, dt);
+        // 原型机-2-5T5 技能区域生命周期 + 命中判定。漏调 → 区域相位永不推进：
+        // stepBoss25T5 的 skill 状态会永远等不到 activeZone 进入 keep → 技能不结束、BOSS 卡死在 skill 态。
+        if (e.type === 'boss-2-5t5') this.boss25t5ZonesTick(e, dt);
         this.resolveEnemyCollision(e);
 
         const dist = Math.hypot(e.x - this.player.x, e.y - this.player.y);
 
-        if (this.player.shieldActive && !this.player.shieldBroken) {
+        // 母舰接触分派：Hitbox 与本体一致（风筝形）。护盾生效且面向+命中 → 清盾并自爆；贴身 → 秒杀并自爆
+        if (e.alive && e.type === 'mothership' && e.bossActive) {
+          const mfacing = Phaser.Math.Angle.Between(e.x, e.y, this.player.x, this.player.y) + Math.PI / 2;
+          const bodyDist = mothershipBodyDist(e, mfacing, this.player.x, this.player.y);
+          const toEnemy = Phaser.Math.Angle.Between(this.player.x, this.player.y, e.x, e.y);
+          const diff = Math.abs(Phaser.Math.Angle.Wrap(toEnemy - this.player.shieldAngle));
+          const radius = PLAYER_ART.weaponRingRadius + SHIELD.gap;
+          if (this.player.shieldActive && !this.player.shieldBroken
+              && diff <= Phaser.Math.DegToRad(SHIELD.arcDeg / 2) && bodyDist < radius) {
+            this.player.shield = 0;
+            this.player.shieldBroken = true;
+            this.player.shieldActive = false;
+            this.mothershipSelfDestruct(e);
+            continue;
+          }
+          if (bodyDist < this.player.r) {
+            this.player.hp = 0;
+            this.player.shield = 0;
+            this.player.shieldBroken = true;
+            this.player.shieldActive = false;
+            this.state = 'fail';
+            this.syncUIState();
+            this.mothershipSelfDestruct(e);
+            continue;
+          }
+        }
+
+        // 原型机-2-5T5 不走「撞盾反杀」：hitShield → defeatEnemy 会因本身体积（e.r=80）被贴身玩家一击判死，
+        // BOSS 的破防手段只有子弹扣血（护盾存在时拦截），盾格挡不消耗 BOSS。
+        if (e.type !== 'boss-2-5t5' && this.player.shieldActive && !this.player.shieldBroken) {
           const toEnemy = Phaser.Math.Angle.Between(this.player.x, this.player.y, e.x, e.y);
           const diff = Math.abs(Phaser.Math.Angle.Wrap(toEnemy - this.player.shieldAngle));
           const radius = PLAYER_ART.weaponRingRadius + SHIELD.gap;
@@ -589,7 +728,10 @@ export function createGameScene(ctx) {
           }
         }
 
-        if (this.state === 'playing' && e.type !== 'advanced2' && dist < e.r + this.player.r) {
+        // 接触伤害：必须排除自己人 —— e.type !== 'boss-2-5t5'，否则玩家一碰到 BOSS 本体（e.r=80）
+        // 就会走 damagePlayer + defeatEnemy 把 BOSS 直接判死。BOSS 的伤害走技能区域（boss25t5ZonesTick）。
+        if (this.state === 'playing' && e.type !== 'advanced2' && e.type !== 'boss-2-5t5'
+            && dist < e.r + this.player.r) {
           this.damagePlayer(e.damage);
           this.defeatEnemy(e);
         }
@@ -745,7 +887,7 @@ export function createGameScene(ctx) {
   }
 
   // 战斗相关方法已外提至 systems/combat/ 下的 mixin，this 语义不变
-  Object.assign(EditorScene.prototype, EnemyAiMixin, PlayerCombatMixin, DestructiblesMixin, PetMixin, SpawningMixin, TriggersMixin, InteractablesMixin, LevelFlowMixin, HudMixin, UiRuntimeMixin, ScreensMixin, SaveLoginMixin, NewbeeHubMixin, WorkshopMixin, DropsMixin, ProgressionMixin, EditorInputMixin, EditorCameraMixin, WorldRenderMixin, WorldOverlayMixin, MinimapMixin);
+  Object.assign(EditorScene.prototype, EnemyAiMixin, Boss25T5Mixin, PlayerCombatMixin, DestructiblesMixin, PetMixin, SpawningMixin, TriggersMixin, InteractablesMixin, LevelFlowMixin, HudMixin, UiRuntimeMixin, ScreensMixin, SaveLoginMixin, NewbeeHubMixin, WorkshopMixin, DropsMixin, ProgressionMixin, EditorInputMixin, EditorCameraMixin, WorldRenderMixin, WorldOverlayMixin, MinimapMixin);
 
   return EditorScene;
 }

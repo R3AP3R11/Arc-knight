@@ -28,7 +28,7 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 - 房间布局 `roomLayout`：行列数、每格房间尺寸、墙厚、道路宽/长、墙色（房间面板可视化点选）
 - 墙体 `walls[]`（矩形/圆/弧、旋转、颜色、可见性）
 - 出生点 `spawn`（坐标 + 初始武器 + 等级/血量）
-- 触发器 `triggers[]`：矩形/圆形范围、`once`、`cooldown`、事件列表（7 种事件类型）
+- 触发器 `triggers[]`：矩形/圆形范围、`once`、`cooldown`、事件列表（8 种事件类型，含 `bossBattle` 触发 Boss 战）
 - 敌人波次 `events[].spawn.waves[]`：类型/数量/生成方式/前后延迟/等待清理/召唤阵形状
 - 生成区域 `spawnZones[]`（屏幕内随机生成的矩形范围）
 - 交互物：`chests[]`、`portals[]`、`vendors[]`、`idols[]`、`icons[]`、`gates[]`
@@ -41,14 +41,14 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 | 文件路径 | 职责 | 关键导出 | 行数 |
 | --- | --- | --- | --- |
 | `src/systems/level/spawning.js` | 生成点求解 + 可达性校验 + 召唤阵/锁定框特效 | `SpawningMixin`（17 方法） | 398 |
-| `src/systems/level/triggers.js` | 触发器点火 / 事件派发 / 波次定时链 / 门开合 | `TriggersMixin`（11 方法） | 242 |
+| `src/systems/level/triggers.js` | 触发器点火 / 事件派发 / 波次定时链 / 门开合（含 `bulletGateWalls` 挡子弹门） | `TriggersMixin`（13 方法，含 `autoRoomGates`） | 300 |
 | `src/systems/level/interactables.js` | 宝箱、传送门、售货机、神像、图标交互；`openIdolOffer` 按 `IDOL_OFFER_COUNT` 取 n 张并预载 icon 画板资产；vendor/icon 首次按 F 置运行时 `guideUsed`（指引停止用） | `InteractablesMixin`（16 方法） | 251 |
-| `src/systems/level/level-flow.js` | `restart` 关卡构建、开场演出、结算、切关淡出 | `LevelFlowMixin`（9 方法） | 314 |
-| `src/rooms.js` | 多箱庭房间布局生成 + 尺寸常量 | `generateRoomLayout`、`normalizeRoomLayout`、`spawnInRooms`、`clampRoomSize`、13 个常量 | 175 |
-| `src/state.js` | 关卡 JSON schema 权威定义（所有 `normalize*`） | `normalizeLevel`、`normalizeTrigger`、`normalizeWave`、`normalizeChest`、`normalizePortal`、`EVENT_TYPES`、`MINIMAP_MARKER_TYPES/LABELS`、`normalizeRoomMarker`、`DEFAULT_LEVEL` | 540 |
+| `src/systems/level/level-flow.js` | `restart` 关卡构建、开场演出、结算、切关淡出、未知房间揭示（`updateRoomReveal`/`roomRevealAlpha`） | `LevelFlowMixin`（11 方法） | 377 |
+| `src/rooms.js` | 多箱庭房间布局生成 + 通道开口几何计算 + 尺寸常量 | `generateRoomLayout`、`normalizeRoomLayout`、`spawnInRooms`、`clampRoomSize`、`roomPassagesForPoint`（触发器所在房间各通道开口）、`isGateOnPassage`（判定门是否在通道上）、13 个常量 | 213 |
+| `src/state.js` | 关卡 JSON schema 权威定义（所有 `normalize*`） | `normalizeLevel`、`normalizeTrigger`、`normalizeTriggerEvent`（`playCinematic` 含 `focusTarget`）、`normalizeWave`、`normalizeChest`、`normalizePortal`、`normalizeCinematic`（含 `timeScale`）、`EVENT_TYPES`、`MINIMAP_MARKER_TYPES/LABELS`、`ROOM_TYPES/ROOM_TYPE_LABELS`、`normalizeRoomMarker`、`DEFAULT_LEVEL` | 597 |
 | `src/pathfinding.js` | 网格构建 + A* 寻路（生成点可达性依赖） | `buildGrid`、`findPath`、`nearestWalkable` | 105 |
 | `src/editor/room-panel.js` | 多箱庭房间面板：方格点选、尺寸弹窗、墙体重生成 | `applyRooms`、`renderRoomPanel`、`toggleRoomCell`、`updateRoomNumber` | 124 |
-| `src/editor/trigger-panel.js` | 触发器事件列表编辑器（事件类型/时机/波次表单） | `renderTriggerEvents` | 240 |
+| `src/editor/trigger-panel.js` | 触发器事件列表编辑器（事件类型/时机/波次表单 + 能量门自动生成开关） | `renderTriggerEvents` | 292 |
 | `src/editor/level-flow.js` | 关卡加载/切换/模式切换/试玩快照恢复 | `selectLevel`、`switchToLevel`、`setMode`、`restoreEditorSnapshot`、`redraw`、`fadeAndSwitch`、`startGame` | 222 |
 | `src/systems/editor/editor-input.js` | 放置工具（trigger/gate/chest/portal/spawnzone…）建实体 | `EditorInputMixin`：`pointerDown`(12)、`pointerMove`(191) | 259 |
 | `src/systems/constants.js` | `CELL`、`CHEST_*_FX_MS`、`GATE_SPAWN_MS`、`ENEMY_BEHAVIOR` | 见第 5 章 | 83 |
@@ -148,7 +148,7 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 
 注意：含 `switchLevel` 事件的触发器**强制单次**（`triggers.js:215`）。
 
-### 3.5 trigger.events[] 事件类型（7 种，`EVENT_TYPES` @ `state.js:219`）
+### 3.5 trigger.events[] 事件类型（9 种，`EVENT_TYPES` @ `state.js:219`）
 
 所有事件共有 `when` 字段：
 
@@ -164,8 +164,14 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 | `combat` | 无 | HUD 切 `combat` | `triggers.js:45` |
 | `spawnEnemy` | `spawn: { stopOnExit, resumeOnReturn, waves[] }` | 启动波次定时链 | `triggers.js:37` → `triggerSpawnEnemy`(93) |
 | `switchLevel` | `target`（关卡 id，`''` 默认）、`spawnPoint`（`{x,y}` 或 null） | 淡出后切关卡并按 `spawnPoint` 覆写出生点 | `triggers.js:39` → `beginSwitch`(level-flow.js:70) |
-| `spawnGate` | `gateIds[]`（空则取距触发器最近的一扇门） | 开门（封路） | `triggers.js:41` → `setGatesActive(…,true)` |
-| `removeGate` | `gateIds[]`（同上兜底） | 关门（`closing=true`，动画后 `active=false`） | `triggers.js:43` |
+| `spawnGate` | `gateIds[]`（空则取距触发器最近的一扇门）；`auto:true` 时自动生成/启用触发器所在箱庭房间各通道的门 | 开门（封路） | `triggers.js:41` → `setGatesActive(…,true)` |
+| `removeGate` | `gateIds[]`（同上兜底）；`auto:true` 时自动消除触发器所在箱庭房间各通道的门 | 关门（`closing=true`，动画后 `active=false`） | `triggers.js:43` |
+| `bossBattle` | `bossId`（可选，母舰 enemy id；缺省取首个待机母舰） | 激活预置母舰 Boss（`bossActive=true` + 亮血条 + 开始移动/召唤） | `triggers.js:49` → `startBossBattle` |
+| `playCinematic` | `cinematicId`（运镜动画 id，对应 `state.level.cinematics[{id}]`）、`focusTarget`（可选，`'boss'`=镜头中心锁定 BOSS 死亡位置） | 播放一段运镜（过场）动画：按关键帧插值驱动相机 `zoom/scrollX/scrollY/rotation` + 全屏蒙层 alpha；若配 `focusTarget:'boss'` 则镜头中心动态锁定 BOSS 被击败坐标；运镜可带 `timeScale` 慢动作 | `triggers.js` → `this.playCutsceneById(cinematicId, { focusTarget })` → `EditorCameraMixin.playCutscene`（见 engine-editor） |
+
+**多箱庭能量门自动模式**：`spawnGate`/`removeGate` 事件加 `auto:true` 后，运行时 `setGatesActive` 走 `autoRoomGates`（`triggers.js`）——用 `roomPassagesForPoint`（`rooms.js`）算触发器所在箱庭房间各通道开口，经 `isGateOnPassage` 复用已在通道上的门；`spawnGate` 时通道若无门则**运行时新建**一扇（id `gate-<triggerId>-<edge>`）并启用，`removeGate` 时关闭。编辑器触发器事件面板勾选「自动（触发器所在箱庭通道的门）」会在编辑态**一次性生成**缺失门实体、写入 `gateIds` 并落盘（`trigger-panel.js` `autoGenerateGateEvent`），让门成为可见可微调的关卡内容；两者几何一致，已用 `Level1-Scene1` 验证（trigger-1-1→gate-1-1/gate-1-2、trigger-1-2→gate-1-3、trigger-1787751836609→gate-1787751706661）。
+
+**Boss 战（母舰）**：母舰作为 Boss **预置**在关卡 `enemies[]`（`normalizeEnemy` @ state.js 保留 `boss` 配置与 **`cutsceneId`（BOSS 被击败时播放的运镜 id）**；`level-flow:283` 经 `initEnemy` 入队），未激活 `bossActive=false` = 待机（**无敌**、不移动、不召唤、无血条）。踩带 `bossBattle` 事件的触发器激活：`triggers.js:startBossBattle` 置 `bossActive=true` + `bossTarget` + `bossBarReveal=0`，UI 顶部血条见 `ui-interaction`（`drawBossBar`/`updateBossBar`）。大小（`artScale`）/召唤间隔（`boss.spawnInterval`）/召唤表（`boss.spawnTable`，格式 `type*count,...`）在编辑器属性面板配置（`entity-properties.js` 母舰字段）。**BOSS 被击败**：`enemy-ai.js:defeatEnemy` 里 `e.type==='mothership' && e.bossActive && e.cutsceneId` 时 `this.playCutscene(clip, { focusTarget:'boss', x:e.x, y:e.y })`（镜头锁定死亡位置 + 白闪），运镜引擎见 engine-editor 坑 31。`bossBattle` 事件类型双份维护：`state.js:EVENT_TYPES` + `editor/entity-properties.js:eventTypeOptions`。
 
 `spawnEnemy.spawn` 字段：
 
@@ -239,9 +245,10 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 | `id` | `gate-<i+1>` | `spawnGate`/`removeGate` 事件按 id 引用 |
 | `w`,`h` | `max(20,v)=237` / `max(10,v)=45` | 碰撞时高度按 `h*1.42` 放大（`activeGateWalls` 90） |
 | `rotation` | 0 | 度 |
-| `label` | `'Barrier Active'` | 门上文字 |
-| `color1`/`color2` | `#FFE6BE`/`#FFCB85` | 渐变色 |
+| `label` | `'Barrier Active'` | 门上文字（英文，用 `FONT_TECH` 字体，与传送门 `EVACUATION` 同字体）；`drawGates` 渲染时 `setDepth(12)` 置于世界覆盖文字层，避免被门栏/地面实体叠压显糊 |
+| `color1`/`color2` | `#ffa200`/`#ffa200` | 两色块默认同为橙色（`GATE_OUTER_COLOR`/`GATE_INNER_COLOR`）；`drawGates` 外侧 inner/outer 两矩形各用其一 |
 | `active` | `false` | 初始是否已封路；运行时 `spawnT` 0→1 为开门动画 |
+| `shieldOnly` | `false` | 只挡子弹门：`active=false`（触发前）不可见、不挡玩家、只挡子弹（`bulletGateWalls`，triggers.js:129）；被 `spawnGate` 触发 `active=true` 后转为普通可见全挡门；`removeGate` 后回退为只挡子弹。用于「进房间前禁止玩家狙击房内交互物」——玩家子弹被拦、本人可穿过；敌人寻路/移动碰撞仍走 `activeGateWalls`（不含盾门未激活态） |
 | `visible` | `true` | `false` 时不参与碰撞（`activeGateWalls` 过滤） |
 
 | spawnZones 字段 | 默认 | 说明 |
@@ -268,6 +275,7 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 | `wallColor` | 必须 `#rrggbb` | `#60758b` |
 | `cells[].c/r` | 必须整数且在 `cols/rows` 内，越界与重复被丢弃 | — |
 | `cells[].size` | 400 – 2400（`clampRoomSize`） | 1120（`ROOM_SIZE`） |
+| `cells[].type` | `'normal'` \| `'unknown'` | `'normal'` | 房间类型（房间面板「房间类型」下拉可配，`ROOM_TYPES/ROOM_TYPE_LABELS` @ `state.js`）：`unknown`=未知房间——进入前房内内容物不可见，玩家进入该房间后 0.8s 渐显（`ROOM_REVEAL_MS`，`level-flow.js` `updateRoomReveal`/`roomRevealAlpha`）；墙体轮廓始终可见；小地图未揭示时显示「未知」占位。归一化 `normalizeRoomLayout`（rooms.js）对非法值回落 `normal`，`generateRoomLayout` 的 `rooms[i]` 透传 `type` |
 | `cells[].marker` | `null` 或 `{ type, icon }` | `null` | 小地图标记（每箱庭最多 1 个）：`type` ∈ `MINIMAP_MARKER_TYPES`（`state.js:5`）`combat/idol/chest/vendor/boss` ↔ 中文 `战斗/神像/宝箱/商人/BOSS`（`MINIMAP_MARKER_LABELS`）；`icon` 为画板资产 id，空串`''`=文字占位。归一化 `normalizeRoomMarker`（`state.js:9`）：非法/空→`null`、type 不在白名单→丢弃整标记、icon 非字符串→`''`。`generateRoomLayout` 的 `rooms[i]` 透传 `marker`（`rooms.js:109`），供小地图渲染/玩家定位 |
 
 `generateRoomLayout`(rooms.js:55) 输出 `{ walls, world, rooms, spawn }`：列宽取该列最大 `size`、行高取该行最大 `size`，房间在格内居中；相邻格之间开洞（开洞宽 = `max(8, min(roadWidth, aSize-16, bSize-16))`）并补道路侧墙；世界尺寸 = 布局尺寸 + `WORLD_MARGIN(500)`，起点偏移 `ROOM_OFFSET(250)`。生成的墙都带 `room:true`。
@@ -364,6 +372,8 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 6. 事件类型下拉是**硬编码**的中文标签数组 `eventTypeOptions`（`src/editor/entity-properties.js:79-87`，与 `EVENT_TYPES` 各自独立维护），必须手动补一行 `['playSound', '播放音效']`，否则面板选不到。同处还传入 `enemyTypeOptions`(76)、`levelOptions`(77)、`gateOptions`(88)。
 7. 验证：`npx vite build` → `node server.js` → 编辑器给某触发器加该事件 → 试玩确认派发。
 
+> **已落地实例 `playCinematic`（播放运镜）**：新增事件类型的最佳参考。涉及 4 处同步：① `state.js:EVENT_TYPES` 加 `'playCinematic'` + `normalizeTriggerEvent` 加分支保留 `cinematicId`；② `triggers.js:dispatchTriggerEvent` 加 `this.playCutsceneById(ev.cinematicId)`（方法本体在 `EditorCameraMixin`，见 engine-editor）；③ `trigger-panel.js:triggerEventParamsHtml` 加「运镜动画」下拉（options 取 `state.level.cinematics`）；④ `entity-properties.js:eventTypeOptions` 加 `['playCinematic','播放运镜']`。运镜数据本身是**关卡级**字段 `state.level.cinematics`（`CinematicDef` 数组），在运镜编辑器（`cinematics-board.js`，engine-editor 分类）里配，触发器用 `cinematicId` 引用。**新增事件类型若有动画/数据携带，务必同时加 `DEFAULT_LEVEL` 对应默认数组 + `normalizeLevel` 归一**，否则导入即丢。
+
 ### 6.2 新增一种交互物（例：`shrines`）
 
 1. `src/state.js` 加 `normalizeShrine(v, i)`（照 `normalizeIdol`(192) 写：id 兜底、坐标、`w/h` 下限、`interactRadius`、`visible`）。
@@ -416,13 +426,18 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 - **波次中止与残留清理时机**：`stopTriggerSpawn`(triggers.js:155) 只在「玩家离开 + `spawn.stopOnExit`」时调用（`triggers.js:211`）。它做四件事：移除当前 timer、按 `triggerId` 过滤 `waveEvents`、清同 id 的 `spawnEffects`（并把其中 `frozen` 的敌人解冻，否则会永久冻在场上）、清同 id 的 `lockEffects`。自己加中止路径时必须复用它，别只 `remove` timer。另外已生成的敌人**不会**被回收。
 - **异步事件的三重等待条件**：`checkAsyncTriggerEvents`(triggers.js:174-180) 必须同时满足「无未生成波次」「无本触发器的存活敌人」「无本触发器的 `lockEffects`」。如果波次用了 `waitForClear` 且场上有别的触发器召唤的敌人，本触发器的波次会一直等 → 异步事件（如 `removeGate`）永不触发，表现为「门打不开」。
 - **试玩快照机制不能污染编辑器数据**：`redraw`(editor/level-flow.js:63) 只在 `state.mode==='editor'` 时落盘；游戏内 `switchLevel` 会直接改 `state.level`/`state.levelId`，退出必须走 `restoreEditorSnapshot`(160) 还原。新增「进入游戏态」入口时，务必先 `await saveDraft` 再存 `ctx.editorSnapshot`（照 `bindings.js:222` / `save-flow.js:76`），否则玩家会丢编辑内容。试玩存档写 `data/test-players/`，与正式档隔离（`state.saveStore`）。
-- **生成点必须过可达性校验**：`canSpawnAt`(spawning.js:107) 检查「世界边界内（留敌人半径）+ 不在墙内 + 与玩家连线 `hasLOS` 通畅 + 可选最小玩家距离」。绕过它直接 push 敌人 → 敌人卡墙或玩家打不到。注意 `canSpawnAt` 用的是视线判定，**不是**寻路判定；真要保证能走到得用 `isReachableWalkable`(67)（`findPath` A*）或 `nearestReachablePoint`(85) 兜底。`this.grid` 在 `restart` 里由 `buildGrid` 生成，编辑器改墙后未 `restart` 时 grid 是旧的。
-- **门参与碰撞但编辑器态不参与**：`activeGateWalls`(triggers.js:87) 在 `this.editing` 时返回 `[]`，且门**不进寻路网格**（`buildGrid` 只吃 `walls` + `crates` + `barrels`）。所以门关闭时敌人寻路仍会尝试穿门位置，只是被移动碰撞挡住。
-- **`gateIds` 空数组的隐式兜底**：`setGatesActive`(66) 找不到目标时会自动取**距离最近的一扇门**。配置漏填 id 不会报错，只会随机开错门——排查「门乱开」先看事件里的 `gateIds`。
+- **生成点必须过可达性校验**：`canSpawnAt`(spawning.js:107) 检查「世界边界内（留敌人半径）+ 不在墙内 + 与玩家连线 `hasLOS` 通畅 + 可选最小玩家距离」。绕过它直接 push 敌人 → 敌人卡墙或玩家打不到。注意 `canSpawnAt` 用的是视线判定，**不是**寻路判定；真要保证能走到得用 `isReachableWalkable`(67)（`findPath` A*）或 `nearestReachablePoint`(85) 兜底。`this.grid` 在 `restart` 里由 `buildGrid` 生成，编辑器改墙后未 `restart` 时 grid 是旧的。**`canSpawnAt` 现追加了「整圆穿墙排除」**（圆心+半径上 8 采样点任一 `pointInWall` 即 false，spawning.js:154），小敌人(r≈15-24)影响可忽略；母舰因其**风筝形 Hitbox**（`geometry.js:mothershipBoundsR`，包围半径≈180×artScale≈360）显著变严，故走 `spawning.js:spawnMothership` 专用生成（整圆不穿墙+三档兜底，防卡墙/波次空转），经既有波次 `mode:'offscreen'` 触发。
+- **门参与碰撞但编辑器态不参与**：`activeGateWalls`(triggers.js:87) 在 `this.editing` 时返回 `[]`，且门**不进寻路网格**（`buildGrid` 只吃 `walls` + `crates` + `barrels`）。所以门关闭时敌人寻路仍会尝试穿门位置，只是被移动碰撞挡住。自动模式下运行时新建的门（未落盘）会进 `this.gates`，随 `restart` 重建而清空；要长期保留需在编辑器面板用「自动生成」落盘。
+- **`gateIds` 空数组的隐式兜底**：`setGatesActive`(66) 找不到目标时会自动取**距离最近的一扇门**。配置漏填 id 不会报错，只会随机开错门——排查「门乱开」先看事件里的 `gateIds`。**`auto:true` 会覆盖 gateIds**（直接按触发器所在箱庭通道计算），故自动模式与手动多选二选一；自动模式要求触发器**位于某个箱庭房间内**，落在通道/走廊上会算出空集（编辑器面板会提示「触发器不在任何箱庭房间内」并自动取消勾选）。
+- **`isGateOnPassage` 原容差会把相邻箱庭的门误配到本通道**（真实踩过：`Level1-Scene2` trigger-2-1-2）。现象：勾选「自动（触发器所在箱庭通道的门）」后，多选列表里出现**另一个箱庭房间**的能量门。根因：`isGateOnPassage`（`rooms.js`）的 `across`（门沿通道法线方向的容差）原先取 `max(160, roadLen+40, w/2+60)`，而 `roadLen`（本关 960，默认 560）恰好等于「本房间房间开口」的间距，于是相邻房间墙上的门（距本开口恰约 roadLen）被当成「就在本通道上」而复用。正确做法：`across` 只按门自身进深 `h` + 墙厚容差计算（`max(120, min(200, h+80))`），让门只能坐到**本房间自己的开口**上，自动模式从而只复用本房间开口的门、不蹭相邻箱庭的门。全量扫描所有含 `auto` 门的关卡：仅 `trigger-2-1-2` 受影响，其余自动门关卡行为不变；`Level1-Scene1` trigger-1-1 走显式 `gateIds`（无 auto），不受影响。
+- **盾门（`shieldOnly`）与普通门行为差异**：`activeGateWalls`（玩家/敌人移动碰撞）只含 `active && visible!==false`；`bulletGateWalls`（triggers.js:129，仅子弹/激光碰撞用）含 `shieldOnly || active`。故盾门未激活时玩家可穿、子弹被拦。排查「子弹被莫名挡住 / 门没拦住玩家」先看门的 `shieldOnly` 与 `active`。敌弹碰撞仍走 `activeGateWalls`（盾门未激活态不拦敌弹）；激光 `spawnLaser`（weapons.js:88）现拦截子弹门（含盾门与所有激活门），`pierce` 改件可穿透。
+- **未知房间揭示是「一次性」且只隐藏视觉**：`roomRevealAlpha`（level-flow.js）只影响渲染 alpha，不影响碰撞/交互/生成点可达性——内容物在隐藏期间仍物理存在、仍参与碰撞（玩家可能撞到房内隐形木箱）。敌人 AI 的 `isInView` 不看揭示状态，隐藏房内敌人仍可能被激活推进；若需「激活等揭示」要在 `enemy-ai.js` 加 `roomRevealAlpha` 判定。新增房间类型字段务必同步 `rooms.js` 的 `normalizeRoomLayout`/`generateRoomLayout`、`room-panel.js` 的 `applyRoomType`、`bindings.js` / `index.html` / `ui.js` 的 `roomCellType`（否则编辑器配不了/写不回去）。
 - **房间墙重生成只认 `room:true`**：`applyRooms`(room-panel.js:23) 用 `l.walls.filter(w => !w.room)` 保留手工墙。手工加的墙千万别带 `room:true`，否则下次改房间面板会被删。
 - **`spawnInScreen` 依赖 `ctx.state.level.spawnZones`**：`zoneId` 找不到对应 zone 时静默回落到触发器自身矩形（`spawning.js:362`）。删 spawnZone 后波次里的 `zoneId` 不会自动清，表现为刷怪范围突然变小。
+- **触发器矩形贴着刚关闭的门 → `inscreen` 第一波生成 0 只**（真实踩过：`Level1-Scene2` trigger-1788792207315）。现象：配了 2 波（`inscreen` + `zoneId` + `waitForClear:true`），但第一波一只怪都不出，第二波却正常。根因：该触发器同时带 `spawnGate(auto)` 且位于多箱庭房间入口，事件列表里 `spawnGate` 排在 `spawnEnemy` 前，进场即激活房间通道的门；玩家进触发器瞬间站在矩形左缘（≈门厚度包络内，门 `h*1.42` 如左门旋转后 x∈[2298,2362]），且波次 `preDelay:0` 的 `time.delayedCall(0)` **同帧**触发 → `spawnInScreen` 此刻 `canSpawnAt → hasLOS`（`enemy-ai.js:399` 含 `activeGateWalls()`）从生成区任意点到玩家的连线都命中那扇门（玩家贴门时门在射线 t<1 处被命中）→ 两轮取点全失败 → `spawnInScreen` 直接 `continue` 丢弃（无 `findClearSpawnNearPlayer` 兜底）→ 0 个 lockEffect。第二波因 `postDelay` 后玩家已被 `resolveMovementCollision`（`enemy-ai.js:360` 含门）推出门体积、LOS 恢复才正常。**关键**：只有「同帧」且玩家正好卡在门体积内才会触发（实测玩家 x<2362 时 0/10，x>2362 后 10/10，边界极脆）。**正确做法**：①代码层已修——`hasLOS` 现在会跳过「包含任一端点」的门（门贴玩家时不算隔断视线，`enemy-ai.js:399`）；②数据层给此类「入口触发器 + inscreen 首波」补 `preDelay`（≥100ms，让玩家被推出门）或把触发器矩形左缘右移到明显越过门厚度，且勿把触发器矩形左缘压在门体积内。
 - **交互半径会被实体尺寸抬高**：`max(interactRadius, halfDiag + p.r + 40)`。把神像/图标做得很大时，`interactRadius` 配再小也没用。
 - **菜单关与家园关的特殊分支**：`isMenuLevel()`（`ui==='login'`）跳过开场演出、相机固定 `(0,0)`；`isHubLevel()`（`levelId==='knight-home'`）禁用开火与护盾（`game-scene.js:225/228`）。新增此类关卡要同步这两个判定（`src/systems/ui/ui-runtime.js:165/186/191`）。
+- **大地图 + `camera.mode:'center'` + 空场 + `showGridInPlay:false` ⇒ 玩家报「上下不能移动」（真实踩过：`Boss2-Test`）**。现象：某一关「按上/下键角色完全不动，按左/右却正常」，触发某个事件（如 BOSS 战）后又「正常」了，极像输入或碰撞 bug。**根因不是移动逻辑**：`center` 相机每帧把玩家钉在屏幕正中（`editor-camera.js:107-108`），玩家移动时**只有世界元素在屏幕上滑动**才能被看出；若场地里没有参照物（背景纯黑、网格关闭、上/下墙离出生点 ~1000px 在视口外），而画面内唯一的墙恰好是**比视口还高的竖直长条**（`h:2030` vs 视口 1080），那么纵向滑动该长条**看起来毫无变化**、横向滑动却非常明显 → 玩家以为自己只能左右走。事件触发后一个明显物体（BOSS）进入画面 → 纵向移动变得可见 → 「恢复正常」。**判据**：症状与「哪个关卡 / 玩家站在地图哪个位置」强相关，而不是与按键/时间相关，就先怀疑视野参照物。**正确做法**：①给关卡开 `showGridInPlay: true`（网格 30px、`gridColor` 深色，随相机滚动，是最省事的全屏参照）②或把地图缩到接近视口（真实战斗关多为 `1920×1080`，相机被边界钳住时角色本体会在屏幕上直接移动）③或在场地内放可见参照物（`Level1-Scene1` 就是 63 面墙 + 3 张图）。**别去改移动代码**——那段逻辑（`game-scene.js:214-238`）是左右对称的。
 
 ## 8. 验证方式
 

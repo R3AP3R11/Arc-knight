@@ -4,11 +4,11 @@
   "showGridInPlay": false,
   "ui": "battle",
   "world": {
-    "width": 1440,
-    "height": 900
+    "width": 3600,
+    "height": 2100
   },
   "camera": {
-    "width": 1400,
+    "width": 1440,
     "mode": "center"
   },
   "walls": [
@@ -29,14 +29,14 @@
   ],
   "enemies": [
     {
-      "id": "enemy-1",
-      "x": 690,
-      "y": 90,
-      "type": "advanced2",
+      "id": "enemy-1788779534570",
+      "x": 2310,
+      "y": 300,
+      "type": "mothership",
       "art": "",
       "artScale": 1,
-      "hp": 100,
-      "damage": 15,
+      "hp": 1500,
+      "damage": 0,
       "drops": {
         "gold": 1,
         "exp": 1,
@@ -66,12 +66,14 @@
       {
         "item": "gold",
         "count": 4,
-        "chance": 100
+        "chance": 100,
+        "weapon": ""
       },
       {
         "item": "diamond",
         "count": 4,
-        "chance": 100
+        "chance": 100,
+        "weapon": ""
       }
     ]
   },
@@ -109,7 +111,11 @@
       "w": 288.98120224373207,
       "h": 237.62168628109782,
       "interactRadius": 120,
-      "visible": true
+      "visible": true,
+      "guide": false,
+      "guideRange": 600,
+      "guideIcon": "",
+      "guideStopAfterUse": true
     }
   ],
   "idols": [],

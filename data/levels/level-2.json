@@ -189,8 +189,8 @@
       "h": 45,
       "rotation": 0,
       "label": "Barrier Active",
-      "color1": "#FFE6BE",
-      "color2": "#FFCB85",
+      "color1": "#ffa200",
+      "color2": "#ffa200",
       "active": false,
       "visible": true
     }

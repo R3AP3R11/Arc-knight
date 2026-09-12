@@ -17,16 +17,55 @@ export function muzzlePosition(player, design) {
 
 function degToRad(d) { return d * Math.PI / 180; }
 
+// ── BOSS 施力弹渲染常量 ──
+const S5_DIR_EPS = 1e-6;          // 速度低于此值视为方向退化（刚解冻、尚未被施力加速）
+const S5_TRAIL_ALPHA = 0.9;
+
+// ── BOSS 施力弹：白弹体 + 彩色拖尾（颜色由 b.forceTrail.color 决定） ──
+// 被护盾拦截的子弹被 BOSS 施加吸力/推力后会带上 b.forceTrail（boss25t5.js 写入）；此时它已是
+// 普通玩家子弹（blockedBoss=false），但 b.dist 停在「被冻结时」的旧值 → 拖尾长度只取配置值。
+// 方向兜底：speed < S5_DIR_EPS 且无 b.dirX/dirY 时跳过拖尾，只画白色弹点。
+// 返回 true = 已按该形态绘制（调用方跳过设计稿形状之外的普通拖尾，避免白/红双拖尾）。
+function drawForceTrailBullet(g, b, bodyR, fade = 1) {
+  const tr = b.forceTrail;
+  if (!tr) return false;
+  const alpha = Math.max(0.02, fade);
+  const speed = Math.hypot(b.vx, b.vy);
+  let ux = 0, uy = 0;
+  if (speed > S5_DIR_EPS) { ux = b.vx / speed; uy = b.vy / speed; }
+  else if (Number.isFinite(b.dirX) && Number.isFinite(b.dirY)) { ux = b.dirX || 0; uy = b.dirY || 0; }
+  if (ux || uy) {
+    const len = Math.max(0, Number(tr.length) || 0);
+    const halfW = Math.max(0, Number(tr.width) || 0);   // width = 垂直航向的半宽（尾部收成尖）
+    if (len > 0 && halfW > 0) {
+      const px = -uy, py = ux;
+      const tailX = b.x - ux * len, tailY = b.y - uy * len;
+      g.fillStyle(hexToInt(tr.color || '#ff3b3b'), S5_TRAIL_ALPHA * alpha);
+      g.beginPath();
+      g.moveTo(b.x + px * halfW, b.y + py * halfW);
+      g.lineTo(tailX, tailY);
+      g.lineTo(b.x - px * halfW, b.y - py * halfW);
+      g.closePath();
+      g.fillPath();
+    }
+  }
+  g.fillStyle(0xffffff, alpha);
+  g.fillCircle(b.x, b.y, bodyR);
+  return true;
+}
+
 // 生成环绕六边形的动态外观克隆：仅改 orbitIndexes 元素的 orbitRadius/rotSpeed/radius，
 // 其余元素保持基础（本体/装饰不变）。phase = { radius, speedMult, sizeMult }。
+// 公转沿用 rotSpeed*t 移动方式（保留切换轨道时的瞬移手感），rotSpeed 整体乘 speedScale（默认 0.8=转速-20%）。
 export function buildOrbitInstance(weaponArt, orbit, phase) {
   const idx = new Set((orbit?.orbitIndexes || []));
+  const speedScale = (orbit?.speedScale ?? 0.8);
   const els = (weaponArt?.elements || []).map((e, i) => {
     if (!idx.has(i)) return e;
     return {
       ...e,
       orbitRadius: phase.radius,
-      rotSpeed: (Number(e.rotSpeed) || 0) * (phase.speedMult ?? 1),
+      rotSpeed: (Number(e.rotSpeed) || 0) * (phase.speedMult ?? 1) * speedScale,
       radius: (Number(e.radius) || 20) * (phase.sizeMult ?? 1)
     };
   });
@@ -213,6 +252,22 @@ export function buildWeaponRuntimeEntry(design) {
       if (fade <= 0) return;
       const shape = b.bulletShape;
       const colInt = hexToInt(b.colorStr || b.trailColor || '#ffffff');
+      // 护盾拦截弹（vx=vy=0、已被 boss25t5TryBlock 置红）：叠加一枚至少 5px 半径的红色弹体，
+      // 避免设计稿子弹本身很小 / 形状在速度为 0 时看不清。
+      if (b.blockedBoss) {
+        g.fillStyle(colInt, 1);
+        g.fillCircle(b.x, b.y, Math.max(b.blockedR ?? 3, (b.bulletSize || 1) * 4));
+      }
+      // BOSS 施力弹：彩色拖尾 + 白色弹体；设计稿形状仍按白色（colorStr 已置 #ffffff）叠加，
+      // 但跳过普通拖尾（否则会叠出一条白拖尾）。
+      if (b.forceTrail) {
+        const bodyR = Math.max(b.blockedR ?? 5, (b.bulletSize || 1) * 4);
+        drawForceTrailBullet(g, b, bodyR, fade);
+        if (shape && Array.isArray(shape.elements) && shape.elements.length) {
+          renderAsset(g, shape, b.x, b.y, (b.age || 0) / 1000, b.bulletSize || 1, null, fade);
+        }
+        return;
+      }
       if (shape && Array.isArray(shape.elements) && shape.elements.length) {
         renderAsset(g, shape, b.x, b.y, (b.age || 0) / 1000, b.bulletSize || 1, null, fade);
       } else {

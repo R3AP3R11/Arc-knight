@@ -18,25 +18,62 @@ export function intToHex(n) {
   return (n >>> 0).toString(16).padStart(6, '0');
 }
 
+// 取色：兼容 #hex 与 rgba(...)（rgba 忽略 alpha 只取色）
+function colorInt(v) {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') {
+    if (v.startsWith('#')) return hexToInt(v);
+    const m = /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(v);
+    if (m) return (parseInt(m[1], 10) << 16) | (parseInt(m[2], 10) << 8) | parseInt(m[3], 10);
+  }
+  return hexToInt(v);
+}
+
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function numOr(v, def) { const n = Number(v); return Number.isFinite(n) ? n : def; }
 
-// 钟表表盘花纹超出环径的外侧延伸（design 单位；供包围盒/卡片缩放计入）
-function clockTickExt(el) {
-  if (el.shape !== 'arc' || el.pattern !== 'clock') return 0;
-  if (el.tickDir === 'in') return 0;
-  return Math.max(el.tickLongLen || 0, el.tickShortLen || 0);
+// 从弧心算起的形状/花纹最大外径（design 单位；供包围盒/卡片缩放/选中圈计入）。
+// plain/clock 以 el.radius 为环半径；hands 只画长短针，外径由各自轨道半径 + 针长决定。
+function patternExt(el) {
+  if (el.shape !== 'arc') return 0;
+  const lw = (Math.abs(Number(el.lineWidth)) || 0) / 2;
+  if (el.pattern === 'hands') {
+    const dir = el.tickDir || 'in';
+    const longR = Math.abs(Number(el.handLongRadius) || 0);
+    const shortR = Math.abs(Number(el.handShortRadius) || 0);
+    const longLen = Math.max(0, Number(el.tickLongLen) || 12);
+    const shortLen = Math.max(0, Number(el.tickShortLen) || 6);
+    const out = dir === 'out' || dir === 'both';
+    return Math.max(longR + (out ? longLen : 0), shortR + (out ? shortLen : 0), 1);
+  }
+  const r = Math.abs(Number(el.radius) || 0);
+  if (el.pattern === 'clock') {
+    const maxTick = Math.max(Math.abs(Number(el.tickLongLen) || 0), Math.abs(Number(el.tickShortLen) || 0));
+    return r + lw + (el.tickDir === 'in' ? 0 : maxTick);
+  }
+  return r + lw;
 }
 
 // 单个形状元素默认值
 export function normalizeElement(el = {}, index = 0) {
-  const shape = el.shape === 'arc' ? 'arc' : el.shape === 'stroke' ? 'stroke' : 'polygon';
+  const shape = el.shape === 'arc' ? 'arc' : el.shape === 'stroke' ? 'stroke' : el.shape === 'pixel' ? 'pixel' : 'polygon';
+  const cols = clamp(Math.round(Number(el.cols) || 12), 1, 64);
+  const rows = clamp(Math.round(Number(el.rows) || 12), 1, 64);
   return {
     shape,
-    count: (shape === 'stroke') ? 1 : clamp(Math.round(Number(el.count) || 1), 1, 16), // 围绕圆心等角分布的副本数（"一组"）
+    count: shape === 'pixel' ? 1 : clamp(Math.round(Number(el.count) || 1), 1, 16), // 围绕圆心等角分布的副本数（"一组"）
     orbitRadius: clamp(Number(el.orbitRadius) || 0, 0, 2000), // 形状中心距设计圆心的轨道半径
     radius: clamp(Number(el.radius) || 20, 1, 2000),          // polygon 外接半径 / arc 环形半径
     sides: clamp(Math.round(Number(el.sides) || 6), 3, 24),   // polygon 边数
+    cols,
+    rows,
+    cellSize: clamp(numOr(el.cellSize, 8), 1, 2000),
+    gridColor: el.gridColor || '',
+    cells: Array.isArray(el.cells)
+      ? el.cells
+        .filter(c => c && Number.isInteger(Number(c.x)) && Number.isInteger(Number(c.y)) && Number(c.x) >= 0 && Number(c.x) < cols && Number(c.y) >= 0 && Number(c.y) < rows && c.color)
+        .map(c => ({ x: Number(c.x), y: Number(c.y), color: c.color }))
+      : [],
     lineWidth: clamp(Number(el.lineWidth) || 4, 0.5, 120),    // 描边粗细 / 环厚
     color: el.color || '#ffa914',                              // 颜色（描边 / 环）
     fill: el.fill || null,                                     // 填充色，null = 不填充
@@ -45,12 +82,16 @@ export function normalizeElement(el = {}, index = 0) {
     dir: Number(el.dir) < 0 ? -1 : 1,                          // 旋转方向：1=逆时针，-1=顺时针
     arcStart: Number(el.arcStart) || 0,                        // arc 起始角（°）
     arcEnd: Number(el.arcEnd) || 300,                          // arc 结束角（°）
-    pattern: el.pattern === 'clock' ? 'clock' : 'plain',       // arc 显示形式：plain=普通圆弧 / clock=钟表表盘（径向刻度）
+    pattern: (el.pattern === 'clock' || el.pattern === 'hands') ? el.pattern : 'plain', // arc 显示形式：plain=普通圆弧 / clock=钟表表盘 / hands=长短针
     tickShortLen: clamp(numOr(el.tickShortLen, 6), 0, 500),    // 钟表：短针长度（px，design 单位）
     tickLongLen: clamp(numOr(el.tickLongLen, 12), 0, 500),     // 钟表：长针长度
     tickDensity: clamp(Math.round(numOr(el.tickDensity, 12)), 2, 120), // 钟表：单一密度（总针数，长短针按比例排布）
     tickRatio: clamp(Math.round(numOr(el.tickRatio, 1)), 1, 24),       // 钟表：长短针比例（每 1 长针之间配 N 短针；1=交替，4=钟表式 1长4短）
     tickDir: (el.tickDir === 'out' || el.tickDir === 'both') ? el.tickDir : 'in', // 针朝向：in=朝圆心 / out=向外 / both=双向
+    handLongRadius: Math.max(0, clamp(numOr(el.handLongRadius, Number(el.radius) || 20), 0, 2000)),  // hands：长针轨道半径（针锚定环半径）
+    handShortRadius: Math.max(0, clamp(numOr(el.handShortRadius, Number(el.radius) || 20), 0, 2000)),// hands：短针轨道半径
+    handLongColor: el.handLongColor || el.color || '#ffa914',                     // hands：长针颜色
+    handShortColor: el.handShortColor || el.color || '#ffa914',                   // hands：短针颜色
     points: Array.isArray(el.points)
       ? el.points.map(p => ({ x: Number(p?.x) || 0, y: Number(p?.y) || 0 }))
       : [],                                                    // stroke 轮廓点（相对设计圆心）
@@ -126,7 +167,19 @@ export function designRadius(design) {
   let r = 1;
   for (const el of (design.elements || [])) {
     const hw = (el.lineWidth || 0) / 2;
-    let er = Math.abs(el.orbitRadius || 0) + Math.abs(el.radius || 0) + hw + clockTickExt(el);
+    if (el.shape === 'pixel') {
+      const pc = clamp(Math.round(Number(el.cols) || 12), 1, 64);
+      const pr = clamp(Math.round(Number(el.rows) || 12), 1, 64);
+      const cs = clamp(numOr(el.cellSize, 8), 1, 2000);
+      r = Math.max(r, Math.abs(el.orbitRadius || 0) + Math.hypot((pc / 2) * cs, (pr / 2) * cs) + hw);
+      continue;
+    }
+    let er;
+    if (el.shape === 'arc') {
+      er = Math.abs(el.orbitRadius || 0) + patternExt(el);
+    } else {
+      er = Math.abs(el.orbitRadius || 0) + Math.abs(el.radius || 0) + hw;
+    }
     if (el.points?.length) {
       for (const pt of el.points) er = Math.max(er, Math.abs(el.orbitRadius || 0) + Math.hypot(pt.x, pt.y) + hw);
     }
@@ -146,13 +199,27 @@ export function designBounds(design, t = 0) {
   for (const el of d.elements) {
     const ga = el.phase + el.rotSpeed * t * el.dir;
     if (el.shape === 'arc') {
-      for (let i = 0; i < el.count; i++) { const ca = ga + (Math.PI * 2 / el.count) * i; circle(Math.cos(ca) * el.orbitRadius, Math.sin(ca) * el.orbitRadius, el.radius + el.lineWidth / 2 + clockTickExt(el)); }
+      const ext = patternExt(el);
+      for (let i = 0; i < el.count; i++) { const ca = ga + (Math.PI * 2 / el.count) * i; circle(Math.cos(ca) * el.orbitRadius, Math.sin(ca) * el.orbitRadius, ext); }
     } else if (el.shape === 'stroke') {
-      let cmx = 0, cmy = 0;
-      if (el.orbitRadius > 0 && el.points.length) { for (const p of el.points) { cmx += p.x; cmy += p.y; } cmx /= el.points.length; cmy /= el.points.length; }
+      for (let i = 0; i < el.count; i++) {
+        let cmx = 0, cmy = 0;
+        if (el.orbitRadius > 0 && el.points.length) { for (const p of el.points) { cmx += p.x; cmy += p.y; } cmx /= el.points.length; cmy /= el.points.length; }
+        const ca = ga + (Math.PI * 2 / el.count) * i;
+        const cos = Math.cos(ca), sin = Math.sin(ca);
+        const bx = Math.cos(ca) * el.orbitRadius, by = Math.sin(ca) * el.orbitRadius;
+        for (const p of el.points) pt(bx + ((p.x - cmx) * cos - (p.y - cmy) * sin), by + ((p.x - cmx) * sin + (p.y - cmy) * cos));
+      }
+      const ext = el.lineWidth / 2; minX -= ext; maxX += ext; minY -= ext; maxY += ext;
+    } else if (el.shape === 'pixel') {
       const cos = Math.cos(ga), sin = Math.sin(ga);
       const bx = Math.cos(ga) * el.orbitRadius, by = Math.sin(ga) * el.orbitRadius;
-      for (const p of el.points) pt(bx + ((p.x - cmx) * cos - (p.y - cmy) * sin), by + ((p.x - cmx) * sin + (p.y - cmy) * cos));
+      for (const c of el.cells) {
+        for (const gx of [c.x, c.x + 1]) for (const gy of [c.y, c.y + 1]) {
+          const dx = (gx - el.cols / 2) * el.cellSize, dy = (gy - el.rows / 2) * el.cellSize;
+          pt(bx + (dx * cos - dy * sin), by + (dx * sin + dy * cos));
+        }
+      }
       const ext = el.lineWidth / 2; minX -= ext; maxX += ext; minY -= ext; maxY += ext;
     } else {
       for (let i = 0; i < el.count; i++) { const ca = ga + (Math.PI * 2 / el.count) * i; const px = Math.cos(ca) * el.orbitRadius, py = Math.sin(ca) * el.orbitRadius; for (let k = 0; k < el.sides; k++) { const a = ca + (Math.PI * 2 / el.sides) * k; pt(px + Math.cos(a) * el.radius, py + Math.sin(a) * el.radius); } const ext = el.lineWidth / 2; minX -= ext; maxX += ext; minY -= ext; maxY += ext; }
@@ -211,37 +278,73 @@ export function renderAsset(g, design, x, y, t = 0, scale = 1, motion = null, al
         const py = ay + Math.sin(ca) * el.orbitRadius * s;
         const a0 = ca + el.arcStart * r;
         const a1 = ca + el.arcEnd * r;
-        g.lineStyle(Math.max(0.5, el.lineWidth * s), hexToInt(el.color), alpha);
-        g.beginPath();
-        g.arc(px, py, Math.max(0.1, el.radius * s), a0, a1, a1 < a0);
-        g.strokePath();
-        if (el.pattern === 'clock') drawArcTicks(g, el, px, py, a0, a1, s, alpha);
+        if (el.pattern === 'clock') {
+          g.lineStyle(Math.max(0.5, el.lineWidth * s), hexToInt(el.color), alpha);
+          g.beginPath();
+          g.arc(px, py, Math.max(0.1, el.radius * s), a0, a1, a1 < a0);
+          g.strokePath();
+          drawArcTicks(g, el, px, py, a0, a1, s, alpha);
+        } else if (el.pattern === 'hands') {
+          drawArcHands(g, el, px, py, a0, a1, s, alpha);
+        } else {
+          g.lineStyle(Math.max(0.5, el.lineWidth * s), hexToInt(el.color), alpha);
+          g.beginPath();
+          g.arc(px, py, Math.max(0.1, el.radius * s), a0, a1, a1 < a0);
+          g.strokePath();
+        }
       }
       continue;
     }
 
     if (el.shape === 'stroke') {
       if (!el.points.length) continue;
-      const cos = Math.cos(ga), sin = Math.sin(ga);
-      // orbitRadius>0：轮廓重心挂到轨道上（沿 ga 公转 orbitRadius*s），点相对重心排布并绕重心自转；=0 保持旧行为
-      let cmx = 0, cmy = 0;
-      if (el.orbitRadius > 0) {
-        for (const p of el.points) { cmx += p.x; cmy += p.y; }
-        cmx /= el.points.length; cmy /= el.points.length;
+      for (let i = 0; i < el.count; i++) {
+        const ca = ga + (Math.PI * 2 / el.count) * i;
+        const cos = Math.cos(ca), sin = Math.sin(ca);
+        // orbitRadius>0：轮廓重心挂到轨道上（沿 ca 公转 orbitRadius*s），点相对重心排布并绕重心自转；=0 保持旧行为
+        let cmx = 0, cmy = 0;
+        if (el.orbitRadius > 0) {
+          for (const p of el.points) { cmx += p.x; cmy += p.y; }
+          cmx /= el.points.length; cmy /= el.points.length;
+        }
+        const bx = ax + cos * el.orbitRadius * s, by = ay + sin * el.orbitRadius * s;
+        if (el.closed && el.fill) g.fillStyle(hexToInt(el.fill), alpha);
+        g.lineStyle(Math.max(0.5, el.lineWidth * s), hexToInt(el.color), alpha);
+        g.beginPath();
+        el.points.forEach((pt, k) => {
+          const wx = bx + ((pt.x - cmx) * cos - (pt.y - cmy) * sin) * s;
+          const wy = by + ((pt.x - cmx) * sin + (pt.y - cmy) * cos) * s;
+          if (k === 0) g.moveTo(wx, wy); else g.lineTo(wx, wy);
+        });
+        // 填充仿 Windows 画板：有填充色即按闭合区域上色（描边是否连回首点由 closed 决定）
+        if (el.fill) g.fillPath();
+        if (el.closed) g.closePath();
+        g.strokePath();
       }
-      const bx = ax + cos * el.orbitRadius * s, by = ay + sin * el.orbitRadius * s;
-      if (el.closed && el.fill) g.fillStyle(hexToInt(el.fill), alpha);
-      g.lineStyle(Math.max(0.5, el.lineWidth * s), hexToInt(el.color), alpha);
-      g.beginPath();
-      el.points.forEach((pt, k) => {
-        const wx = bx + ((pt.x - cmx) * cos - (pt.y - cmy) * sin) * s;
-        const wy = by + ((pt.x - cmx) * sin + (pt.y - cmy) * cos) * s;
-        if (k === 0) g.moveTo(wx, wy); else g.lineTo(wx, wy);
-      });
-      // 填充仿 Windows 画板：有填充色即按闭合区域上色（描边是否连回首点由 closed 决定）
-      if (el.fill) g.fillPath();
-      if (el.closed) g.closePath();
-      g.strokePath();
+      continue;
+    }
+
+    if (el.shape === 'pixel') {
+      const bx = ax + Math.cos(ga) * el.orbitRadius * s;
+      const by = ay + Math.sin(ga) * el.orbitRadius * s;
+      const cell = el.cellSize * s;
+      const ox = bx - (el.cols / 2) * cell;
+      const oy = by - (el.rows / 2) * cell;
+      const grid = el.gridColor ? colorInt(el.gridColor) : 0;
+      const hasGrid = !!el.gridColor;
+      if (hasGrid) g.lineStyle(1, grid, alpha);
+      for (const c of el.cells) {
+        const px = ox + c.x * cell, py = oy + c.y * cell;
+        g.fillStyle(hexToInt(c.color), alpha);
+        g.beginPath();
+        g.moveTo(px, py);
+        g.lineTo(px + cell, py);
+        g.lineTo(px + cell, py + cell);
+        g.lineTo(px, py + cell);
+        g.closePath();
+        g.fillPath();
+        if (hasGrid) g.strokePath();
+      }
       continue;
     }
 
@@ -283,6 +386,41 @@ function drawArcTicks(g, el, cx, cy, a0, a1, s, alpha) {
   }
 }
 
+// hands：只画长短针（无圆弧环）。长/短针各自锚定在 handLongRadius/handShortRadius 的环上，
+// 沿弧 span 均布，按 tickRatio 区分长短针，长度取 tickLongLen/tickShortLen，方向由 tickDir 决定。
+function drawArcHands(g, el, cx, cy, a0, a1, s, alpha) {
+  const density = Math.max(2, Math.round(el.tickDensity || 12));
+  const ratio = Math.max(1, Math.round(el.tickRatio || 1)); // 每 1 长针配 ratio 短针
+  const period = ratio + 1;
+  let span = a1 - a0;
+  if (span < 0) span += Math.PI * 2;
+  if (span <= 1e-6) return;
+  const dir = el.tickDir || 'in';
+  const longR = Math.max(0, Number(el.handLongRadius) || 0) * s;
+  const shortR = Math.max(0, Number(el.handShortRadius) || 0) * s;
+  const longLen = Math.max(0, Number(el.tickLongLen) || 12) * s;
+  const shortLen = Math.max(0, Number(el.tickShortLen) || 6) * s;
+  const longColor = hexToInt(el.handLongColor || el.color);
+  const shortColor = hexToInt(el.handShortColor || el.color);
+  const lw = Math.max(0.5, el.lineWidth * s * 0.55);
+  for (let i = 0; i < density; i++) {
+    const ang = a0 + span * (i / density);
+    const isLong = (i % period) === 0;
+    const rr = isLong ? longR : shortR;
+    const len = isLong ? longLen : shortLen;
+    if (len <= 0) continue;
+    const cos = Math.cos(ang), sin = Math.sin(ang);
+    let inner = rr, outer = rr;
+    if (dir === 'in' || dir === 'both') inner = rr - len;
+    if (dir === 'out' || dir === 'both') outer = rr + len;
+    g.lineStyle(lw, isLong ? longColor : shortColor, alpha);
+    g.beginPath();
+    g.moveTo(cx + cos * inner, cy + sin * inner);
+    g.lineTo(cx + cos * outer, cy + sin * outer);
+    g.strokePath();
+  }
+}
+
 // 第 i 个副本的中心与当前公转角（画板命中测试 / 手柄定位用）。
 export function elementCenter(design, el, index, x, y, t = 0, scale = 1) {
   const d = normalizeDesign(design);
@@ -295,16 +433,21 @@ export function elementCenter(design, el, index, x, y, t = 0, scale = 1) {
     return { x: cx0 + Math.cos(ca) * e.orbitRadius * s, y: cy0 + Math.sin(ca) * e.orbitRadius * s, angle: ca, worldScale: s, el: e };
   }
   if (e.shape === 'stroke') {
-    // orbitRadius>0：轮廓重心挂轨道上，命中/手柄中心 = 轨道点（与渲染一致）；=0：取轮廓点重心绕圆心旋转（旧行为）
+    // orbitRadius>0：轮廓重心挂轨道上（沿 ca 公转），命中/手柄中心 = 轨道点（与渲染一致）；=0：取轮廓点重心绕圆心旋转（旧行为）
+    const ca = ga + (Math.PI * 2 / e.count) * index;
     if (e.orbitRadius > 0) {
-      const ox = Math.cos(ga) * e.orbitRadius * s, oy = Math.sin(ga) * e.orbitRadius * s;
-      return { x: cx0 + ox, y: cy0 + oy, angle: ga, worldScale: s, el: e };
+      const ox = Math.cos(ca) * e.orbitRadius * s, oy = Math.sin(ca) * e.orbitRadius * s;
+      return { x: cx0 + ox, y: cy0 + oy, angle: ca, worldScale: s, el: e };
     }
     // 取轮廓点重心为命中/选中中心，绕圆心旋转
     let mx = 0, my = 0;
     if (e.points.length) { for (const p of e.points) { mx += p.x; my += p.y; } mx /= e.points.length; my /= e.points.length; }
-    const cos = Math.cos(ga), sin = Math.sin(ga);
-    return { x: cx0 + (mx * cos - my * sin) * s, y: cy0 + (mx * sin + my * cos) * s, angle: ga, worldScale: s, el: e };
+    const cos = Math.cos(ca), sin = Math.sin(ca);
+    return { x: cx0 + (mx * cos - my * sin) * s, y: cy0 + (mx * sin + my * cos) * s, angle: ca, worldScale: s, el: e };
+  }
+  if (e.shape === 'pixel') {
+    const ox = Math.cos(ga) * e.orbitRadius * s, oy = Math.sin(ga) * e.orbitRadius * s;
+    return { x: cx0 + ox, y: cy0 + oy, angle: ga, worldScale: s, el: e };
   }
   const ca = ga + (Math.PI * 2 / e.count) * index;
   return {
