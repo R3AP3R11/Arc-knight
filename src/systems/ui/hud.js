@@ -213,6 +213,7 @@ export const HudMixin = {
       this.drawAmmo(g);
       this.drawSettingsButton(g);
       this.drawChargeBars(g);
+      this.drawBattleItems(g);   // 局内药水槽 / 临时武器槽 / 药水轮盘
     },
 
     // 受伤残弧状态：hp/shield 下降时记录旧→新比值，作为「残弧」；约 1s 线性渐隐
@@ -304,6 +305,8 @@ export const HudMixin = {
 
     hideHudOverlay() {
       if (this.bossNameText) this.bossNameText.setVisible(false);
+      // 药水轮盘名称文本是独立 Phaser Text（不随 uiG.clear() 消失），离开战斗态须手动隐藏
+      this.hidePotionWheelTexts?.();
       if (this.weaponLabels) this.weaponLabels.forEach(t => t.setVisible(false));
       if (this.weaponIconImage) this.weaponIconImage.setVisible(false);
       if (this.ammoCurrent) {
@@ -355,6 +358,9 @@ export const HudMixin = {
       if (this.minimapContentG) this.minimapContentG.setAlpha(a);
       if (this.minimapFrameG) this.minimapFrameG.setAlpha(a);
       if (this.minimapTexts) for (const t of this.minimapTexts.values()) t.setAlpha(a);
+      // 注：药水轮盘名称文本（this.potionWheelTexts）刻意不在此处控 alpha —— 它只在 state==='playing'
+      //     （此时 hudAlpha 恒为 1）时可见，且其 alpha 要跟随轮盘自身的呼出/消失动画，
+      //     由 battle-items.js:drawBattleItems 每帧设置（本函数在 drawHud 之后执行，会把动画 alpha 冲掉）。
     },
 
     updateWeaponLabels() {

@@ -1598,12 +1598,30 @@ body.cinematics-mode #cinematicsPage {
   pointer-events: none;
 }
 
-.cinema-kf {
-  display: grid;
-  grid-template-columns: repeat(8, minmax(0, auto));
+/* 顶部『玩家被击败运镜』勾选（避免继承 .artboard-name 的 150px 输入宽） */
+.artboard-flag {
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
-  align-items: end;
+  font-size: 12px;
+  color: #fff;
+  cursor: pointer;
+}
+
+.artboard-flag input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  accent-color: #4da6ff;
+}
+
+.cinema-kf {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: flex-end;
   margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed #223a4d;
 }
 
 .cinema-kf label {
@@ -1612,6 +1630,12 @@ body.cinematics-mode #cinematicsPage {
   gap: 2px;
   font-size: 10px;
   color: #9ab;
+  flex: 1 1 62px;
+  min-width: 0;
+}
+
+.cinema-kf label.kf-color {
+  flex: 1 1 44px;
 }
 
 .cinema-kf input,
@@ -1622,6 +1646,11 @@ body.cinematics-mode #cinematicsPage {
   color: #fff;
   padding: 4px;
   border-radius: 4px;
+}
+
+.cinema-kf input[type="color"] {
+  padding: 0;
+  height: 24px;
 }
 
 .cinema-kf .kf-del {

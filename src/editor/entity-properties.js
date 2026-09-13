@@ -13,8 +13,12 @@ import { pushUndo } from './history.js';
 import { getArtChoices } from '../systems/art/design-store.js';
 import { getWeaponDef } from '../systems/art/weapon-store.js';
 import { weaponCatalog } from '../player-data.js';
+import { loadInnerShop, getPotionList } from '../systems/economy/inner-shop.js';
 
 const { state } = ctx;
+
+// 宝箱奖励药水列表：首次渲染时若尚未加载 → 请求一次并重渲染（模块级 flag 防重入）
+let potionsRequested = false;
 
 // ── 嵌套路径读写 ──
 export function getNested(obj, path) {
@@ -428,6 +432,10 @@ export function renderEntityProperties() {
     const rewardList = rewardEditor.querySelector('.chest-reward-list');
     const renderRewards = () => {
       const rewards = entity.rewards || (entity.rewards = []);
+      if (!getPotionList().length && !potionsRequested) {
+        potionsRequested = true;
+        loadInnerShop().then(() => renderRewards());
+      }
       rewardList.innerHTML = rewards.map((r, i) => `
         <div class="chest-reward-row">
           <div class="cr-head">
@@ -439,6 +447,13 @@ export function renderEntityProperties() {
             <button type="button" data-reward-del="${i}" title="删除此条奖励">删除</button>
           </div>
           <div class="cr-fields">
+            ${r.item === 'potion' ? `
+            <label>药水
+              <select data-reward-i="${i}" data-reward-k="potionId">
+                <option value="">（随机药水）</option>
+                ${getPotionList().map(c => `<option value="${c.id}" ${(r.potionId || '') === String(c.id) ? 'selected' : ''}>${c.name}</option>`).join('')}
+              </select>
+            </label>` : ''}
             <label>数量
               <input data-reward-i="${i}" data-reward-k="count" type="number" min="1" value="${r.count}"/>
             </label>
@@ -470,10 +485,18 @@ export function renderEntityProperties() {
       const i = Number(e.target.dataset.rewardI);
       const k = e.target.dataset.rewardK;
       if (!Number.isInteger(i) || !k || !entity.rewards[i]) return;
-      if (k === 'item') entity.rewards[i].item = e.target.value;
-      else entity.rewards[i][k] = k === 'count'
-        ? Math.max(1, Math.floor(Number(e.target.value) || 1))
-        : Math.min(100, Math.max(0, Number(e.target.value) ?? 100));
+      if (k === 'item') {
+        entity.rewards[i].item = e.target.value;
+        // 切离 potion 时清空 potionId，并重渲染以显隐药水下拉
+        if (e.target.value !== 'potion') entity.rewards[i].potionId = '';
+        renderRewards();
+      } else if (k === 'potionId') {
+        entity.rewards[i].potionId = e.target.value;
+      } else {
+        entity.rewards[i][k] = k === 'count'
+          ? Math.max(1, Math.floor(Number(e.target.value) || 1))
+          : Math.min(100, Math.max(0, Number(e.target.value) ?? 100));
+      }
       saveDraft(state.levelId, state.level).catch(() => setStatus(dom, '保存失败', true));
     });
 

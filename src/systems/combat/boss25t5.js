@@ -1371,12 +1371,11 @@ export const Boss25T5Mixin = {
   },
 
   boss25t5KillPlayer() {
-    if (this.state === 'fail') return;   // 已结算过，避免重复 syncUIState
+    if (this.state === 'fail' || this.playerDeathFlow) return;   // 已结算 / 正在播死亡运镜，避免重复进入
     this.player.hp = 0;
     this.player.shield = 0;
     this.player.shieldBroken = true;
     this.player.shieldActive = false;
-    this.state = 'fail';
-    this.syncUIState();
+    this.triggerPlayerDefeat();
   }
 };

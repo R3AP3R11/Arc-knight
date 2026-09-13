@@ -6,10 +6,11 @@
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "node server.js",
-    "build": "vite build",
+    "build": "node tools/export-tables.mjs && vite build",
     "electron": "electron .",
     "dist": "vite build",
-    "pack": "vite build && electron-builder --win"
+    "pack": "node tools/export-tables.mjs && vite build && electron-builder --win",
+    "export-tables": "node tools/export-tables.mjs"
   },
   "keywords": [],
   "author": "ARC Engine",
@@ -17,6 +18,7 @@
   "devDependencies": {
     "electron": "^33.4.11",
     "electron-builder": "^25.1.8",
+    "exceljs": "^4.4.0",
     "phaser": "^4.2.1",
     "vite": "^6.1.0"
   },
@@ -41,6 +43,10 @@
       {
         "from": "data/ui",
         "to": "data/ui"
+      },
+      {
+        "from": "data/inner-shop.json",
+        "to": "data/inner-shop.json"
       }
     ],
     "win": {

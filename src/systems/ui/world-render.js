@@ -7,12 +7,15 @@
 import Phaser from 'phaser';
 import { CELL, FONT_TECH, BARREL_TEX_KEY, CHEST_CLOSED_KEY, CHEST_OPEN_KEY, CHEST_SIZE, CHEST_OPEN_SCALE_CORRECTION, PORTAL_ALPHA, PORTAL_LABEL, VENDOR_TEX_KEY, IDOL_TEX_KEY, ROTATE_HANDLE_OFFSET, HIT_FX_TTL, HIT_FX_RADIUS } from '../constants.js';
 import { wallCorners, wallRotationRad } from '../combat/geometry.js';
-import { color, drawCrate, drawCrateDebris, drawPortalShape, drawWormhole, drawEnemyShape, drawDropDiamond, drawWallShape, drawShieldArc, drawPlayer } from './entity-art.js';
+import { color, drawCrate, drawCrateDebris, drawPortalShape, drawWormhole, drawEnemyShape, drawDropDiamond, drawWallShape, drawShieldArc, drawItemShields, drawPlayer } from './entity-art.js';
 import { drawGates } from '../editor/editor-geometry.js';
 import { drawBoss25T5Zones, drawBoss25T5Vortices } from './boss25t5-art.js';
 import { WEAPONS } from '../combat/weapons.js';
 import { DEFAULT_WALL_COLOR } from '../../state.js';
 import { ensureDesigns } from '../art/design-store.js';
+import { findConsumable, getItemArt } from '../economy/inner-shop.js';
+import { getArtRef, resolveArtRef } from './vendor-shop-art.js';
+import { drawDesignCentered } from '../art/asset-render.js';
 
 export const WorldRenderMixin = {
     // 按需加载玩家 / 敌人引用的画板设计稿（幂等，缓存命中后零成本）
@@ -568,6 +571,18 @@ export const WorldRenderMixin = {
           if (da <= 0) return;
           if (d.type === 'gold') drawDropDiamond(g, d.x, d.y, 0xffd54f, da);
           else if (d.type === 'diamond') drawDropDiamond(g, d.x, d.y, 0x00e5ff, da);
+          else if (d.type === 'potion') {
+            const c = findConsumable(d.potionId);
+            const art = c ? getItemArt(c) : null;
+            const des = art && art.artType && art.artName ? getArtRef(art.artType, art.artName) : null;
+            if (des) drawDesignCentered(g, des, d.x, d.y, 30, (this.time?.now || 0) / 1000);
+            else {
+              // 图标尚未就绪：异步补拉一次，本帧退化为白点
+              if (art && art.artType && art.artName) resolveArtRef(art.artType, art.artName);
+              g.fillStyle(0xffffff, da);
+              g.fillCircle(d.x, d.y, 3);
+            }
+          }
           else {
             g.fillStyle(d.type === 'charge' ? color(WEAPONS[d.weapon]?.ringColor || '#3a7bff') : 0xffffff, da);
             g.fillCircle(d.x, d.y, 3);
@@ -583,8 +598,10 @@ export const WorldRenderMixin = {
           // BOSS「原型机-2-5T5」技能区域 + 黑色遮罩：紧贴 drawPlayer 之前调用，
           // 保证图层在「玩家之下、其余世界元素之上」（本体已在上方敌人循环绘制，天然在遮罩之下）。
           this.enemies.forEach(e => { if (e.type === 'boss-2-5t5' && e.alive) drawBoss25T5Zones(g, e, (this.time?.now || 0) / 1000); });
-          drawPlayer(g, this.player, (this.time?.now || 0) / 1000);
+          drawPlayer(g, this.player, (this.time?.now || 0) / 1000, { screenScale: this.cameras.main.zoom });
           drawShieldArc(g, this.player);
+          drawItemShields(g, this.player);             // 即时护盾（itemShields），世界层独立绘制函数
+          this.drawBattleStatusIcons(g, this.player);  // 药水生效中的白色状态图标
           this.drawPets(g, (this.time?.now || 0) / 1000);
           this.drawNewbeeHint();
           this.drawNewbeeRects(g);

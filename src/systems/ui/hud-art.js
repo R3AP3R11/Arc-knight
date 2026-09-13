@@ -5,7 +5,7 @@
 // ============================================================
 
 import Phaser from 'phaser';
-import { VIEW_W, VIEW_H, PLAYER_ART, WEAPON_BG_ASSET } from '../constants.js';
+import { VIEW_W, VIEW_H, WEAPON_BG_ASSET } from '../constants.js';
 import { color, drawHexRingPlayer } from './entity-art.js';
 import { getDesign } from '../art/design-store.js';
 import { drawDesignCentered } from '../art/asset-render.js';
@@ -29,7 +29,7 @@ export function drawHudAvatar(g, cx, cy, player, t = 0) {
     const artId = (player?.arts && player?.weaponType && player.arts[player.weaponType]) || player?.art;
     const artDes = artId ? getDesign(artId) : null;
     if (artDes) drawDesignCentered(g, artDes, cx, cy, 96, t);
-    else drawHexRingPlayer(g, { x: cx, y: cy, weapon: { ringColor: wc }, weaponAngle: t * 2.5, artScale: player?.artScale || 1, moveHexRadius: PLAYER_ART.hexagonRadius, moveLeanX: 0, moveLeanY: 0, scheme: 'hex-ring' }, 1.275);
+    else drawHexRingPlayer(g, { x: cx, y: cy, weapon: { ringColor: wc }, weaponAngle: t * 2.5, artScale: player?.artScale || 1, moveLeanX: 0, moveLeanY: 0, scheme: 'hex-ring' }, 1.275);
   }
 }
 

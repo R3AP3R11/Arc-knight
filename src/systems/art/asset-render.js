@@ -259,102 +259,107 @@ export function renderAsset(g, design, x, y, t = 0, scale = 1, motion = null, al
   const d = normalizeDesign(design);
   const s = scale * d.scale;
   const cx0 = x + d.center.x * s, cy0 = y + d.center.y * s;
+
+  for (const el of d.elements) renderElement(g, el, cx0, cy0, t, s, motion, alpha);
+}
+
+// 绘制单个（已归一化的）设计稿元素。
+// cx0, cy0 = 设计原点在屏幕上的位置（已含 design.center * s）；s = 本次渲染总缩放；t = 时间；motion = 归一化移动向量或 null；alpha = 元素透明度
+export function renderElement(g, el, cx0, cy0, t, s, motion = null, alpha = 1) {
   const r = Math.PI / 180;
   const mx = motion?.x || 0, my = motion?.y || 0;
 
-  for (const el of d.elements) {
-    const ga = el.phase + el.rotSpeed * t * el.dir;
-    const lag = (el.offsetSpeed ?? 1);
-    const offX = (el.offsetX || 0) * lag * mx * s;
-    const offY = (el.offsetY || 0) * lag * my * s;
-    const ax = cx0 + offX, ay = cy0 + offY;
+  const ga = el.phase + el.rotSpeed * t * el.dir;
+  const lag = (el.offsetSpeed ?? 1);
+  const offX = (el.offsetX || 0) * lag * mx * s;
+  const offY = (el.offsetY || 0) * lag * my * s;
+  const ax = cx0 + offX, ay = cy0 + offY;
 
-    if (el.shape === 'arc') {
-      // count>1 时像多边形一样绕设计圆心沿 orbitRadius 等角排布多环，且每个副本以自身 ca 角朝向
-      // （count=1 / orbitRadius=0 时退回旧行为，单弧在原点）
-      for (let i = 0; i < el.count; i++) {
-        const ca = ga + (Math.PI * 2 / el.count) * i;
-        const px = ax + Math.cos(ca) * el.orbitRadius * s;
-        const py = ay + Math.sin(ca) * el.orbitRadius * s;
-        const a0 = ca + el.arcStart * r;
-        const a1 = ca + el.arcEnd * r;
-        if (el.pattern === 'clock') {
-          g.lineStyle(Math.max(0.5, el.lineWidth * s), hexToInt(el.color), alpha);
-          g.beginPath();
-          g.arc(px, py, Math.max(0.1, el.radius * s), a0, a1, a1 < a0);
-          g.strokePath();
-          drawArcTicks(g, el, px, py, a0, a1, s, alpha);
-        } else if (el.pattern === 'hands') {
-          drawArcHands(g, el, px, py, a0, a1, s, alpha);
-        } else {
-          g.lineStyle(Math.max(0.5, el.lineWidth * s), hexToInt(el.color), alpha);
-          g.beginPath();
-          g.arc(px, py, Math.max(0.1, el.radius * s), a0, a1, a1 < a0);
-          g.strokePath();
-        }
-      }
-      continue;
-    }
-
-    if (el.shape === 'stroke') {
-      if (!el.points.length) continue;
-      for (let i = 0; i < el.count; i++) {
-        const ca = ga + (Math.PI * 2 / el.count) * i;
-        const cos = Math.cos(ca), sin = Math.sin(ca);
-        // orbitRadius>0：轮廓重心挂到轨道上（沿 ca 公转 orbitRadius*s），点相对重心排布并绕重心自转；=0 保持旧行为
-        let cmx = 0, cmy = 0;
-        if (el.orbitRadius > 0) {
-          for (const p of el.points) { cmx += p.x; cmy += p.y; }
-          cmx /= el.points.length; cmy /= el.points.length;
-        }
-        const bx = ax + cos * el.orbitRadius * s, by = ay + sin * el.orbitRadius * s;
-        if (el.closed && el.fill) g.fillStyle(hexToInt(el.fill), alpha);
-        g.lineStyle(Math.max(0.5, el.lineWidth * s), hexToInt(el.color), alpha);
-        g.beginPath();
-        el.points.forEach((pt, k) => {
-          const wx = bx + ((pt.x - cmx) * cos - (pt.y - cmy) * sin) * s;
-          const wy = by + ((pt.x - cmx) * sin + (pt.y - cmy) * cos) * s;
-          if (k === 0) g.moveTo(wx, wy); else g.lineTo(wx, wy);
-        });
-        // 填充仿 Windows 画板：有填充色即按闭合区域上色（描边是否连回首点由 closed 决定）
-        if (el.fill) g.fillPath();
-        if (el.closed) g.closePath();
-        g.strokePath();
-      }
-      continue;
-    }
-
-    if (el.shape === 'pixel') {
-      const bx = ax + Math.cos(ga) * el.orbitRadius * s;
-      const by = ay + Math.sin(ga) * el.orbitRadius * s;
-      const cell = el.cellSize * s;
-      const ox = bx - (el.cols / 2) * cell;
-      const oy = by - (el.rows / 2) * cell;
-      const grid = el.gridColor ? colorInt(el.gridColor) : 0;
-      const hasGrid = !!el.gridColor;
-      if (hasGrid) g.lineStyle(1, grid, alpha);
-      for (const c of el.cells) {
-        const px = ox + c.x * cell, py = oy + c.y * cell;
-        g.fillStyle(hexToInt(c.color), alpha);
-        g.beginPath();
-        g.moveTo(px, py);
-        g.lineTo(px + cell, py);
-        g.lineTo(px + cell, py + cell);
-        g.lineTo(px, py + cell);
-        g.closePath();
-        g.fillPath();
-        if (hasGrid) g.strokePath();
-      }
-      continue;
-    }
-
+  if (el.shape === 'arc') {
+    // count>1 时像多边形一样绕设计圆心沿 orbitRadius 等角排布多环，且每个副本以自身 ca 角朝向
+    // （count=1 / orbitRadius=0 时退回旧行为，单弧在原点）
     for (let i = 0; i < el.count; i++) {
       const ca = ga + (Math.PI * 2 / el.count) * i;
       const px = ax + Math.cos(ca) * el.orbitRadius * s;
       const py = ay + Math.sin(ca) * el.orbitRadius * s;
-      drawPolygon(g, px, py, el.sides, el.radius * s, ca, el.lineWidth * s,
-        hexToInt(el.color), el.fill ? hexToInt(el.fill) : null, alpha);
+      const a0 = ca + el.arcStart * r;
+      const a1 = ca + el.arcEnd * r;
+      if (el.pattern === 'clock') {
+        g.lineStyle(Math.max(0.5, el.lineWidth * s), hexToInt(el.color), alpha);
+        g.beginPath();
+        g.arc(px, py, Math.max(0.1, el.radius * s), a0, a1, a1 < a0);
+        g.strokePath();
+        drawArcTicks(g, el, px, py, a0, a1, s, alpha);
+      } else if (el.pattern === 'hands') {
+        drawArcHands(g, el, px, py, a0, a1, s, alpha);
+      } else {
+        g.lineStyle(Math.max(0.5, el.lineWidth * s), hexToInt(el.color), alpha);
+        g.beginPath();
+        g.arc(px, py, Math.max(0.1, el.radius * s), a0, a1, a1 < a0);
+        g.strokePath();
+      }
     }
+    return;
+  }
+
+  if (el.shape === 'stroke') {
+    if (!el.points.length) return;
+    for (let i = 0; i < el.count; i++) {
+      const ca = ga + (Math.PI * 2 / el.count) * i;
+      const cos = Math.cos(ca), sin = Math.sin(ca);
+      // orbitRadius>0：轮廓重心挂到轨道上（沿 ca 公转 orbitRadius*s），点相对重心排布并绕重心自转；=0 保持旧行为
+      let cmx = 0, cmy = 0;
+      if (el.orbitRadius > 0) {
+        for (const p of el.points) { cmx += p.x; cmy += p.y; }
+        cmx /= el.points.length; cmy /= el.points.length;
+      }
+      const bx = ax + cos * el.orbitRadius * s, by = ay + sin * el.orbitRadius * s;
+      if (el.closed && el.fill) g.fillStyle(hexToInt(el.fill), alpha);
+      g.lineStyle(Math.max(0.5, el.lineWidth * s), hexToInt(el.color), alpha);
+      g.beginPath();
+      el.points.forEach((pt, k) => {
+        const wx = bx + ((pt.x - cmx) * cos - (pt.y - cmy) * sin) * s;
+        const wy = by + ((pt.x - cmx) * sin + (pt.y - cmy) * cos) * s;
+        if (k === 0) g.moveTo(wx, wy); else g.lineTo(wx, wy);
+      });
+      // 填充仿 Windows 画板：有填充色即按闭合区域上色（描边是否连回首点由 closed 决定）
+      if (el.fill) g.fillPath();
+      if (el.closed) g.closePath();
+      g.strokePath();
+    }
+    return;
+  }
+
+  if (el.shape === 'pixel') {
+    const bx = ax + Math.cos(ga) * el.orbitRadius * s;
+    const by = ay + Math.sin(ga) * el.orbitRadius * s;
+    const cell = el.cellSize * s;
+    const ox = bx - (el.cols / 2) * cell;
+    const oy = by - (el.rows / 2) * cell;
+    const grid = el.gridColor ? colorInt(el.gridColor) : 0;
+    const hasGrid = !!el.gridColor;
+    if (hasGrid) g.lineStyle(1, grid, alpha);
+    for (const c of el.cells) {
+      const px = ox + c.x * cell, py = oy + c.y * cell;
+      g.fillStyle(hexToInt(c.color), alpha);
+      g.beginPath();
+      g.moveTo(px, py);
+      g.lineTo(px + cell, py);
+      g.lineTo(px + cell, py + cell);
+      g.lineTo(px, py + cell);
+      g.closePath();
+      g.fillPath();
+      if (hasGrid) g.strokePath();
+    }
+    return;
+  }
+
+  for (let i = 0; i < el.count; i++) {
+    const ca = ga + (Math.PI * 2 / el.count) * i;
+    const px = ax + Math.cos(ca) * el.orbitRadius * s;
+    const py = ay + Math.sin(ca) * el.orbitRadius * s;
+    drawPolygon(g, px, py, el.sides, el.radius * s, ca, el.lineWidth * s,
+      hexToInt(el.color), el.fill ? hexToInt(el.fill) : null, alpha);
   }
 }
 

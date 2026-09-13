@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>玩家被击败运镜 · 预览</title>
+<style>
+  :root { --bg:#0a0e14; --panel:#141b26; --line:#25303f; --txt:#dbe6f3; --accent:#22d3ee; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font-family: "Microsoft YaHei", system-ui, -apple-system, sans-serif; font-size:13px; }
+  .wrap { max-width:1180px; margin:0 auto; padding:16px 16px 40px; }
+  h1 { font-size:18px; margin:0 0 4px; font-weight:600; }
+  .sub { color:#8ba0b8; font-size:12px; margin-bottom:12px; }
+  .badge { display:inline-block; padding:4px 10px; border-radius:4px; font-weight:700; font-size:12px; margin-bottom:12px; background:#1b2432; color:#9fb4cc; border:1px solid var(--line); }
+  .badge.pass { background:#0d3d24; color:#4ade80; border:1px solid #1d7a48; }
+  .badge.fail { background:#3d0d0d; color:#f87171; border:1px solid #7a1d1d; }
+  .controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px; }
+  button { background:var(--panel); color:var(--txt); border:1px solid var(--line); border-radius:4px; padding:6px 12px; cursor:pointer; font-size:13px; }
+  button:hover { border-color:var(--accent); }
+  select { background:var(--panel); color:var(--txt); border:1px solid var(--line); border-radius:4px; padding:6px 8px; font-size:13px; }
+  label.chk { display:flex; align-items:center; gap:6px; cursor:pointer; }
+  #stage { display:flex; gap:10px; justify-content:center; align-items:flex-start; margin:10px 0; flex-wrap:wrap; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:6px; }
+  .cardLabel { font-size:12px; color:#8ba0b8; margin-bottom:4px; text-align:center; }
+  canvas { display:block; background:#05080d; border-radius:4px; }
+  #progressWrap { margin:12px 0 6px; }
+  #track { position:relative; height:16px; background:var(--panel); border:1px solid var(--line); border-radius:8px; cursor:pointer; }
+  #fill { position:absolute; left:0; top:0; bottom:0; width:0; background:linear-gradient(90deg,#0e7490,#22d3ee); border-radius:8px; }
+  .tick { position:absolute; top:-2px; bottom:-2px; width:2px; background:#f59e0b; transform:translateX(-1px); cursor:pointer; }
+  .tick:hover { background:#fbbf24; box-shadow:0 0 6px #fbbf24; }
+  #timeDisplay { font-variant-numeric:tabular-nums; color:#9fb4cc; }
+  .panel { display:grid; grid-template-columns:repeat(auto-fill,minmax(178px,1fr)); gap:6px 14px; margin-top:12px; background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:10px 12px; }
+  .prow { display:flex; justify-content:space-between; gap:8px; }
+  .prow .k { color:#8ba0b8; }
+  .prow .v { font-variant-numeric:tabular-nums; color:var(--accent); }
+  .note { color:#7c8ea3; font-size:11px; margin-top:12px; line-height:1.7; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>玩家被击败运镜 · 预览</h1>
+  <div class="sub">Phaser 相机数学 1:1 复刻 · 纯 Canvas2D · 零外部依赖（file:// 直接打开）</div>
+  <div id="selfcheck" class="badge">自检: 运行中…</div>
+  <div class="controls">
+    <button id="btnPlay">播放</button>
+    <button id="btnReplay">重播</button>
+    <button id="btnPrev">上一帧</button>
+    <button id="btnNext">下一帧</button>
+    <select id="selScheme">
+      <option value="new">新方案（3400ms）</option>
+      <option value="old">旧方案（4450ms）</option>
+    </select>
+    <label class="chk"><input type="checkbox" id="chkCompare"> 叠加对比（左新 / 右旧）</label>
+  </div>
+  <div id="stage"></div>
+  <div id="progressWrap">
+    <div id="track"><div id="fill"></div></div>
+  </div>
+  <div><span id="timeDisplay">t = 0 / 3400 ms</span></div>
+  <div id="panel" class="panel"></div>
+  <div class="note">
+    叠层顺序：世界 → 色染 tint(alpha=tint×0.55) → 暗角 vignette → 黑幕 alpha → 上下黑边 letterbox(各 12.5%×letterbox 屏高) → 闪白 flash(alpha=flash×0.8)。<br>
+    focus='player' → scrollX = player.x − camW/2，panX/panY 被忽略（每帧跟随）；focus='none' → panX/panY 直接当 scrollX/scrollY。desat 只作用于世界绘制那一段。
+  </div>
+</div>
+<script>
+(function () {
+  'use strict';
+
+  /* ============ 常量：世界 / 视口 ============ */
+  var CAM_W = 1920;                 // 运行时 cam.width = level.camera.width
+  var CAM_H = Math.round(CAM_W * 1080 / 1920);  // 1080
+  var WORLD_W = 1920, WORLD_H = 1080;
+  var PLAYER = { x: 960, y: 540 };  // 世界中心
+
+  /* ============ 数据：新方案（玩家被击败运镜）============ */
+  var NEW_CLIP = {
+    durationMs: 3400, timeScale: 1, focus: 'player', blackHoldMs: 500,
+    keyframes: [
+      { t:0,    zoom:1.00, panX:0, panY:0, rot:0,  alpha:0,    ease:'sineOut',   timeScale:1.00, vignette:0,    letterbox:0,    tint:0,    tintColor:'#1a0a0a', flash:1.00, flashColor:'#ffffff', desat:0 },
+      { t:240,  zoom:1.60, panX:0, panY:0, rot:3,  alpha:0,    ease:'quadOut',   timeScale:0.35, vignette:0.25, letterbox:0.35, tint:0.15, tintColor:'#1a0a0a', flash:0.55, flashColor:'#ff2a2a', desat:0 },
+      { t:1500, zoom:3.00, panX:0, panY:0, rot:10, alpha:0.15, ease:'sineInOut', timeScale:0.18, vignette:0.50, letterbox:0.70, tint:0.35, tintColor:'#1a0a0a', flash:0,    flashColor:'#ff2a2a', desat:0 },
+      { t:2150, zoom:2.60, panX:0, panY:0, rot:13, alpha:0.35, ease:'sineOut',   timeScale:0.14, vignette:0.62, letterbox:0.85, tint:0.45, tintColor:'#1a0a0a', flash:0,    flashColor:'#ff2a2a', desat:0 },
+      { t:2800, zoom:4.30, panX:0, panY:0, rot:17, alpha:0.68, ease:'cubicIn',   timeScale:0.10, vignette:0.85, letterbox:1.00, tint:0.60, tintColor:'#1a0a0a', flash:0,    flashColor:'#ff2a2a', desat:0 },
+      { t:3400, zoom:5.20, panX:0, panY:0, rot:20, alpha:1.00, ease:'quadIn',    timeScale:0.08, vignette:1.00, letterbox:1.00, tint:0.70, tintColor:'#1a0a0a', flash:0,    flashColor:'#ff2a2a', desat:0 }
+    ]
+  };
+
+  /* ============ 数据：旧方案（A/B 对比）============ */
+  var OLD_CLIP = {
+    durationMs: 4450, timeScale: 0.2, focus: 'none', blackHoldMs: 0,
+    keyframes: [
+      { t:0,    zoom:1,   panX:0,  panY:0,  rot:0,   alpha:0, ease:'linear' },
+      { t:2000, zoom:5,   panX:40, panY:40, rot:-16, alpha:0, ease:'linear' },
+      { t:4000, zoom:10,  panX:0,  panY:0,  rot:0,   alpha:0, ease:'linear' },
+      { t:4450, zoom:100, panX:0,  panY:0,  rot:0,   alpha:1, ease:'linear' }
+    ]
+  };
+
+  /* ============ 数学：缓动（与运行时一致）============ */
+  function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+
+  var EASES = {
+    linear:     function (p) { return p; },
+    sineIn:     function (p) { return 1 - Math.cos(p * Math.PI / 2); },
+    sineOut:    function (p) { return Math.sin(p * Math.PI / 2); },
+    sineInOut:  function (p) { return -(Math.cos(Math.PI * p) - 1) / 2; },
+    quadIn:     function (p) { return p * p; },
+    quadOut:    function (p) { return p * (2 - p); },
+    quadInOut:  function (p) { return p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; },
+    cubicIn:    function (p) { return p * p * p; },
+    cubicOut:   function (p) { return 1 - Math.pow(1 - p, 3); },
+    cubicInOut: function (p) { return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; },
+    easeOut:    function (p) { return Math.sin(p * Math.PI / 2); },
+    easeInOut:  function (p) { return -(Math.cos(Math.PI * p) - 1) / 2; }
+  };
+
+  function easeValue(name, t) {
+    var p = clamp(t, 0, 1);
+    var f = EASES[name] || EASES.linear;
+    return f(p);
+  }
+
+  /* ============ 关键帧插值 ============ */
+  var LERP_FIELDS = ['zoom', 'panX', 'panY', 'rot', 'alpha', 'timeScale', 'vignette', 'letterbox', 'tint', 'flash', 'desat'];
+
+  function stateAt(clip, T) {
+    var kfs = clip.keyframes;
+    var a = kfs[0], b = kfs[kfs.length - 1];
+    for (var i = 0; i < kfs.length - 1; i++) {
+      if (T >= kfs[i].t && T <= kfs[i + 1].t) { a = kfs[i]; b = kfs[i + 1]; break; }
+    }
+    var span = (b.t - a.t) || 1;
+    var p = clamp((T - a.t) / span, 0, 1);
+    var eased = easeValue(a.ease || 'linear', p);
+    var out = {};
+    for (var j = 0; j < LERP_FIELDS.length; j++) {
+      var f = LERP_FIELDS[j];
+      var v0 = (a[f] != null) ? a[f] : 0;
+      var v1 = (b[f] != null) ? b[f] : 0;
+      out[f] = v0 + (v1 - v0) * eased;
+    }
+    out.tintColor = a.tintColor || '#1a0a0a';   // 取 a 帧颜色，不插值
+    out.flashColor = a.flashColor || '#ffffff';
+    out.ease = a.ease || 'linear';
+    out.t = T;
+    return out;
+  }
+
+  /* ============ 相机变换（核心公式）============
+     等价于 Phaser: screen = R(-rot) * (world - camCenterWorld) * z + viewportCenter
+     camCenterWorld = (scrollX + camW/(2z), scrollY + camH/(2z))
+     displayScale 放在最外层，内部全程按 1920×1080 屏幕空间绘制。 */
+  function applyCameraTransform(ctx, camW, camH, z, rotRad, scrollX, scrollY, displayScale) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(displayScale, displayScale);
+    ctx.translate(camW / 2, camH / 2);
+    ctx.rotate(-rotRad);
+    ctx.scale(z, z);
+    ctx.translate(-(scrollX + camW / (2 * z)), -(scrollY + camH / (2 * z)));
+  }
+
+  // 手算参考（自检用）
+  function manualScreen(camW, camH, z, rotRad, scrollX, scrollY, displayScale, wx, wy) {
+    var cxw = scrollX + camW / (2 * z);
+    var cyw = scrollY + camH / (2 * z);
+    var dx = wx - cxw, dy = wy - cyw;
+    var c = Math.cos(-rotRad), s = Math.sin(-rotRad);
+    var rx = dx * c - dy * s;
+    var ry = dx * s + dy * c;
+    return { x: (rx * z + camW / 2) * displayScale, y: (ry * z + camH / 2) * displayScale };
+  }
+
+  // 给定 clip + t，解出 scroll
+  function resolveScroll(clip, s) {
+    if (clip.focus === 'player') {
+      return { x: PLAYER.x - CAM_W / 2, y: PLAYER.y - CAM_H / 2 }; // panX/panY 被忽略
+    }
+    return { x: s.panX, y: s.panY }; // focus='none'：pan 直接当 scroll
+  }
+
+  /* ============ 场景数据（固定，保证两个画布一致）============ */
+  var ENEMIES = [
+    [760, 320], [1180, 300], [700, 780], [1230, 790],
+    [960, 255], [320, 540], [1630, 560], [255, 185]
+  ];
+  var CRATES = [[1060, 640], [845, 655], [1130, 455]];
+  var PORTALS = [[520, 300], [1470, 820]];
+
+  /* ============ 世界绘制 ============ */
+  function drawWorld(ctx) {
+    // 世界底
+    ctx.fillStyle = '#0b1b2b';
+    ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+
+    // 网格
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+    ctx.beginPath();
+    for (var gx = 0; gx <= WORLD_W; gx += 120) { ctx.moveTo(gx, 0); ctx.lineTo(gx, WORLD_H); }
+    for (var gy = 0; gy <= WORLD_H; gy += 120) { ctx.moveTo(0, gy); ctx.lineTo(WORLD_W, gy); }
+    ctx.stroke();
+
+    // 世界边界框
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = '#3aa0ff';
+    ctx.strokeRect(0, 0, WORLD_W, WORLD_H);
+
+    // 传送门（紫圆）
+    for (var i = 0; i < PORTALS.length; i++) {
+      var p = PORTALS[i];
+      ctx.beginPath();
+      ctx.arc(p[0], p[1], 28, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(168,85,247,0.85)';
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#c084fc';
+      ctx.stroke();
+    }
+
+    // 箱子（黄方块）
+    for (var c = 0; c < CRATES.length; c++) {
+      var q = CRATES[c];
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(q[0] - 20, q[1] - 20, 40, 40);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#a16207';
+      ctx.strokeRect(q[0] - 20, q[1] - 20, 40, 40);
+    }
+
+    // 敌人（红圆）
+    for (var e = 0; e < ENEMIES.length; e++) {
+      var n = ENEMIES[e];
+      ctx.beginPath();
+      ctx.arc(n[0], n[1], 16, 0, Math.PI * 2);
+      ctx.fillStyle = '#ef4444';
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#7f1d1d';
+      ctx.stroke();
+    }
+
+    // 玩家（白色圆 + 朝右短粗线）
+    ctx.beginPath();
+    ctx.arc(PLAYER.x, PLAYER.y, 16, 0, Math.PI * 2);
+    ctx.fillStyle = '#e8ffff';
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#22d3ee';
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(PLAYER.x, PLAYER.y);
+    ctx.lineTo(PLAYER.x + 30, PLAYER.y);
+    ctx.lineWidth = 8;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#22d3ee';
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+
+    // 世界坐标标注（小十字 + 文字）
+    drawMarker(ctx, PLAYER.x, PLAYER.y, 26, '#22d3ee', '玩家 (960,540)');
+    drawMarker(ctx, 0, 0, 30, '#f59e0b', '原点 (0,0)');
+    drawMarker(ctx, WORLD_W / 2, WORLD_H / 2, 40, '#94a3b8', '世界中心 (960,540)');
+  }
+
+  function drawMarker(ctx, x, y, r, color, label) {
+    ctx.beginPath();
+    ctx.moveTo(x - r, y); ctx.lineTo(x + r, y);
+    ctx.moveTo(x, y - r); ctx.lineTo(x, y + r);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.font = 'bold 20px "Microsoft YaHei", sans-serif';
+    ctx.fillText(label, x + r + 8, y - 8);
+  }
+
+  /* ============ 叠层（屏幕空间）============ */
+  function drawOverlays(ctx, W, H, s) {
+    // tint
+    if (s.tint > 0) {
+      ctx.globalAlpha = s.tint * 0.55;
+      ctx.fillStyle = s.tintColor || '#1a0a0a';
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+    }
+    // vignette
+    if (s.vignette > 0) {
+      var cx = W / 2, cy = H / 2;
+      var R = Math.sqrt(W * W + H * H) / 2;
+      var grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+      grd.addColorStop(0, 'rgba(0,0,0,0)');
+      grd.addColorStop(0.55, 'rgba(0,0,0,0)');
+      grd.addColorStop(1, 'rgba(0,0,0,1)');
+      ctx.globalAlpha = s.vignette;
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+    }
+    // 黑幕
+    if (s.alpha > 0) {
+      ctx.globalAlpha = s.alpha;
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+    }
+    // letterbox（上下各 12.5% × letterbox 屏高）
+    if (s.letterbox > 0) {
+      var barH = 0.125 * s.letterbox * H;
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, W, barH);
+      ctx.fillRect(0, H - barH, W, barH);
+    }
+    // flash
+    if (s.flash > 0) {
+      ctx.globalAlpha = s.flash * 0.8;
+      ctx.fillStyle = s.flashColor || '#ffffff';
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /* ============ 单帧渲染 ============ */
+  function drawClip(ctx, canvasW, canvasH, clip, T) {
+    var s = stateAt(clip, T);
+    var displayScale = canvasW / CAM_W;
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.filter = 'none';
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#05080d';
+    ctx.fillRect(0, 0, canvasW, canvasH);
+
+    var sc = resolveScroll(clip, s);
+    var rotRad = s.rot * Math.PI / 180;
+
+    applyCameraTransform(ctx, CAM_W, CAM_H, s.zoom, rotRad, sc.x, sc.y, displayScale);
+
+    // desat 只作用在世界绘制这一段
+    ctx.filter = 'grayscale(' + (s.desat * 100) + '%)';
+    drawWorld(ctx);
+    ctx.filter = 'none';
+
+    // 叠层回到画布像素空间
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    drawOverlays(ctx, canvasW, canvasH, s);
+    return s;
+  }
+
+  /* ============ 自检 ============ */
+  function selfCheck() {
+    var sc = document.createElement('canvas');
+    sc.width = 960; sc.height = 540;
+    var sctx = sc.getContext('2d');
+    var displayScale = 0.5;
+    var maxErr = 0, fails = 0, N = 200;
+
+    for (var i = 0; i < N; i++) {
+      var z = 0.15 + Math.random() * 6.0;
+      var rotDeg = -40 + Math.random() * 80;
+      var rotRad = rotDeg * Math.PI / 180;
+      var scrollX = -400 + Math.random() * 2000;
+      var scrollY = -400 + Math.random() * 1600;
+      var wx = -200 + Math.random() * 2400;
+      var wy = -200 + Math.random() * 1600;
+
+      applyCameraTransform(sctx, CAM_W, CAM_H, z, rotRad, scrollX, scrollY, displayScale);
+      var m = sctx.getTransform();
+      var gx = m.a * wx + m.c * wy + m.e;   // ctx 变换结果
+      var gy = m.b * wx + m.d * wy + m.f;
+
+      var ref = manualScreen(CAM_W, CAM_H, z, rotRad, scrollX, scrollY, displayScale, wx, wy);
+
+      var err = Math.max(Math.abs(gx - ref.x), Math.abs(gy - ref.y));
+      if (err > maxErr) maxErr = err;
+      if (err >= 0.5) fails++;
+    }
+
+    // 退化断言：rot=0 时必须等于 screen=(world-scroll)*z*displayScale
+    var degFails = 0;
+    for (var k = 0; k < 50; k++) {
+      var z2 = 0.2 + Math.random() * 4;
+      var sx2 = Math.random() * 1000, sy2 = Math.random() * 600;
+      var wx2 = Math.random() * 2000, wy2 = Math.random() * 1200;
+      applyCameraTransform(sctx, CAM_W, CAM_H, z2, 0, sx2, sy2, displayScale);
+      var m2 = sctx.getTransform();
+      var ax = m2.a * wx2 + m2.c * wy2 + m2.e;
+      var ay = m2.b * wx2 + m2.d * wy2 + m2.f;
+      var bx = (wx2 - sx2) * z2 * displayScale;
+      var by = (wy2 - sy2) * z2 * displayScale;
+      if (Math.max(Math.abs(ax - bx), Math.abs(ay - by)) >= 0.5) degFails++;
+    }
+
+    var pass = (fails === 0) && (degFails === 0);
+    try {
+      console.assert(pass, '[cinematic-preview] 自检失败', { fails: fails, maxErr: maxErr, degFails: degFails });
+      console.assert(degFails === 0, '[cinematic-preview] rot=0 退化断言失败', degFails);
+    } catch (e) { /* ignore */ }
+
+    return { pass: pass, maxErr: maxErr, fails: fails, degFails: degFails, n: N };
+  }
+
+  function showSelfCheck() {
+    var res = selfCheck();
+    var el = document.getElementById('selfcheck');
+    if (res.pass) {
+      el.className = 'badge pass';
+      el.textContent = '自检: PASS ✅（' + res.n + ' 随机点 + 50 退化点，最大误差 ' + res.maxErr.toFixed(4) + ' px < 0.5px）';
+    } else {
+      el.className = 'badge fail';
+      el.textContent = '自检: FAIL ❌（fails=' + res.fails + '，degFails=' + res.degFails + '，最大误差 ' + res.maxErr.toFixed(4) + ' px）';
+    }
+    return res;
+  }
+
+  /* ============ 播放器 ============ */
+  var stage = document.getElementById('stage');
+  var track = document.getElementById('track');
+  var fill = document.getElementById('fill');
+  var timeDisplay = document.getElementById('timeDisplay');
+  var panel = document.getElementById('panel');
+  var btnPlay = document.getElementById('btnPlay');
+  var btnReplay = document.getElementById('btnReplay');
+  var btnPrev = document.getElementById('btnPrev');
+  var btnNext = document.getElementById('btnNext');
+  var selScheme = document.getElementById('selScheme');
+  var chkCompare = document.getElementById('chkCompare');
+
+  // 画布
+  var cards = [];
+  for (var ci = 0; ci < 2; ci++) {
+    var card = document.createElement('div');
+    card.className = 'card';
+    var lab = document.createElement('div');
+    lab.className = 'cardLabel';
+    var cv = document.createElement('canvas');
+    card.appendChild(lab);
+    card.appendChild(cv);
+    stage.appendChild(card);
+    cards.push({ card: card, lab: lab, cv: cv, ctx: cv.getContext('2d') });
+  }
+
+  // 状态
+  var compare = false;
+  var selected = 'new';
+  var t = 0;
+  var playing = false;
+  var phase = 'idle';       // 'idle' | 'playing' | 'hold'
+  var holdLeft = 0;
+  var dragging = false;
+
+  function primaryClip() { return selected === 'old' ? OLD_CLIP : NEW_CLIP; }
+  function masterDuration() { return compare ? Math.max(NEW_CLIP.durationMs, OLD_CLIP.durationMs) : primaryClip().durationMs; }
+  function masterHold() { return compare ? Math.max(NEW_CLIP.blackHoldMs, OLD_CLIP.blackHoldMs) : primaryClip().blackHoldMs; }
+
+  function sizeCanvas(i, w, h) {
+    var o = cards[i];
+    o.cv.width = w; o.cv.height = h;
+    o.cv.style.width = w + 'px'; o.cv.style.height = h + 'px';
+  }
+
+  function rebuild() {
+    if (compare) {
+      sizeCanvas(0, 640, 360);
+      sizeCanvas(1, 640, 360);
+      cards[1].card.style.display = '';
+      cards[0].lab.textContent = '新方案（3400ms）';
+      cards[1].lab.textContent = '旧方案（4450ms）';
+    } else {
+      sizeCanvas(0, 960, 540);
+      cards[1].card.style.display = 'none';
+      cards[0].lab.textContent = (selected === 'old') ? '旧方案（4450ms）' : '新方案（3400ms）';
+    }
+    rebuildTicks();
+  }
+
+  function rebuildTicks() {
+    var old = track.querySelectorAll('.tick');
+    for (var i = 0; i < old.length; i++) { old[i].parentNode.removeChild(old[i]); }
+    var clip = primaryClip();
+    var dur = clip.durationMs;
+    for (var k = 0; k < clip.keyframes.length; k++) {
+      (function (kf) {
+        var d = document.createElement('div');
+        d.className = 'tick';
+        d.style.left = (kf.t / dur * 100) + '%';
+        d.title = 't=' + kf.t + 'ms';
+        d.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          seek(kf.t);
+        });
+        track.appendChild(d);
+      })(clip.keyframes[k]);
+    }
+  }
+
+  function render() {
+    if (compare) {
+      drawClip(cards[0].ctx, cards[0].cv.width, cards[0].cv.height, NEW_CLIP, Math.min(t, NEW_CLIP.durationMs));
+      drawClip(cards[1].ctx, cards[1].cv.width, cards[1].cv.height, OLD_CLIP, Math.min(t, OLD_CLIP.durationMs));
+    } else {
+      var clip = primaryClip();
+      drawClip(cards[0].ctx, cards[0].cv.width, cards[0].cv.height, clip, Math.min(t, clip.durationMs));
+    }
+  }
+
+  var PARAMS = [
+    ['zoom', '缩放 zoom'],
+    ['rot', '旋转 rot(°)'],
+    ['alpha', '黑幕 alpha'],
+    ['timeScale', '时间缩放 timeScale'],
+    ['vignette', '暗角 vignette'],
+    ['letterbox', '黑边 letterbox'],
+    ['tint', '色染 tint'],
+    ['flash', '闪白 flash'],
+    ['desat', '去饱和 desat']
+  ];
+  // 构建面板行
+  var pvals = {};
+  (function () {
+    for (var i = 0; i < PARAMS.length; i++) {
+      var row = document.createElement('div');
+      row.className = 'prow';
+      var k = document.createElement('span'); k.className = 'k'; k.textContent = PARAMS[i][1];
+      var v = document.createElement('span'); v.className = 'v'; v.textContent = '0.000';
+      row.appendChild(k); row.appendChild(v);
+      panel.appendChild(row);
+      pvals[PARAMS[i][0]] = v;
+    }
+  })();
+
+  function updateUI() {
+    var dur = masterDuration();
+    fill.style.width = (clamp(t / dur, 0, 1) * 100) + '%';
+    timeDisplay.textContent = 't = ' + Math.round(t) + ' / ' + dur + ' ms' +
+      (phase === 'hold' ? '（黑屏停顿 ' + Math.max(0, Math.round(holdLeft)) + 'ms）' : '');
+    btnPlay.textContent = playing ? '暂停' : '播放';
+
+    var s = stateAt(primaryClip(), Math.min(t, primaryClip().durationMs));
+    for (var i = 0; i < PARAMS.length; i++) {
+      var key = PARAMS[i][0];
+      pvals[key].textContent = (typeof s[key] === 'number') ? s[key].toFixed(3) : String(s[key]);
+    }
+  }
+
+  function seek(nt) {
+    t = clamp(nt, 0, masterDuration());
+    if (t < masterDuration()) { phase = playing ? 'playing' : 'idle'; }
+    updateUI();
+  }
+
+  function play() {
+    if (t >= masterDuration()) t = 0;
+    playing = true; phase = 'playing';
+    updateUI();
+  }
+  function pause() {
+    playing = false; phase = 'idle';
+    updateUI();
+  }
+  function replay() {
+    t = 0; playing = true; phase = 'playing';
+    updateUI();
+  }
+  function stepFrame(dir) {
+    var kfs = primaryClip().keyframes;
+    var nt = t;
+    if (dir > 0) {
+      var nk = null;
+      for (var i = 0; i < kfs.length; i++) { if (kfs[i].t > t + 0.5) { nk = kfs[i]; break; } }
+      nt = nk ? nk.t : kfs[kfs.length - 1].t;
+    } else {
+      var pk = null;
+      for (var j = kfs.length - 1; j >= 0; j--) { if (kfs[j].t < t - 0.5) { pk = kfs[j]; break; } }
+      nt = pk ? pk.t : kfs[0].t;
+    }
+    playing = false; phase = 'idle';
+    t = clamp(nt, 0, masterDuration());
+    updateUI();
+  }
+
+  /* ============ 事件 ============ */
+  btnPlay.addEventListener('click', function () { if (playing) pause(); else play(); });
+  btnReplay.addEventListener('click', replay);
+  btnPrev.addEventListener('click', function () { stepFrame(-1); });
+  btnNext.addEventListener('click', function () { stepFrame(1); });
+
+  selScheme.addEventListener('change', function () {
+    selected = selScheme.value;
+    rebuild();
+    replay();
+  });
+
+  chkCompare.addEventListener('change', function () {
+    compare = chkCompare.checked;
+    rebuild();
+    replay();
+  });
+
+  function ratioFromEvent(ev) {
+    var r = track.getBoundingClientRect();
+    return clamp((ev.clientX - r.left) / r.width, 0, 1);
+  }
+  track.addEventListener('pointerdown', function (ev) {
+    dragging = true;
+    seek(ratioFromEvent(ev) * masterDuration());
+    if (track.setPointerCapture) { try { track.setPointerCapture(ev.pointerId); } catch (e) {} }
+  });
+  window.addEventListener('pointermove', function (ev) {
+    if (!dragging) return;
+    seek(ratioFromEvent(ev) * masterDuration());
+  });
+  window.addEventListener('pointerup', function () { dragging = false; });
+
+  /* ============ 主循环 ============ */
+  var lastTs = 0;
+  function tick(ts) {
+    if (!lastTs) lastTs = ts;
+    var dt = ts - lastTs;
+    lastTs = ts;
+    if (dt > 100) dt = 100; // 切后台防跳帧
+
+    if (playing && !dragging) {
+      if (phase === 'playing') {
+        t += dt;
+        if (t >= masterDuration()) {
+          t = masterDuration();
+          holdLeft = masterHold();
+          if (holdLeft <= 0) { phase = 'idle'; playing = false; t = 0; }
+          else { phase = 'hold'; }
+        }
+      } else if (phase === 'hold') {
+        holdLeft -= dt;
+        if (holdLeft <= 0) { phase = 'idle'; playing = false; t = 0; }
+      }
+    }
+
+    render();
+    updateUI();
+    requestAnimationFrame(tick);
+  }
+
+  /* ============ 启动 ============ */
+  showSelfCheck();
+  rebuild();
+  replay();
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

@@ -48,7 +48,8 @@ const ids = [
   'wireframePageSel', 'wireframePageImport',
   'cinematic', 'cinematicsPage', 'cinematicBack', 'cinematicName', 'cinematicSelect', 'cinematicNew',
   'cinematicSave', 'cinematicSetAnchor', 'cinematicDelete', 'cinematicPlay', 'cinematicStop',
-  'cinematicDuration', 'cinematicTimeScale', 'cinematicKeyframes', 'cinematicAddKeyframe',
+  'cinematicDuration', 'cinematicTimeScale', 'cinematicFocus', 'cinematicBlackHold',
+  'cinematicDeathFlag', 'cinematicKeyframes', 'cinematicAddKeyframe',
   'cinematicRefs', 'cinematicAddRef', 'cinematicPreviewCanvas'
 ];
 

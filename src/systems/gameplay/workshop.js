@@ -5,7 +5,7 @@
  * 依赖：systems/constants.js、systems/combat/weapons.js、systems/ui/entity-art.js、systems/ui/ui-runtime.js、systems/economy/progression.js、ui-layer.js、state.js
  */
 import Phaser from 'phaser';
-import { FONT_TECH_SC, PLAYER_ART, VIEW_W, VIEW_H, WEAPON_BG_ASSET } from '../constants.js';
+import { FONT_TECH_SC, VIEW_W, VIEW_H, WEAPON_BG_ASSET } from '../constants.js';
 import { WEAPONS } from '../combat/weapons.js';
 import { color, drawHexRingPlayer } from '../ui/entity-art.js';
 import { WEAPON_SLOT_LEVELS } from '../ui/ui-runtime.js';
@@ -268,7 +268,7 @@ export const WorkshopMixin = {
           const artId = source.art || (type && source.arts?.[type]);
           const artDes = artId ? getDesign(artId) : null;
           if (artDes) drawDesignCentered(cardG, artDes, headCx, headCy, headH * 0.52, tNow);
-          else drawHexRingPlayer(cardG, { x: headCx, y: headCy, weapon: { ringColor: wc }, weaponAngle: 0, artScale: 1, moveHexRadius: PLAYER_ART.hexagonRadius, moveLeanX: 0, moveLeanY: 0, scheme: 'hex-ring' }, 1);
+          else drawHexRingPlayer(cardG, { x: headCx, y: headCy, weapon: { ringColor: wc }, weaponAngle: 0, artScale: 1, moveLeanX: 0, moveLeanY: 0, scheme: 'hex-ring' }, 1);
         }
         if (!unlocked) drawLock(cardG, headCx, cardY + headH - 40, 20);
         const splitY = cardY + headH;
@@ -514,8 +514,7 @@ export const WorkshopMixin = {
           x: cx, y: cy,
           weapon: { ringColor },
           scheme: WEAPONS[type]?.scheme || 'hex-ring',
-          weaponAngle: this.workshopSnapAngle || 0, moveLeanX: 0, moveLeanY: 0,
-          moveHexRadius: PLAYER_ART.hexagonRadius
+          weaponAngle: this.workshopSnapAngle || 0, moveLeanX: 0, moveLeanY: 0
         }, bodyScl);
       }
 

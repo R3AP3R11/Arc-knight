@@ -1,6 +1,6 @@
 ---
 name: level-design
-description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌人波次、刷怪点与可达性、宝箱传送门售货机神像等交互物、关卡开场与通关切换流程，以及 data/levels/*.json schema 时读这份。
+description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌人波次、刷怪点与可达性、宝箱传送门售货机（局内商店）神像等交互物、关卡开场与通关切换流程与局内态清零、玩家被击败/死亡运镜失败流程，以及 data/levels/*.json schema 时读这份。触发词：售货机 / 局内商店 / 局内态 / vendors / F 键交互 / 药水掉落 / 掉落规则 / potionId / 运镜 / 过场运镜 / 死亡运镜 / 玩家被击败 / 运镜预览。
 ---
 
 # 关卡设计 开发指南
@@ -42,17 +42,22 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 | --- | --- | --- | --- |
 | `src/systems/level/spawning.js` | 生成点求解 + 可达性校验 + 召唤阵/锁定框特效 | `SpawningMixin`（17 方法） | 398 |
 | `src/systems/level/triggers.js` | 触发器点火 / 事件派发 / 波次定时链 / 门开合（含 `bulletGateWalls` 挡子弹门） | `TriggersMixin`（13 方法，含 `autoRoomGates`） | 300 |
-| `src/systems/level/interactables.js` | 宝箱、传送门、售货机、神像、图标交互；`openIdolOffer` 按 `IDOL_OFFER_COUNT` 取 n 张并预载 icon 画板资产；vendor/icon 首次按 F 置运行时 `guideUsed`（指引停止用） | `InteractablesMixin`（16 方法） | 251 |
-| `src/systems/level/level-flow.js` | `restart` 关卡构建、开场演出、结算、切关淡出、未知房间揭示（`updateRoomReveal`/`roomRevealAlpha`） | `LevelFlowMixin`（11 方法） | 377 |
+| `src/systems/level/interactables.js` | 宝箱、传送门、售货机、神像、图标交互；`openIdolOffer` 按 `IDOL_OFFER_COUNT` 取 n 张并预载 icon 画板资产；vendor/icon 首次按 F 置运行时 `guideUsed`（指引停止用）；`updateVendorInteract` 按 F 经 `this.openVendorShop(nearest)` 打开局内商店页 | `InteractablesMixin`（16 方法） | 251 |
+| `src/systems/level/level-flow.js` | `restart` 关卡构建、开场演出、结算、切关淡出、未知房间揭示（`updateRoomReveal`/`roomRevealAlpha`）、**玩家被击败失败流程 `triggerPlayerDefeat`（幂等，见 §4⑨）**；**`restart` 是局内态唯一清零点**：清零 `runItems`/`runTimedWeapons`/`vendorActive` + `runEffects`/`tempWeaponActive`/`tempWeaponSaved`/`potionWheel`/`potionKeyHold`（:147-153）+ `playerDeathFlow=null`（:100）+ `hideCinematicFade?.()`，`this.player` 加 `itemShields:[]`（:273），末尾 `if(!this.editing) this.preloadRunItemArt()`（:297）+ `potionWheelText?.setVisible(false)`（:298）（旧 `vendorBought` 已删） | `LevelFlowMixin`（12 方法）`triggerPlayerDefeat` | 411 |
 | `src/rooms.js` | 多箱庭房间布局生成 + 通道开口几何计算 + 尺寸常量 | `generateRoomLayout`、`normalizeRoomLayout`、`spawnInRooms`、`clampRoomSize`、`roomPassagesForPoint`（触发器所在房间各通道开口）、`isGateOnPassage`（判定门是否在通道上）、13 个常量 | 213 |
-| `src/state.js` | 关卡 JSON schema 权威定义（所有 `normalize*`） | `normalizeLevel`、`normalizeTrigger`、`normalizeTriggerEvent`（`playCinematic` 含 `focusTarget`）、`normalizeWave`、`normalizeChest`、`normalizePortal`、`normalizeCinematic`（含 `timeScale`）、`EVENT_TYPES`、`MINIMAP_MARKER_TYPES/LABELS`、`ROOM_TYPES/ROOM_TYPE_LABELS`、`normalizeRoomMarker`、`DEFAULT_LEVEL` | 597 |
+| `src/state.js` | 关卡 JSON schema 权威定义（所有 `normalize*`） | `normalizeLevel`（`state.js:586`，含顶层死亡运镜注入）、`normalizeTrigger`、`normalizeTriggerEvent`（`playCinematic` 含 `focusTarget`）、`normalizeWave`、`normalizeChest`、`normalizePortal`、`normalizeCinematic`（含 `timeScale`/`focus`/`blackHoldMs` + 关键帧 `vignette`/`letterbox`/`tint`/`tintColor`/`flash`/`flashColor`/`desat`，见 §3.12）、模块私有 `clampUnit`/`normalizeHexColor`、`EVENT_TYPES`、`DROP_ITEMS`（含 `potion:'药水'`）、`normalizeDropRules`/`normalizeRewardList`（含 `potionId`）、`MINIMAP_MARKER_TYPES/LABELS`、`ROOM_TYPES/ROOM_TYPE_LABELS`、`normalizeRoomMarker`、`DEFAULT_LEVEL`（`state.js:468`，`deathCinematic` 默认 = `DEFAULT_DEATH_CINEMATIC.id`）、**`DEFAULT_DEATH_CINEMATIC`**（`state.js:454`，默认「玩家被击败运镜」，`normalizeLevel` 注入所有关卡，见 §4⑨） | 663 |
+| `src/systems/economy/run-items-runtime.js` | `RunItemsMixin`：局内药水队列 / 限时武器 / 限时加成 的入队、取用、每帧推进（到期回退）、图标预载 | `RunItemsMixin`（14 方法）`updateRunItems` `addRunItem` `preloadRunItemArt` | 210 |
+| `src/systems/economy/run-items.js` | 局内消耗品纯逻辑（药水队列增删合并、上限、限时武器/限时加成数据结构，无 Phaser） | `potionQueueAdd` 等 | 63 |
+| `src/systems/ui/battle-items.js` | `BattleItemsMixin`：战斗内数字键 4/5 交互（4 短按用队列首瓶药水 / 长按 ≥`POTION_HOLD_MS` 呼出轮盘；5 使用或取消限时武器）+ 轮盘/HUD 绘制 | `BattleItemsMixin` `updateBattleItemsInput` | 138 |
+| `src/systems/ui/battle-items-art.js` | 局内消耗品 / 限时武器美术方案（图标）加载与绘制 | — | 205 |
+| `src/systems/economy/drops.js` | 掉落物生成 / 磁吸 / 拾取：`spawnDrops` 规则循环含 `item==='potion'` 分支（`resolveDropPotionId(rule.potionId)` 解析具体药水 id）→ `spawnDropItems(...,potionId)` 挂 id；`updateDrops` 磁吸含 `gold/diamond/potion`；`collectDrop` 的 `type==='potion'` → `this.addRunItem(d.potionId,1)`；掉落物世界图标绘制在 `world-render.js` 的 `this.drops.forEach`（30 世界单位，图标未就绪退化白点并 `resolveArtRef` 补拉） | `spawnDrops` `spawnDropItems` `updateDrops` `collectDrop` | 143 |
 | `src/pathfinding.js` | 网格构建 + A* 寻路（生成点可达性依赖） | `buildGrid`、`findPath`、`nearestWalkable` | 105 |
 | `src/editor/room-panel.js` | 多箱庭房间面板：方格点选、尺寸弹窗、墙体重生成 | `applyRooms`、`renderRoomPanel`、`toggleRoomCell`、`updateRoomNumber` | 124 |
 | `src/editor/trigger-panel.js` | 触发器事件列表编辑器（事件类型/时机/波次表单 + 能量门自动生成开关） | `renderTriggerEvents` | 292 |
 | `src/editor/level-flow.js` | 关卡加载/切换/模式切换/试玩快照恢复 | `selectLevel`、`switchToLevel`、`setMode`、`restoreEditorSnapshot`、`redraw`、`fadeAndSwitch`、`startGame` | 222 |
 | `src/systems/editor/editor-input.js` | 放置工具（trigger/gate/chest/portal/spawnzone…）建实体 | `EditorInputMixin`：`pointerDown`(12)、`pointerMove`(191) | 259 |
 | `src/systems/constants.js` | `CELL`、`CHEST_*_FX_MS`、`GATE_SPAWN_MS`、`ENEMY_BEHAVIOR` | 见第 5 章 | 83 |
-| `src/game-scene.js` | 场景装配：19 个 Mixin `Object.assign`(559)、`update` 主循环(139) | `createGameScene` | 569 |
+| `src/game-scene.js` | 场景装配：25 个 Mixin `Object.assign`(:902)、`update` 主循环；含 `InnerShopMixin`（紧跟 `ProgressionMixin`），`updateVendorInteract(dt)` → `updateVendorSlot()` → `updateRunItems(dt)` → `updateBattleItemsInput(dt)`；`addKeys` 注册 `NUMPAD4/NUMPAD5/DIGIT4/DIGIT5`（小键盘与主键盘数字键都响应） | `createGameScene` | 912 |
 | `src/api.js` | 关卡读写 HTTP（`/api/levels/:id`） | `loadLevel`、`saveDraft`(=`saveFormal`) | 40 |
 | `data/levels/*.json` | 16 个关卡数据文件（含 `login`、`newbee`、`knight-home`） | — | — |
 
@@ -70,14 +75,18 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 | 改宝箱/传送门出现时机 | `state.js:149/163` 的 `trigger` 字段 + `level-flow.js:119/125`（`spawned` 初值）+ `triggers.js:183` `spawnChestsForTrigger` |
 | 改门（gate）开合动画时长 | `constants.js:79` `GATE_SPAWN_MS` + `game-scene.js:150-159` 推进段 |
 | 改房间尺寸/道路范围上下限 | `src/rooms.js:2-16` 常量 + `editor/bindings.js:200-216` 面板绑定 |
-| 改关卡开场演出（镜头拉近时长） | `level-flow.js:35` `startLevelIntro`、`level-flow.js:50` `updateLevelIntro` |
+| 改关卡开场演出（黑幕渐显时长） | `level-flow.js:38` `startLevelIntro`、`level-flow.js:50` `updateLevelIntro` |
+| 改玩家被击败 / 死亡运镜失败流程 | `level-flow.js:352 triggerPlayerDefeat`（幂等）+ `state.js` 的 **`DEFAULT_DEATH_CINEMATIC`（默认死亡运镜）/ `DEFAULT_LEVEL.deathCinematic` / `normalizeLevel` 注入（所有关卡默认生效，关卡自带同 id 的运镜则以关卡为准）** + §4⑨；运镜播放器/编辑器落点在 engine-editor skill，三个失败入口在 combat skill |
 | 改切关淡入淡出时长 | `level-flow.js:22` `SWITCH_FADE_MS`（场景内）/ `editor/level-flow.js:113` `FADE_MS`（DOM 黑屏） |
 | 新增一个关卡文件 | `data/levels/<id>.json` + 编辑器「新建关卡」按钮（`editor/bindings.js:252`） |
+| 改售货机 F 键交互 / 局内商店落点 | `interactables.js:225 updateVendorInteract`（按 F → `this.openVendorShop(nearest)`）；商品池/老虎机种类由表格驱动（`tools/export-tables.mjs` → `data/inner-shop.json`），页面绘制与交互见 ui-interaction skill（`screens.js:drawVendorShop` / `economy/inner-shop-runtime.js`，详见 economy-numbers skill） |
+| 加药水掉落 / 宝箱奖药水（potionId） | `state.js:37 DROP_ITEMS`(potion) + `normalizeDropRules`(121)/`normalizeRewardList`(182) 的 `potionId`；编辑器面板在 engine-editor skill（`drop-rules-panel.js`/`entity-properties.js`）；运行时消费 `economy/drops.js:spawnDrops`。数据契约见 §3.11 |
+| 改局内药水/限时武器按键或轮盘 | `ui/battle-items.js:updateBattleItemsInput`（数字键 4/5）+ `game-scene.js:addKeys` 键码注册 + `ui/battle-items-art.js` 绘制；局内态字段与清零见 §3.10 |
 | 通关后解锁/结算规则 | `level-flow.js:269` `settleVictory` |
 
 ## 3. 核心数据结构
 
-`data/levels/<id>.json` 是唯一关卡数据源，读入后必过 `normalizeLevel`（`src/state.js:438`）；**归一化后的结构才是运行时契约**，缺字段会被补默认值，非法值会被 clamp。默认骨架见 `DEFAULT_LEVEL`（`src/state.js:323`）。
+`data/levels/<id>.json` 是唯一关卡数据源，读入后必过 `normalizeLevel`（`src/state.js:586`）；**归一化后的结构才是运行时契约**，缺字段会被补默认值，非法值会被 clamp。默认骨架见 `DEFAULT_LEVEL`（`src/state.js:468`）。
 
 ### 3.1 level 根字段
 
@@ -89,10 +98,12 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 | `ui` | `'battle' \| 'login' \| 'interface'` | `'battle'` | 关卡 UI 类型；`login` 判定为菜单关（`isMenuLevel`），镜头固定全图、无开场演出 | 透传 |
 | `world` | `{width,height}` | 各 `max(600, v)`，默认 1920×1080 | 世界尺寸；多箱庭时由 `generateRoomLayout` 覆写 | `state.js:444` |
 | `camera` | `{width,mode}` | `width max(300,v)` 默认 1920；`mode` 仅 `'center'`/`'deadzone'`（默认 deadzone） | 可见宽度决定缩放；`center` 始终居中玩家 | `state.js:448` |
+| `cinematics[]` | 数组 | `[]`（缺省时 `normalizeLevel` 注入默认死亡运镜） | 运镜（过场动画）定义 `CinematicDef`，见 §3.12；**关卡未自带同 id 时，`normalizeLevel` 会补入一份 `DEFAULT_DEATH_CINEMATIC` 归一化副本**（关卡自带同 id 则以关卡数据为准） | `state.js:617` |
+| `deathCinematic` | string | `DEFAULT_DEATH_CINEMATIC.id`（`'cine-1789288387998'`） | 玩家被击败时播放的运镜 id（对应 `cinematics[].id`）。**`normalizeLevel` 把空串/缺字段回落成默认死亡运镜 → 全部 16 个关卡 JSON 一字未改也默认都有玩家被击败运镜；副作用：无法用空串关闭（要关需另加显式开关字段）**，见 §4⑨；`normalizeLevel` 必须显式回传，否则落盘→读回即丢 | `state.js:626` |
 | `walls[]` | 数组 | 见 3.2 | 静态墙体（同时喂寻路网格） | `state.js:452` |
 | `enemies[]` | 数组 | 默认 3 只示例 | 预置敌人（进关即存在），`normalizeEnemy`(59) | `state.js:465` |
 | `spawn` | 对象 | 见 3.3 | 玩家出生点 + 局内初始参数 | `state.js:474` |
-| `dropRules` | 对象 | `{}` | 按敌人类型的掉落规则（详见 economy-numbers skill） | `state.js:475` |
+| `dropRules` | 对象 | `{}` | 按敌人类型的掉落规则：`dropRules[敌人类型] = [{item,count,chance,potionId?}]`，`item`∈ gold/exp/charge/diamond/**potion**（potion 见 §3.11；数值详见 economy-numbers skill） | `state.js:579` |
 | `triggers[]` | 数组 | `[]` | 触发器，见 3.4 | `state.js:466` |
 | `crates[]` | 数组 | `[]` | 木箱：固定 `w/h=50`、`hp=1` | `normalizeCrate`(115) |
 | `barrels[]` | 数组 | `[]` | 油桶：`r=30`、`hp=1`、`explodeRadius max(30,v)` 默认 150 | `normalizeBarrel`(126) |
@@ -228,15 +239,27 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 
 | 实体 | 关键字段（默认值） | 交互 | normalize |
 | --- | --- | --- | --- |
-| `chests[]` | `trigger`：`'start'`（进关即有）/`'trigger'`；`triggerId`；`openRadius max(20,v)=50`；`rewards[]`（`item`∈gold/exp/charge/diamond、`count`、`chance` 0-100，`count<=0` 会被过滤）；指引字段组 | 走近 `openRadius` 内**自动**开箱（`updateChests` 78） | `state.js:167` |
+| `chests[]` | `trigger`：`'start'`（进关即有）/`'trigger'`；`triggerId`；`openRadius max(20,v)=50`；`rewards[]`（`item`∈gold/exp/charge/diamond/**potion**、`count`、`chance` 0-100，`count<=0` 会被过滤；`item==='potion'` 时附 `potionId`，见 §3.11）；指引字段组 | 走近 `openRadius` 内**自动**开箱（`updateChests` 78） | `state.js:217` |
 | `portals[]` | `w max(30,v)=120`、`h max(20,v)=60`、`rotation=0`、`trigger`/`triggerId`、`interactRadius max(40,v)=90`、`visible`；指引字段组 | 按 F 撤离 → `usePortal` → `state='end'` + `settleVictory` | `state.js:182` |
-| `vendors[]` | `w=130`、`h=96`、`interactRadius max(30,v)=120`、`visible`；指引字段组 | 按 F 打开 `vendor` 菜单页（局内商店） | `state.js:200` |
+| `vendors[]` | `w=130`、`h=96`、`interactRadius max(30,v)=120`、`visible`；指引字段组（**商品与老虎机结果不在此包配**，由策划表控制，见 §3.6.1） | 按 F 经 `this.openVendorShop(nearest)` 打开 `vendor` 局内商店页 | `state.js:200` |
 | `idols[]` | `w=h=110`、`interactRadius max(40,v)=130`、`visible`；指引字段组 | 按 F 弹 3 张祝福卡，选 1 生效并 `used=true`（不可再用）；**点空白关闭不消耗**，可再交互 | `state.js:213` |
 | `icons[]` | `w=h=64`、`src`、`interactRadius=120`、`tipText='按 F 交互'`、`event`∈`workshop`/`weapon`/`battle`（默认 workshop）；指引字段组 | 按 F 打开对应菜单页：`weapon`→武器商店、`battle`→关卡选择、其他→工坊 | `state.js:226` |
 
 交互半径实际生效值 = `max(interactRadius, 半对角线 + 玩家半径 + 40)`（`interactables.js:115/141/174/233`），所以把实体拉很大时半径会自动跟着放大。
 
 **指引字段组**（5 类交互实体通用，`state.js:157 guideFields()` 平铺展开）：`guide`（bool，默认 false，是否游戏内指引）、`guideRange`（`max(100,v)=600`，实体在视窗外且距玩家 ≤ 该值才显示指引箭头）、`guideIcon`（动态资产名/设计稿 id，空=实体名称文字占位）。F 键交互实体（portals/vendors/idols/icons，**不含 chests**）另有 `guideStopAfterUse`（bool，默认 **true**）：交互后（chest.opened / portal.used / idol.used / vendor·icon 首次按 F 置运行时 `guideUsed`）停止指引；配 false 则交互后继续指引。渲染与淡入淡出见 ui-interaction skill（`world-overlay.js:updateGuideArrows/drawGuideArrows`）。
+
+#### 3.6.1 vendors 运行时扩展字段（JSON 里不存在；`restart` 生成副本时 / 首次打开始写）
+
+售货机的 `stock`/`bought`/`slot` 是**运行时**字段，不写进 `data/levels/*.json`，也不落到 `ctx.state.level.vendors`：
+
+| 字段 | 类型 | 何时写 | 说明 |
+| --- | --- | --- | --- |
+| `stock` | `[{kind,id,name,desc,cost,artType,artName,durationSec?}]` / `undefined` | `openVendorShop` → `ensureVendorStock` → `setupVendorStock` 首次抽取 | 该实体**随机一次并持久**的 4 个商品（池 7 选 4 不重复）；同一实体重复打开不变，不同实体互相独立 |
+| `bought` | `Set<index>` | 购买时 `add(index)` | 每商品限购 1 次 |
+| `slot` | `{icons,prize,rolling,rollAt,settleAt,prizeAt,granted}` / `null` | `rollVendorSlot` 抽取 | 老虎机状态；每实体独立、不限次数 |
+
+`this.vendors` 是 `(l.vendors||[]).map(v => ({...v}))` 的**副本**（`level-flow.js:144`），故上述字段随 `restart` 天然按局清零；**不要把状态写回 `ctx.state.level.vendors` 的原始实体**（编辑器会看到脏数据，见第 7 章）。
 
 ### 3.7 gates[] / spawnZones[]
 
@@ -290,11 +313,61 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 | `Level1-Scene1.json` | 标准战斗关 | 7140×3780、`roomLayout` 6×4 多箱庭、36 墙、3 触发器、3 生成区域、4 门、5 宝箱、2 传送门、1 神像、15 木箱、4 油桶、3 装饰图 |
 | `level-1..5`、`Level1-3 × Scene1-3` | 战斗关 | 结构同上 |
 
+### 3.10 局内态运行时字段（挂场景对象、仅当局有效、随关卡重开清零、绝不写存档）
+
+`state.player` **就是存档源**（`progression.js:persistSave` → `ctx.onPlayerSave`），所以「仅本局有效」的字段一律挂**场景对象**（`this.xxx`，见 §3.6.1 售货机同源），由 `level-flow.js:restart`（:147-153）统一清零：
+
+| 字段 | 类型 / 上限 | 含义 |
+| --- | --- | --- |
+| `runItems` | `[{id,count}]`，上限 4 | 局内药水队列（数字键 4 使用 / 长按呼轮盘） |
+| `runTimedWeapons` | `[{id,name,durationSec,remainSec}]`，上限 1 | 局内限时武器（数字键 5 使用 / 取消） |
+| `runEffects` | `[{id,name,artType,artName,effect:{type,value,sec},remainSec,totalSec}]` | 限时加成（生效中，到期自动回退） |
+| `tempWeaponActive` / `tempWeaponSaved` | bool / 对象\|null | 临时武器是否使用中 / 启用时暂存的主武器态 |
+| `potionWheel` / `potionKeyHold` | 对象\|null | 药水选择轮盘状态 / 数字键 4 按住状态 |
+| `potionWheelText` | Phaser.Text\|null | 轮盘名称文本（独立 Phaser 对象，重开需额外 `setVisible(false)`） |
+| `player.itemShields` | `[{hp,maxHp}]` | 局内即时护盾，按顺序吸收伤害（挂 `this.player`，**非** `state.player`） |
+
+### 3.11 「药水」掉落种类（关卡级掉落规则 + 宝箱奖励，`potionId`）
+
+- **关卡级掉落规则**：`state.level.dropRules[敌人类型] = [{ item:'potion', count, chance, potionId }]`；`potionId` 留空 = 随机药水。
+- **宝箱奖励**：`chest.rewards = [{ item:'potion', count, chance, potionId }]`。
+- **归一化**：`state.js:normalizeDropRules`(121) 与 `state.js:normalizeRewardList`(182) 共用白名单 `DROP_ITEMS`（`state.js:37`，含 `potion:'药水'`）；`item !== 'potion'` 时把 `potionId` 归空串。
+- **敌人个体 `e.drops = {gold,exp,diamond}` 不支持药水**：只有「关卡级掉落规则」与「宝箱奖励」两个面板能配药水。
+- **运行时消费**：`drops.js:spawnDrops` → `resolveDropPotionId(rule.potionId)` 解析具体药水 id → `spawnDropItems(...,potionId)`；拾取走 `collectDrop` 的 `type==='potion'` → `addRunItem`。
+
+### 3.12 运镜定义 `cinematics[]`（`normalizeCinematic` @ `state.js:398`）
+
+```json
+{ "id": "cine-1789288387998", "name": "玩家被击败运镜", "durationMs": 3400,
+  "timeScale": 1,        // clip 级慢动作（0.05~1）
+  "focus": "player",     // 'none' | 'player' | 'boss'（默认 'none'）
+  "blackHoldMs": 500,    // 结算黑幕保持时长，整数 0~3000（默认 0）
+  "keyframes": [ { "t": 0, "zoom": 1, "panX": 0, "panY": 0, "rotation": 0, "alpha": 0, "ease": "linear",
+                   "timeScale": 1, "vignette": 0, "letterbox": 0, "tint": 0, "tintColor": "#1a0a0a",
+                   "flash": 0, "flashColor": "#ffffff", "desat": 0 } ] }
+```
+
+| 字段 | 默认 / 范围 | 说明 |
+| --- | --- | --- |
+| `durationMs` | 整数 | 运镜总时长 ms |
+| `timeScale` | 0.05~1（clip 级） | 运镜慢动作倍率（关键帧 `timeScale` 缺省继承它） |
+| `focus` | `'none'`/`'player'`/`'boss'`（默认 none） | 焦点模式；`player`/`boss` 时 pan 被焦点目标覆盖、运行时每帧跟随 |
+| `blackHoldMs` | 整数 0~3000（默认 0） | 死亡流程结算黑幕保持时长，见 §4⑨ |
+| 关键帧 `timeScale` | 0.05~1（缺省继承 clip `timeScale`） | 该段世界 dt 缩放 |
+| 关键帧 `vignette`/`letterbox`/`tint`/`flash`/`desat` | 0~1（默认 0） | 叠层强度（暗角/黑边/色调/闪光/去饱和） |
+| 关键帧 `tintColor`/`flashColor` | `'#1a0a0a'` / `'#ffffff'` | 接受 `#rgb`/`#rrggbb` → 规整 `#rrggbb` 小写（`normalizeHexColor`）；**不插值，取所在段起点帧颜色** |
+| 关键帧 `panX`/`panY` | 0 | **视口左上角世界坐标**（与运行时相机 `scrollX` 同源，见 engine-editor §7 坑 31） |
+| 关键帧 `ease` | `'linear'` | 12 种之一（`linear/sineIn/sineOut/sineInOut/quadIn/quadOut/quadInOut/cubicIn/cubicOut/cubicInOut/easeOut/easeInOut`；`easeOut`/`easeInOut`=Sine） |
+
+- 模块私有工具 `clampUnit(value, fallback)`（0~1 钳制）、`normalizeHexColor(value, fallback)`（颜色规整），**不导出**，只在 `normalizeCinematic` 内用。
+- 编辑器（`src/editor/cinematics-board.js`）与播放器（`src/systems/editor/editor-camera.js`）的字段一致性要求见 engine-editor skill；`docs/cinematic-preview.html` 是离线预览页。
+- **默认「玩家被击败运镜」**：`state.js:DEFAULT_DEATH_CINEMATIC`（`state.js:454`，逐字搬运 `data/levels/Level1-Scene1.json` 的 `cine-1789288387998`：3 关键帧 t0 zoom1 alpha0 / t2000 zoom5 pan40,40 rot-16 / t4450 zoom**1000** alpha1，`durationMs 4450`、`timeScale 0.2`、`focus:'none'`、`blackHoldMs 0`）。`normalizeLevel`（`state.js:586`）取 `deathId = data.deathCinematic || DEFAULT_DEATH_CINEMATIC.id`，并在 `cinematics` 的 IIFE 里：若列表无同 id 则 push 一份 `normalizeCinematic(clone(DEFAULT_DEATH_CINEMATIC))`，最后 `deathCinematic: deathId`。**→ 所有关卡（16 个 JSON 一字未改）经 `normalizeLevel` 后默认都拥有玩家被击败运镜；关卡自带同 id 的运镜（如 `level-1.json` 的 4 帧变体 t4000 zoom10 / t4450 zoom100）以关卡为准**。副作用：`deathCinematic` 存空串会被回落成默认值，即**无法用空串关闭死亡运镜**（要真正关闭需另加显式开关字段）。
+
 ## 4. 关键流程
 
 **① 关卡加载 → normalize → 场景构建 → 开场演出**
 
-`editor/level-flow.js:176 selectLevel` → `api.js:19 loadLevel`（GET `/api/levels/:id`）→ `state.js:438 normalizeLevel` 写 `state.level` → `editor/level-flow.js:137 setMode` 销毁旧 Phaser.Game → `startGame`(73) 新建场景 → `game-scene.js:40 create`（贴图预载 + 输入注册）→ `game-scene.js:99 this.restart()` → `level/level-flow.js:88 restart`：清空所有运行时数组、重置 `triggered`/`triggerState`/`waveEvents` → 从 `l.crates/barrels/chests/portals/vendors/idols/icons/gates` 浅拷贝出运行时副本（宝箱/传送门 `spawned = trigger==='start'`）→ `pathfinding.js:1 buildGrid`（墙 + 木箱 + 油桶，`CELL=30`、`inflate=PATH_INFLATE(24)`）→ 组装 `this.player`（武器/弹药/充能/装备/存档字段）→ `l.enemies.map(initEnemy)` → `applyPlayerBounds`(28) → `setupPlayCamera` → 非菜单关 `startLevelIntro`(35)：`isBattleLevel()` 时 3.5s 镜头从 `1920/340` 缩放到 `playZoom()`（`pow(p,2.4)` 缓动），否则 1.2s 空过场，期间 `state='transition'` → `updateLevelIntro`(50) 结束置 `state='playing'`。
+`editor/level-flow.js:176 selectLevel` → `api.js:19 loadLevel`（GET `/api/levels/:id`）→ `state.js:586 normalizeLevel` 写 `state.level`（含默认死亡运镜注入）→ `editor/level-flow.js:137 setMode` 销毁旧 Phaser.Game → `startGame`(73) 新建场景 → `game-scene.js:40 create`（贴图预载 + 输入注册）→ `game-scene.js:99 this.restart()` → `level/level-flow.js:88 restart`：清空所有运行时数组、重置 `triggered`/`triggerState`/`waveEvents` → 从 `l.crates/barrels/chests/portals/vendors/idols/icons/gates` 浅拷贝出运行时副本（宝箱/传送门 `spawned = trigger==='start'`；`this.vendors` 为副本，其 `stock`/`bought`/`slot` 随之按局清零）→ 清零局内态 `this.runItems=[]`、`this.runTimedWeapons=[]`、`this.vendorActive=null`（`level-flow.js:147-149`）→ `pathfinding.js:1 buildGrid`（墙 + 木箱 + 油桶，`CELL=30`、`inflate=PATH_INFLATE(24)`）→ 组装 `this.player`（武器/弹药/充能/装备/存档字段）→ `l.enemies.map(initEnemy)` → `applyPlayerBounds`(28) → `setupPlayCamera` → 非菜单关 `startLevelIntro`(38)：只做黑幕渐显、无镜头拉近（战斗关 3.5s / 其他 1.2s），期间 `state='transition'` → `updateLevelIntro`(50) 结束置 `state='playing'`。
 
 **② 玩家进入触发器 → 事件派发 → 波次生成 → 敌人清空 → 异步事件**
 
@@ -308,7 +381,7 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 
 - 宝箱：`trigger:'start'` 在 `restart` 即 `spawned=true`；`trigger:'trigger'` 等 `checkAsyncTriggerEvents` → `interactables.js:33 spawnChestsForTrigger` → `spawnChest`(26) 置 `fx={t:CHEST_SPAWN_FX_MS(260),kind:'spawn'}` → `updateChests`(76) 每帧递减特效并检测玩家距离 ≤ `openRadius` → `openChest`(66)：`opened=true`、`fx=open(320ms)`、按 `rewards[].chance` 掉落 `spawnDropItems`（economy 侧）。
 - 传送门：同样两种出现方式 → `updatePortalInteract`(161) 只认 `spawned && !used && visible!==false`，靠近记 `portalNearest` 并渐显提示（`portalTipT += dt/180`）→ 按 F → `usePortal`(59)：`used=true`、`state='end'`、`settleVictory()`。
-- 售货机：`updateVendorInteract`(220) → 按 F → `openMenuScreen('vendor')`（局内商店，数值见 economy-numbers skill）。
+- 售货机：`updateVendorInteract`(225) → 靠近记 `vendorNearest` 渐显提示 → 按 F 置 `guideUsed` + `this.openVendorShop(nearest)`（记 `vendorActive`、抽/持久 `vendor.stock`、开 `vendor` 局内商店页）；页面绘制/购买/抽奖链路见 ui-interaction skill §4⑦，数值见 economy-numbers skill。
 - 神像：`updateIdolInteract`(102) → 按 F → `openIdolOffer`(188)：洗牌 `IDOL_BUFFS` 按 `IDOL_OFFER_COUNT` 取 n 张（配置 `data/ui/idol-buffs.json` 的 `offerCount`），`state` 置 `paused` 并存 `prevState` → `chooseIdolBuff`(207) 调 `buff.apply(this)` 改 `player.combat`，`idol.used=true`，`closeIdolOffer`(200) 恢复 `playing`；`onUIPointer` 未命中卡片时置 `idolOffer.closing=true` 走离场滑出后 `closeIdolOffer`（点空白关闭，**不设 `used`**，可再次按 F 重新随机）。
 - 图标：`updateIconInteract`(128) → 按 F → `triggerIconEvent`(153) 按 `icon.event` 打开 `weapon`/`levelSelect`/`workshop` 页。
 
@@ -325,6 +398,23 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 **⑦ 多箱庭房间改动链路**
 
 房间面板点格 → `room-panel.js:87 toggleRoomCell`（新格必须与已选格四邻相邻，否则报「新方格必须与已选方格相邻」）→ `applyRooms`(18)：`generateRoomLayout` → 保留非 `room` 墙 + 新生成墙、覆写 `l.world`、若出生点不在任何房间内（`spawnInRooms`）则移到首个房间中心 → `resetEditorCamera` → `redraw` 落盘。
+
+**⑧ 局内药水 / 限时武器链路（战斗内数字键 4/5 + 掉落→拾取）**
+
+- **按键**：`game-scene.js:addKeys` 注册 `NUMPAD4/NUMPAD5/DIGIT4/DIGIT5` → `ui/battle-items.js:updateBattleItemsInput(dt)`（每帧）：数字键 4 **短按**使用 `runItems` 队列首瓶药水、**长按 ≥ `POTION_HOLD_MS`(160ms)** 呼出药水选择轮盘（松开按悬停扇区使用）；数字键 5 使用或取消 `runTimedWeapons`。屏蔽条件：编辑态 / 菜单页 / 设置蒙层 / `state!=='playing'` / 菜单关 / 骑士之家。
+- **推进**：`economy/run-items-runtime.js:updateRunItems(dt)` 递减 `runEffects` 与 `runTimedWeapons[0].remainSec`，到期清项 / `runTimedWeapons=[]` 并恢复主武器。
+- **掉落→拾取**：`economy/drops.js:spawnDrops`（含 `item==='potion'` 分支）→ 世界图标绘制在 `ui/world-render.js` 的 `this.drops.forEach` → `updateDrops` 磁吸（`gold/diamond/potion`）→ `collectDrop` 的 `type==='potion'` → `this.addRunItem(d.potionId, 1)`。
+- **调度位置**：`game-scene.js:update()` 里 `updateVendorSlot()`（售货机页面推进）之后依次 `updateRunItems(dt)`、`updateBattleItemsInput(dt)`，保证售货机当帧购买的药水当帧进队列；限时加成本帧到期则晚一帧回退，可忽略。
+
+**⑨ 玩家被击败 → 死亡运镜 → 结算页（`triggerPlayerDefeat`）**
+
+三个失败入口（`combat/player-combat.js:damagePlayer` 血量归零、`combat/boss25t5.js:boss25t5KillPlayer`、`game-scene.js` 母舰贴身秒杀分支）统一调 `level-flow.js:352 triggerPlayerDefeat()`（**幂等**：`this.editing` / 已存在 `this.playerDeathFlow` → return；**`state.level.deathCinematic` 默认 = `DEFAULT_DEATH_CINEMATIC.id`，故所有关卡默认都播死亡运镜**）：
+
+- `ctx.state.mode` 非 `play|trial` → 直接 `state='fail'` + `syncUIState()`（编辑器不播运镜）。
+- `ctx.state.level.deathCinematic` 找不到对应 clip → 同上 fallback。
+- 否则 `playerDeathFlow={phase:'cinematic'}` → `playCutscene(clip, { focusTarget: clip.focus || 'player', holdBlack:true, onComplete })` → `phase='hold'` → `time.delayedCall(clip.blackHoldMs ?? 500, …)` → `playerDeathFlow=null; state='fail'; syncUIState(); draw(); hideCinematicFade()`（**先画结算页再撤黑幕**，避免闪帧）。能承受 `playCutscene` 的**同步** `onComplete`（clip 无关键帧时）。
+
+`game-scene.js`：`create()` 初始化 `this.playerDeathFlow=null`；`update()` 里 `deathSim = state==='fail' && !!playerDeathFlow`、`inputLocked = deathSim || !!playerDeathFlow || (cinematicInputLocked?.() ?? false)`；早退条件改 `if (state !== 'playing' && !deathSim)`（让世界继续按慢放 dt 跑）；gate 掉方向键/开火/护盾/`toggleGrowth`/各 `updateXxxInteract`/`checkAsyncTriggerEvents`。`ui-runtime.js:drawUI` 新增 `else if (this.playerDeathFlow) hideHudOverlay()` 分支（**放在 `state==='end'||'fail'` 结算分支之前**），`activeGraph` 计算也排除它。`enemy-ai.js:defeatEnemy` 的 BOSS 击破运镜 `if (!this.playerDeathFlow)` 抑制（否则顶掉死亡运镜 → `playerDeathFlow` 卡死，见 engine-editor 坑 49）。`restart()` 清 `playerDeathFlow=null` + `hideCinematicFade?.()`。
 
 ## 5. 关键常量与数值
 
@@ -353,12 +443,16 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 | `GATE_SPAWN_MS` | `src/systems/constants.js:79` | 500 | 门开/关动画时长 | 封路生效的过渡时间 |
 | `SWITCH_FADE_MS` | `src/systems/level/level-flow.js:22` | 500 | 场景内切关淡出/淡入时长 | 切关黑屏节奏（单侧 0.5s） |
 | `FADE_MS` | `src/editor/level-flow.js:113` | 350 | DOM 黑屏切换时长 | 菜单/存档跳转的黑屏 |
-| 开场演出时长 | `src/systems/level/level-flow.js:38` | 战斗关 3.5s / 其他 1.2s | 开场镜头推进时间 | 进关等待感；`state` 期间不可操作 |
-| 开场初始 zoom | `src/systems/level/level-flow.js:40` | `1920/340` | 起始视野宽约 340 px | 拉近幅度 |
+| 开场演出时长 | `src/systems/level/level-flow.js:40` | 战斗关 3.5s / 其他 1.2s | 开场黑幕渐显时长（无镜头拉近） | 进关等待感；`state` 期间不可操作 |
+| `deathCinematic` 默认 / `blackHoldMs` 默认 | `state.js:485` / `state.js:431` | `'cine-1789288387998'`（= `DEFAULT_DEATH_CINEMATIC.id`）/ `0`（clamp 0~3000） | 死亡运镜 id / 结算黑幕保持时长 | 见 §4⑨（默认值由 `normalizeLevel` 注入，见 §3.12） |
+| 运镜关键帧叠层默认 | `state.js:419-425` | `vignette`/`letterbox`/`tint`/`flash`/`desat` 各 0；`tintColor '#1a0a0a'`、`flashColor '#ffffff'` | 叠层强度/配色默认 | 见 §3.12 |
 | `applyPlayerBounds` 的 `pad` | `src/systems/level/level-flow.js:31` | 2000 | 相机边界外扩 | 出生点在世界外时相机不抖 |
 | `LEVEL_HP_BONUS` | `src/systems/level/level-flow.js:23` | 10 | 编辑器预览态每级血量加成 | 仅编辑器/预览，不影响正式档 |
 | `HUD_IDLE_MS` | `src/systems/ui/hud.js:18` | 3000 | HUD 常态脉冲周期，`restart` 里重置 | 详见 ui skill |
 | `roomComplete` 自动回退 | `src/systems/level/triggers.js:48` | 1500 ms | secure 态自动回 explore 的延迟 | 房间清空后的 HUD 表现 |
+| `POTION_HOLD_MS` | `src/systems/ui/battle-items.js:21` | 160 | 数字键 4 长按阈值 ms | 短按=直接用首瓶药水；长按 ≥160ms=呼出选择轮盘 |
+| 药水队列上限 / 限时武器上限 | `src/systems/economy/run-items.js` | 4 / 1 | `runItems` 最多 4 瓶、`runTimedWeapons` 最多 1 把 | 超出上限时丢弃/合并；影响 HUD 槽位 |
+| 药水效果类型 | `策划文档/server/消耗品.xlsx` → `data/inner-shop.json` | `heal`/`attackPower`/`shield`/`moveSpeed` | 表格驱动（改表 → `node tools/export-tables.mjs`），代码只认这 4 种 type | 新增效果类型要加代码分支（见 engine-editor 导表章） |
 
 ## 6. 扩展指南
 
@@ -377,7 +471,7 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 ### 6.2 新增一种交互物（例：`shrines`）
 
 1. `src/state.js` 加 `normalizeShrine(v, i)`（照 `normalizeIdol`(192) 写：id 兜底、坐标、`w/h` 下限、`interactRadius`、`visible`）。
-2. `src/state.js:323 DEFAULT_LEVEL` 加 `shrines: []`，`normalizeLevel`(438) 加 `shrines: (Array.isArray(data.shrines) ? data.shrines : []).map(normalizeShrine)`。
+2. `src/state.js:468 DEFAULT_LEVEL` 加 `shrines: []`，`normalizeLevel`(586) 加 `shrines: (Array.isArray(data.shrines) ? data.shrines : []).map(normalizeShrine)`。
 3. `src/systems/level/level-flow.js:132` 附近的 `restart` 里加运行时副本：`this.shrines = (l.shrines || []).map(v => ({ ...v }))` + `this.shrineNearest = null; this.shrineTipT = 0;`（有一次性语义就加 `used: false`）。
 4. `src/systems/level/interactables.js` 加 `updateShrineInteract(dt)`（照 `updateIdolInteract`(102)：`editing || state!=='playing'` 先清状态；`reach = max(interactRadius, halfDiag + p.r + 40)`；`Phaser.Input.Keyboard.JustDown(this.keys.F)` 判 F）。
 5. `src/game-scene.js:486-490` 注册每帧调用。
@@ -417,6 +511,30 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 4. 改「等待清理」判定口径：`triggers.js:137 enemiesCleared` 目前是「场上任何存活敌人」，若要改成「仅本触发器召唤的敌人」，加 `e.triggerId === t.id` 条件——注意这会改变多触发器叠加时的节奏。
 5. 验证：用 `data/levels/Level1-Scene1.json`（3 触发器 × 多波、含 `inscreen`+`offscreen`+`surround` 三种 mode）复现。
 
+### 6.5 在关卡里放一台售货机（局内商店）
+
+1. 编辑器选「售货机」工具 → 画布点击即建实体（`editor-input.js:162` 默认 `{w:130,h:96,interactRadius:120,visible:true}`）。
+2. 属性面板（`editor/entity-properties.js:314` 的 vendors 分支）可配字段：`x` / `y` / `w` / `h` / `interactRadius`（交互半径）/ `visible` / 指引字段组（`guide`/`guideRange`/`guideIcon`/`guideStopAfterUse`，由 `guideRows(entity, true)` 展开）。
+3. **商品池、老虎机种类、抽奖价/金币奖、图标全部由策划表控制，编辑器不需要也不应加任何字段**（改 `策划文档/server/*.xlsx` → `node tools/export-tables.mjs` → `data/inner-shop.json`，无需改代码；见 ui-interaction skill §6F、economy-numbers skill）。
+4. 交互半径实际生效值 = `max(interactRadius, 半对角线 + 玩家半径 + 40)`（`interactables.js:238`），把实体拉大时半径自动放大。
+5. 验证：试玩 → 走近按 F 打开商店页；退出试玩确认编辑器实体数据未变（`stock`/`bought`/`slot` 只写在运行期副本上）。
+
+### 6.6 在关卡里配药水掉落 / 宝箱奖药水
+
+1. **关卡级掉落规则**：编辑器「掉落规则」面板（`editor/drop-rules-panel.js`）按敌人类型选「药水」后，会在「数量」前插入**药水下拉**（`data-drop-field="potionId"`，选项来自 `getPotionList()`，空值显示「（随机药水）」）。
+2. **宝箱奖励**：属性面板宝箱分支的奖励子编辑器同样加药水下拉（`data-reward-k="potionId"`）。
+3. 药水 id 来自策划表：`策划文档/server/消耗品.xlsx` → `node tools/export-tables.mjs` → `data/inner-shop.json`（面板选项由运行时 `/api/inner-shop` 提供，首次打开若数据未加载会自动补拉并重渲染，详见 engine-editor skill 坑）。
+4. **不支持**敌人个体 `e.drops`（只有 gold/exp/diamond）——要掉药水只能用上面两个面板。
+5. 验证：给某敌人类型配 `potion` 规则 → 试玩击杀看是否掉药水图标 → 拾取后队列 +1 → 短按 4 用首瓶、长按 4 呼轮盘选瓶。
+
+### 6.7 在关卡里配「玩家被击败运镜」（死亡运镜）
+
+1. **配运镜**：编辑器「运镜」页（`editor/cinematics-board.js`，engine-editor skill）新建/编辑一条 `CinematicDef`；关键帧可加 8 个新字段（`timeScale`/`vignette`/`letterbox`/`tint`/`tintColor`/`flash`/`flashColor`/`desat`），并把 `focus` 设成 `player`（镜头跟玩家）、`blackHoldMs` 设结算黑幕保持时长（如 500）。
+2. **挂到关卡**：在该运镜页勾选 `#cinematicDeathFlag`（写 `state.level.deathCinematic = <运镜 id>`）；或直接改关卡 JSON 顶层 `deathCinematic: "cine-..."`（见 §3.12）。
+3. **归一化必有回传 + 默认注入**：`normalizeLevel` 里 `const deathId = (typeof data.deathCinematic === 'string' && data.deathCinematic) || DEFAULT_DEATH_CINEMATIC.id`（`state.js:589`），返回对象写 `deathCinematic: deathId`（`state.js:626`），并在 `cinematics` IIFE 里按 `deathId` 补入默认运镜 —— **漏回传会被静默丢弃**（与 `cutsceneId` 的坑同源）；**空串会被回落成默认死亡运镜，无法用空串关闭**。
+4. **数据样例**：`data/levels/level-1.json` 的 `cine-1789288387998`「玩家被击败运镜」（`durationMs 3400` / `timeScale 1` / `focus 'player'` / `blackHoldMs 500` / 6 关键帧带全部新字段），`Level1-Scene1.json` 追加同一条 + 顶层 `deathCinematic`。
+5. **验证**：试玩 → 被打死（或走 `boss25t5KillPlayer` / 母舰贴身秒杀）→ 应播死亡运镜 → 黑幕保持 `blackHoldMs` → 结算页出现；黑幕期间按 F/4/5/ESC **不应**打开菜单页（`playerDeathFlow` 输入锁，见 §4⑨ + engine-editor 坑 50）。
+
 ## 7. 坑与约束
 
 - **Mixin 装配顺序与同名覆盖**：`src/game-scene.js:559` 一次 `Object.assign(EditorScene.prototype, …19 个 Mixin)`，后者覆盖前者。本分类的四个 Mixin 顺序为 `SpawningMixin → TriggersMixin → InteractablesMixin → LevelFlowMixin`（在 `DestructiblesMixin` 之后、`HudMixin` 之前）。新增方法前先确认方法名在其他 Mixin 中不存在，否则会静默覆盖。
@@ -438,11 +556,21 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 - **交互半径会被实体尺寸抬高**：`max(interactRadius, halfDiag + p.r + 40)`。把神像/图标做得很大时，`interactRadius` 配再小也没用。
 - **菜单关与家园关的特殊分支**：`isMenuLevel()`（`ui==='login'`）跳过开场演出、相机固定 `(0,0)`；`isHubLevel()`（`levelId==='knight-home'`）禁用开火与护盾（`game-scene.js:225/228`）。新增此类关卡要同步这两个判定（`src/systems/ui/ui-runtime.js:165/186/191`）。
 - **大地图 + `camera.mode:'center'` + 空场 + `showGridInPlay:false` ⇒ 玩家报「上下不能移动」（真实踩过：`Boss2-Test`）**。现象：某一关「按上/下键角色完全不动，按左/右却正常」，触发某个事件（如 BOSS 战）后又「正常」了，极像输入或碰撞 bug。**根因不是移动逻辑**：`center` 相机每帧把玩家钉在屏幕正中（`editor-camera.js:107-108`），玩家移动时**只有世界元素在屏幕上滑动**才能被看出；若场地里没有参照物（背景纯黑、网格关闭、上/下墙离出生点 ~1000px 在视口外），而画面内唯一的墙恰好是**比视口还高的竖直长条**（`h:2030` vs 视口 1080），那么纵向滑动该长条**看起来毫无变化**、横向滑动却非常明显 → 玩家以为自己只能左右走。事件触发后一个明显物体（BOSS）进入画面 → 纵向移动变得可见 → 「恢复正常」。**判据**：症状与「哪个关卡 / 玩家站在地图哪个位置」强相关，而不是与按键/时间相关，就先怀疑视野参照物。**正确做法**：①给关卡开 `showGridInPlay: true`（网格 30px、`gridColor` 深色，随相机滚动，是最省事的全屏参照）②或把地图缩到接近视口（真实战斗关多为 `1920×1080`，相机被边界钳住时角色本体会在屏幕上直接移动）③或在场地内放可见参照物（`Level1-Scene1` 就是 63 面墙 + 3 张图）。**别去改移动代码**——那段逻辑（`game-scene.js:214-238`）是左右对称的。
+- **局内态字段必须挂 scene，不能挂 `state.player`**：`state.player` 就是存档源（`progression.js:persistSave` → `ctx.onPlayerSave`），直接加字段会被写进存档文件。售货机的局内消耗品/限时武器/当前实体改为挂 `scene.runItems` / `scene.runTimedWeapons` / `scene.vendorActive`，随 `restart` 清零（旧 `vendorBought` 已删）。新增任何「仅本局有效」字段都照此，绝不要挂 `state.player`。详见 ui-interaction skill 坑 22。
+- **`vendor` 实体是每次 `restart` 由 `(l.vendors||[]).map(v => ({...v}))` 重新生成的副本**（`level-flow.js:144`），所以 `stock`/`bought`/`slot` 天然按局清零；但**不要**把状态写到 `ctx.state.level.vendors` 的原始实体上（编辑器会看到脏数据，且会被 `saveDraft` 落盘污染关卡文件）。同理 `chests`/`portals`/`idols`/`icons`/`gates` 等运行时副本也都别写回 `ctx.state.level`。售货机页面/摇奖交互详见 ui-interaction skill（坑 20-23）与 economy-numbers skill。
+- **局内态一律挂场景对象、不挂 `state.player`**：`state.player` 就是存档源（`progression.js:persistSave` → `ctx.onPlayerSave`），往里写会导致药水 / 限时武器 / 限时加成被写进存档文件。挂场景的字段（清单见 §3.10）随 `restart` 重建自然清零。（与既有的售货机 `runItems`/`vendorActive` 同源，详见 ui-interaction skill 坑 22。）
+- **`restart` 是局内态唯一的清零点**：新增任何「仅当局」字段都必须在 `level-flow.js:restart`（:147 附近）补一行，否则上一关的残留会带到下一关；其中 `potionWheelText` 这类**独立 Phaser 对象**除了置 `null`/复位，还要额外 `setVisible(false)`（:298），否则轮盘名称文本会跨关残留。
+- **售货机实体是每关 `(l.vendors||[]).map(v => ({...v}))` 的浅拷贝**：`vendor.stock`/`vendor.bought`/`vendor.slot` 写在这些副本上安全，但**绝不能写回 `ctx.state.level.vendors`**（会被 `saveDraft` 落盘污染关卡文件）。
+- **新增的 4/5 键与 F 键不同层**：F 是「靠近才有」的交互（`updateVendorInteract` 等），4/5 是**战斗内随时可用**；实现落在 `ui/battle-items.js:updateBattleItemsInput`，**别塞进** `updateVendorInteract` 之类的靠近判定里，否则离得远就按不出来。
+- **`updateRunItems`/`updateBattleItemsInput` 的调度位置**在 `game-scene.js:update()` 的 `this.updateVendorSlot()` 之后（保证售货机页当帧购买的药水当帧进队列），且在战斗处理之后 → 本帧到期的限时加成晚一帧回退，可忽略。
+- **药水只支持「关卡级掉落规则」与「宝箱奖励」两个面板**：敌人个体 `e.drops` 没有药水字段（`{gold,exp,diamond}`），不要以为配了 `e.drops` 就能掉药水；两个面板的药水下拉选项来自运行时的 `/api/inner-shop`，见 engine-editor skill。
+- **`deathCinematic` 必须在 `normalizeLevel` 里显式回传，否则静默丢弃**（同 `cutsceneId` 坑）：`state.js:626`（`deathCinematic: deathId`）是唯一回传点，`DEFAULT_LEVEL`（`:485`）的默认值只是骨架。**注意现已改为「默认注入」** —— `normalizeLevel` 会把空串/缺字段回落成 `DEFAULT_DEATH_CINEMATIC.id`，即所有关卡默认都有玩家被击败运镜、且**无法用空串关闭**（要关需显式开关字段）。编辑器勾选 `#cinematicDeathFlag` 后保存，若 `normalizeLevel` 漏回传，重开即丢且**全链路无报错**。
+- **死亡运镜会被后播放的运镜顶掉且不回调旧 `onComplete`**：`playCutscene` 覆盖正在播放的运镜时只 `cinematicTimer.remove()`、旧 `onComplete` 永不触发 → 母舰贴身秒杀 → BOSS 击破运镜顶掉死亡运镜 → `playerDeathFlow` 卡死、结算页永不出现。修法见 §4⑨ 与 engine-editor 坑 49-50（`enemy-ai.js:defeatEnemy` 加 `if (!this.playerDeathFlow)` 抑制；输入锁不只依赖 `cinematicInputLocked()`）。`playCinematic` 触发器事件同理会顶掉死亡运镜，故死亡演出期间 `game-scene.update` 会 gate 掉 `checkAsyncTriggerEvents()`。
 
 ## 8. 验证方式
 
-- 构建：`npx vite build`（Vite 6 + Phaser 4，纯 ESM，只做打包不跑测试）。
-- 单测：`node --test test/`。基线 **16 pass / 5 fail**；5 个失败是 `player-api.test.js` 的 `fetch failed`，属正常——它们需要先起 dev server。测试只覆盖玩家存档，**关卡 schema 无自动化测试**，改 `normalize*` 必须手动回归。
+- 构建：`npx vite build`（Vite 6 + Phaser 4，纯 ESM，只做打包不跑测试）；基线 **90 modules**（接线前 86；+4 = 两个新运行时模块 + 因接线才进依赖图的 `run-items.js`/`battle-items-art.js`）。装配 mixin 由 23 → **25**（`RunItemsMixin`、`BattleItemsMixin` 紧随 `InnerShopMixin`）。
+- 单测：`node --test test/`。基线 **20 tests / 19 pass / 1 fail**；唯一 fail 为 `test/player-api.test.js` 旧 schema `mods` 字段被 `normalizePlayer` 丢弃（属既有的 schema 迁移不一致，非本改动引入）。测试只覆盖玩家存档，**关卡 schema 无自动化测试**，改 `normalize*` 必须手动回归。mixin 同名自检基线：**方法数 285 / 冲突 2**（均为 `if`/`for` 关键字相关的假阳性）。
 - 起服：`node server.js`（默认端口 5173，可 `PORT=5174 node server.js`）。关卡读写走 `GET/POST /api/levels/:id`，直接落 `data/levels/*.json`。
 - 手动复现路径：
 
@@ -453,6 +581,10 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 | 交互物（宝箱自动开、传送门撤离、神像三选一） | `Level1-Scene1.json`（5 宝箱 / 2 传送门 / 1 神像） | 走近宝箱应自动开箱掉落；传送门按 F 直接通关结算 |
 | 图标交互与家园分支 | `knight-home.json`（3 icons） | 按 F 分别进战斗选择 / 武器商店 / 工坊；确认禁止开火 |
 | 菜单关形态与 wormhole 背景 | `login.json` | 相机固定全图、无开场演出 |
-| 开场演出（战斗关镜头拉近 3.5s） | 任意 `ui:'battle'` 且非 hub 的关卡 | 进关前 3.5s 不可操作，镜头由窄到宽 |
+| 开场演出（黑幕渐显，战斗关 3.5s） | 任意 `ui:'battle'` 且非 hub 的关卡 | 进关前 3.5s（黑幕渐显、无镜头拉近）不可操作 |
 | 切关淡入淡出 + `spawnPoint` 覆写 | 任一带 `switchLevel` 事件的关卡 | 黑屏 0.5s → 新关卡出生点应等于事件里的 `spawnPoint` |
 | 试玩快照不污染 | 任意关卡 | 编辑器改动 → 试玩并游戏内切关 → ESC 退出 → 关卡 id 与内容应回到试玩前 |
+| 售货机局内商店（放置 → 试玩按 F） | 任意战斗关 + 编辑器放一台 `vendors` | 试玩走近按 F 打开商店页；买 1 件看翻面/扣钱/限购；退出试玩确认编辑器实体数据未变（`stock`/`bought`/`slot` 只写运行期副本） |
+| 局内药水（掉落→拾取→数字键 4 使用/轮盘） | 任意配了 `dropRules[类型].item='potion'` 或宝箱 `rewards` 含 `potion` 的关卡 | 击杀掉药水 / 开箱拾取 → 队列 +1；短按 4 用首瓶、长按 4 呼轮盘选瓶；重开关卡应清零 |
+| 局内限时武器（数字键 5） | 售货机买限时武器后 | 按 5 启用（滚轮被禁，见 engine-editor 坑）→ 再按 5 取消；重开关卡清零 |
+| 死亡运镜（玩家被击败） | 配了顶层 `deathCinematic` 的关卡（如 `level-1.json` / `Level1-Scene1.json`） | 被打死 → 播死亡运镜（`focus:'player'`）→ 黑幕保持 `blackHoldMs` → 结算页出现；黑幕期间按 F/4/5/ESC **不应**打开菜单页（§4⑨） |

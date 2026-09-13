@@ -76,3 +76,6 @@ export const listUiDesigns = () => get('/ui-designs');
 export const loadUiDesign = id => get(`/ui-designs/${id}`);
 export const saveUiDesign = (id, design) => post(`/ui-designs/${id}`, design);
 export const deleteUiDesign = id => remove(`/ui-designs/${id}`);
+
+// 局内商店 / 老虎机配置 API（服务端聚合后的 { consumables, weapons, lottery }）
+export const getInnerShop = () => get('/inner-shop');

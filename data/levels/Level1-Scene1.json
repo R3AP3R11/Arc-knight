@@ -968,6 +968,7 @@
       "artScale": 800,
       "hp": 1200,
       "damage": 0,
+      "cutsceneId": "",
       "drops": {
         "gold": 1,
         "exp": 1,
@@ -1001,19 +1002,22 @@
         "item": "gold",
         "count": 1,
         "chance": 20,
-        "weapon": ""
+        "weapon": "",
+        "potionId": ""
       },
       {
         "item": "exp",
         "count": 5,
         "chance": 100,
-        "weapon": ""
+        "weapon": "",
+        "potionId": ""
       },
       {
         "item": "charge",
         "count": 1,
         "chance": 100,
-        "weapon": ""
+        "weapon": "",
+        "potionId": ""
       }
     ],
     "basic2": [
@@ -1021,19 +1025,22 @@
         "item": "gold",
         "count": 1,
         "chance": 20,
-        "weapon": ""
+        "weapon": "",
+        "potionId": ""
       },
       {
         "item": "exp",
         "count": 3,
         "chance": 100,
-        "weapon": ""
+        "weapon": "",
+        "potionId": ""
       },
       {
         "item": "charge",
         "count": 1,
         "chance": 60,
-        "weapon": ""
+        "weapon": "",
+        "potionId": ""
       }
     ],
     "advanced1": [
@@ -1041,13 +1048,15 @@
         "item": "gold",
         "count": 1,
         "chance": 100,
-        "weapon": ""
+        "weapon": "",
+        "potionId": ""
       },
       {
         "item": "exp",
         "count": 10,
         "chance": 100,
-        "weapon": ""
+        "weapon": "",
+        "potionId": ""
       }
     ],
     "advanced2": [
@@ -1055,13 +1064,15 @@
         "item": "gold",
         "count": 2,
         "chance": 100,
-        "weapon": ""
+        "weapon": "",
+        "potionId": ""
       },
       {
         "item": "exp",
         "count": 10,
         "chance": 100,
-        "weapon": ""
+        "weapon": "",
+        "potionId": ""
       }
     ]
   },
@@ -1453,6 +1464,70 @@
       ]
     }
   ],
+  "cinematics": [
+    {
+      "id": "cine-1789288387998",
+      "name": "玩家被击败运镜",
+      "durationMs": 4450,
+      "timeScale": 0.2,
+      "focus": "none",
+      "blackHoldMs": 0,
+      "keyframes": [
+        {
+          "t": 0,
+          "zoom": 1,
+          "panX": 0,
+          "panY": 0,
+          "rotation": 0,
+          "alpha": 0,
+          "ease": "linear",
+          "timeScale": 0.2,
+          "vignette": 0,
+          "letterbox": 0,
+          "tint": 0,
+          "tintColor": "#1a0a0a",
+          "flash": 0,
+          "flashColor": "#ffffff",
+          "desat": 0
+        },
+        {
+          "t": 2000,
+          "zoom": 5,
+          "panX": 40,
+          "panY": 40,
+          "rotation": -16,
+          "alpha": 0,
+          "ease": "linear",
+          "timeScale": 0.2,
+          "vignette": 0,
+          "letterbox": 0,
+          "tint": 0,
+          "tintColor": "#1a0a0a",
+          "flash": 0,
+          "flashColor": "#ffffff",
+          "desat": 0
+        },
+        {
+          "t": 4450,
+          "zoom": 1000,
+          "panX": 0,
+          "panY": 0,
+          "rotation": 0,
+          "alpha": 1,
+          "ease": "linear",
+          "timeScale": 0.2,
+          "vignette": 0,
+          "letterbox": 0,
+          "tint": 0,
+          "tintColor": "#1a0a0a",
+          "flash": 0,
+          "flashColor": "#ffffff",
+          "desat": 0
+        }
+      ]
+    }
+  ],
+  "deathCinematic": "cine-1789288387998",
   "crates": [
     {
       "id": "crate-1",
@@ -1624,12 +1699,14 @@
         {
           "item": "gold",
           "count": 25,
-          "chance": 100
+          "chance": 100,
+          "potionId": ""
         },
         {
           "item": "exp",
           "count": 20,
-          "chance": 100
+          "chance": 100,
+          "potionId": ""
         }
       ]
     },
@@ -1647,12 +1724,14 @@
         {
           "item": "gold",
           "count": 25,
-          "chance": 100
+          "chance": 100,
+          "potionId": ""
         },
         {
           "item": "exp",
           "count": 25,
-          "chance": 100
+          "chance": 100,
+          "potionId": ""
         }
       ]
     },
@@ -1670,7 +1749,8 @@
         {
           "item": "gold",
           "count": 25,
-          "chance": 100
+          "chance": 100,
+          "potionId": ""
         }
       ]
     },
@@ -1688,7 +1768,8 @@
         {
           "item": "gold",
           "count": 25,
-          "chance": 100
+          "chance": 100,
+          "potionId": ""
         }
       ]
     },
@@ -1706,7 +1787,8 @@
         {
           "item": "gold",
           "count": 50,
-          "chance": 100
+          "chance": 100,
+          "potionId": ""
         }
       ]
     },
@@ -1724,12 +1806,14 @@
         {
           "item": "gold",
           "count": 50,
-          "chance": 100
+          "chance": 100,
+          "potionId": ""
         },
         {
           "item": "exp",
           "count": 40,
-          "chance": 100
+          "chance": 100,
+          "potionId": ""
         }
       ]
     }

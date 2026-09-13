@@ -1,10 +1,8 @@
 /**
- * 文件职责：成长经济（局内商店购买 / 工坊加点 / 存档来源与落盘）
+ * 文件职责：成长经济（工坊加点 / 存档来源与落盘）
  * 归属分类：数值_经济
- * 主要导出：ProgressionMixin（4 个方法）、UPGRADE_STATS
- * 依赖：systems/economy/buffs.js
+ * 主要导出：ProgressionMixin（3 个方法）、UPGRADE_STATS
  */
-import { VENDOR_BUFFS } from './buffs.js';
 
 // 工坊页基础属性加点配置：key → 属性键 / 每点收益 / 上限 / 显示
 export const UPGRADE_STATS = {
@@ -15,17 +13,6 @@ export const UPGRADE_STATS = {
 };
 
 export const ProgressionMixin = {
-    buyBuff(id) {
-      const item = VENDOR_BUFFS.find(d => d.id === id);
-      if (!item || !this.player || this.vendorBought.has(id)) return;
-      if ((this.player.gold ?? 0) < item.price) return;
-      this.player.gold -= item.price;
-      this.player.combat = this.player.combat || {};
-      item.apply(this);
-      this.vendorBought.add(id);
-      this.syncUIState();
-    },
-
     applyUpgrade(key) {
       const cfg = UPGRADE_STATS[key];
       if (!cfg || !this.menuScreen) return;

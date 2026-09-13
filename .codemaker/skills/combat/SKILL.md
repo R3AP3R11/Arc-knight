@@ -1,6 +1,6 @@
 ---
 name: combat
-description: 改武器手感与弹道、敌人 AI 行为、伤害与命中判定、护盾格挡、寻路、可破坏物（木箱/油桶）时读这份。覆盖 src/systems/combat/** 与 src/systems/economy/damage.js。
+description: 改武器手感与弹道、敌人 AI 行为、伤害与命中判定、护盾格挡、限时加成、临时武器开火、即时护盾吸收（itemShields）、寻路、可破坏物（木箱/油桶）、玩家被击败（三个失败入口 damagePlayer / boss25t5KillPlayer / 母舰贴身秒杀）时读这份。覆盖 src/systems/combat/** 与 src/systems/economy/damage.js。触发词：武器 / 武器出场 / 弹道 / 子弹 / 敌人 / AI / 护盾 / 木箱 / 油桶 / 运镜 / 过场运镜 / 死亡运镜 / 玩家被击败 / 运镜预览。
 ---
 
 # 战斗相关 开发指南
@@ -10,7 +10,7 @@ description: 改武器手感与弹道、敌人 AI 行为、伤害与命中判定
 
 ## 1. 这块负责什么
 
-从「玩家扣下扳机」到「敌人掉落物落地」之间的全部实时逻辑：弹道生成与推进、命中与穿墙判定、敌人行为决策与寻路、玩家受伤与护盾格挡、可破坏物的破坏与连锁伤害。
+从「玩家扣下扳机」到「敌人掉落物落地」之间的全部实时逻辑：弹道生成与推进、命中与穿墙判定、敌人行为决策与寻路、玩家受伤与护盾格挡（含**即时护盾吸收**）、可破坏物的破坏与连锁伤害、**限时加成与临时武器**的生效。
 
 玩家可见功能点：
 - 3 种可用武器（基础环射 `radial` / 散射 `yellow` / 激光 `green`）+ 1 个内部保留武器（`basic`），滚轮或按键切换
@@ -18,10 +18,12 @@ description: 改武器手感与弹道、敌人 AI 行为、伤害与命中判定
 - 4 种敌人（basic1/basic2/advanced1/advanced2），各有接近—交战—环绕—冲锋/点射的行为机
 - 敌人被墙阻挡时会 A* 绕路
 - 玩家护盾（扇形，有角度与距离判定，可被破盾）
+- **局内限时加成**（药水改 `player.combat`）与**即时护盾**（`player.itemShields`，先到先吸收、盾碎抖屏）
+- **临时武器**（数字键 5 使用/取消，替换 `player.weapon`，仅「使用中」倒计时，复用现有开火链路）
 - 木箱可打碎产生碎片，油桶爆炸有范围伤害
 - 命中特效、受击红闪、击杀计数
 
-**不负责**：掉落内容与概率（`economy-numbers`）、敌人从哪刷出来（`level-design`）、子弹长什么样以外的世界渲染（`ui-interaction` 的 `world-render.js` 负责实际绘制调度）。
+**不负责**：掉落内容与概率、药水 / 限时武器的获得队列与效果数值（`economy-numbers`）、敌人从哪刷出来（`level-design`）、子弹长什么样以外的世界渲染（`ui-interaction` 的 `world-render.js` 负责实际绘制调度）、药水轮盘 / 限时状态图标的 HUD 绘制（`ui-interaction`）。
 
 ## 2. 文件地图
 
@@ -31,13 +33,15 @@ description: 改武器手感与弹道、敌人 AI 行为、伤害与命中判定
 | `src/systems/combat/weapons.js` | 武器定义表 + 激光生成 + 被拦截弹（`b.blockedBoss`）强制红 + BOSS 施力弹（`b.forceTrail`）白弹体 + 彩色拖尾（内部 `drawForceTrailBullet`；颜色由 `forceTrail.color` 决定 —— 技能1 蓝 / 技能2 红 / 技能5 蓝） | `WEAPONS` `spawnLaser` | 160 |
 | `src/systems/combat/enemy-ai.js` | 敌人行为机、寻路、开火、死亡结算（含母舰/原型机-2-5T5 运镜与拦截弹/漩涡清理） | `EnemyAiMixin` | 484 |
 | `src/systems/combat/boss25t5.js` | 原型机-2-5T5 专属：数据契约（默认值/归一化）+ 行为状态机 + 技能区域生命周期（**扇形方向释放时固定、可被走出躲避** + 命中像素级容差）+ 阻挡护盾拦截 + 技能5 场景级漩涡（捕获环绕 / 释放停驻）+ 已转化子弹对区域施力（**一次性固定速度+固定距离**；**不 import Phaser，可被 state.js 安全引用**） | `BOSS25T5_ART` `BOSS25T5_DESIGN` `BOSS25T5_DEFAULTS` `boss25t5Defaults` `normalizeBoss25T5Config` `Boss25T5Mixin`（**27 方法（实测）**：`stepBoss25T5` + 26 个 `boss25t5*`；本轮重写 `boss25t5ZoneBulletForce`（改为一次性固定速度+固定距离）；`boss25t5ZonesTick` 的扇形方向改为释放瞬间写死、**不再跟随玩家**，仅保留像素级命中容差） | 1383 |
-| `src/systems/combat/player-combat.js` | 玩家受伤、护盾格挡、武器切换、受击闪屏 | `PlayerCombatMixin`（6 方法） | 113 |
+| `src/systems/combat/player-combat.js` | 玩家受伤（含**即时护盾吸收** `player.itemShields`）、护盾格挡、武器切换、受击闪屏 | `PlayerCombatMixin`（6 方法） | 130 |
 | `src/systems/combat/destructibles.js` | 木箱碎片、油桶爆炸 | `DestructiblesMixin`（2 方法） | 77 |
 | `src/systems/combat/pet-runtime.js` | 玩家宠物：环绕玩家、索敌开火、受击结算 | `PetMixin`（5 方法）+ 依赖 `pet-store.getPetDef` | 144 |
 | `src/systems/economy/damage.js` | 伤害公式与改件生效集合（归数值_经济，但战斗必经） | `playerDamage` `playerIncomingDamage` `activeMods` | 56 |
-| `src/systems/constants.js` | 战斗相关常量（护盾、命中特效、敌人行为参数、`ENEMY_BEHAVIOR['boss-2-5t5']`） | `SHIELD` `SHIELD_MAX` `HIT_FX_TTL` `HIT_FX_RADIUS` `BULLET_DAMAGE` `ENEMY_BEHAVIOR` `BARREL_DAMAGE` 等 | 102 |
+| `src/systems/economy/run-items.js` | 限时加成**纯逻辑**（**无 Phaser**）：`statMul` 乘子、`normalizeEffect`、`applyStatEffect`（互逆乘算回退） | `POTION_CAP` `statMul` `normalizeEffect` `potionQueueAdd` `potionQueueTakeFront` `applyStatEffect` | 63 |
+| `src/systems/economy/run-items-runtime.js` | **限时加成 / 临时武器 / 即时护盾**运行时（倒计时、替换还原、护盾入列）；归 `economy-numbers` 但战斗必经 | `RunItemsMixin`（14 方法：`addRunItem` / `addRunTimedWeapon` / `usePotionAt` / `toggleTempWeapon` / `useTempWeapon` / `cancelTempWeapon` / `updateRunItems` …） | 210 |
+| `src/systems/constants.js` | 战斗相关常量（护盾、命中特效、敌人行为参数、`ENEMY_BEHAVIOR['boss-2-5t5']`、`WEAPON_RING_CHAIN` 武器内圈环链/出场动画） | `SHIELD` `SHIELD_MAX` `HIT_FX_TTL` `HIT_FX_RADIUS` `BULLET_DAMAGE` `ENEMY_BEHAVIOR` `BARREL_DAMAGE` `WEAPON_RING_CHAIN` 等 | 112 |
 | `src/pathfinding.js` | 网格构建与 A* | `buildGrid` `findPath` `nearestWalkable` | 105 |
-| `src/game-scene.js` | `update` 主循环：开火节流、子弹推进、命中判定、敌人更新与 `boss25t5ZonesTick`/`boss25t5VorticesTick` 的调度点、构造函数注入 `this.playerDamage`；子弹 filter 的新顺序见 §6.2 | `createGameScene` | 900 |
+| `src/game-scene.js` | `update` 主循环：开火节流、子弹推进、命中判定、敌人更新与 `boss25t5ZonesTick`/`boss25t5VorticesTick` 的调度点、`updateRunItems`/`updateBattleItemsInput` 调度、装配 `RunItemsMixin`/`BattleItemsMixin`；构造函数注入 `this.playerDamage`；**玩家被击败失败流程**：`create()` 初始化 `this.playerDeathFlow`，`update()` 里 `deathSim`/`inputLocked`（见 §4.3 / level-design §4⑨）；子弹 filter 的新顺序见 §6.2 | `createGameScene` | 922 |
 
 ### 改 X 该动哪里
 
@@ -53,6 +57,9 @@ description: 改武器手感与弹道、敌人 AI 行为、伤害与命中判定
 | 改敌人行为逻辑（何时冲锋、何时点射） | `enemy-ai.js:stepEnemy` / `stepAdvanced2` |
 | 改敌人绕路策略 | `enemy-ai.js:stepToward` / `findEnemyPath` + `pathfinding.js` |
 | 改护盾角度/耐久/破盾 | `constants.js:SHIELD` / `SHIELD_MAX` + `player-combat.js:blockWithShield` |
+| 改**即时护盾**（药水护盾）吸收顺序 / 吸收量 | `player-combat.js:damagePlayer` 的 `player.itemShields` 循环（先到先吸）+ `run-items-runtime.js:addRunItem` 的 `shield` 入列 |
+| 改**限时加成**（药水改 `player.combat`）生效 / 到期回退 | `economy/run-items.js:applyStatEffect` + `run-items-runtime.js:updateRunItems`（数值/时长见 `economy-numbers`） |
+| 改**临时武器**使用 / 取消 / 倒计时 | `run-items-runtime.js:useTempWeapon` / `cancelTempWeapon` / `updateRunItems`；开火仍复用 `WEAPONS[id].fire`（详见 `economy-numbers`）。**`useTempWeapon`/`cancelTempWeapon` 与 `player-combat.js:switchWeapon`、`level-flow.js:restart` 都会写 `player.weaponIntroAt = this.time?.now || 0`** 以重播武器本体出场动画（局内态、不落存档） |
 | 改免伤/闪避/暴击公式 | `economy/damage.js`（同时看 `economy-numbers` skill） |
 | 改墙体形状支持（矩形/圆/弧） | `geometry.js:pointInWall` + `resolveCircleAgainstWalls` |
 | 改油桶爆炸范围/伤害 | `constants.js:BARREL_DAMAGE` + `destructibles.js:explodeBarrel` |
@@ -79,8 +86,13 @@ description: 改武器手感与弹道、敌人 AI 行为、伤害与命中判定
 | `combat` | 战斗属性集合 | 见下 | 存档 `combat` |
 | `hitFlash` | 受击闪屏状态 | `{ alpha, total, t }` \| null | `damagePlayer` 写入 |
 | `gold` | 局内金币（不落盘） | number | 拾取掉落 |
+| `itemShields` | **即时护盾数组**（先到先吸收、盾碎抖屏） | `[{ hp, maxHp }]` | `addRunItem` 的 `shield` 分支 push；`level-flow.restart` 置 `[]` |
+| `weapon` / `weaponType` / `weaponArt` / `scheme` / `charge` | **临时武器「使用中」会被替换** | 武器定义引用 / id / 方案 / 蓄力 | `useTempWeapon` 换、`cancelTempWeapon` 由 `scene.tempWeaponSaved` 还原 |
+| `weaponIntroAt` | 武器本体出场动画计时起点（ms，与 `this.time.now` 同基） | number | `player-combat.js:switchWeapon` / `run-items-runtime.js:useTempWeapon`·`cancelTempWeapon` / `level-flow.js:restart` 写入（即「出武器」重播本体出场动画，渲染侧 `entity-art.js:drawPlayer` 用 `t*1000 - weaponIntroAt` 算渐显进度）；**局内运行时字段、不落存档** |
 
 `player.combat` 字段（**全部来自存档，改动请同步 `economy-numbers`**）：`maxHp` `maxShield` `attackPower`(倍率,默认1) `attackSpeed`(倍率) `critRate`(0..1) `dodgeRate`(0..1) `moveSpeed`(倍率) `damageReduction`(倍率,越小越抗)。
+
+**限时加成**（药水，仅当局）通过 `applyStatEffect(player.combat, type, mul, 1)` **直接乘算改 `player.combat` 上的字段**（`type` 即字段名，`mul = 1 + value/100`）；到期 `mul` 换 `1/mul` 精确回退，条目存 `scene.runEffects`。**临时武器**态存 `scene.tempWeaponActive` / `scene.tempWeaponSaved`（见 `economy-numbers` §3.4）。
 
 ### 3.2 `enemy`（由 `enemy-ai.js:initEnemy` 产出）
 
@@ -251,15 +263,22 @@ game-scene.js:update 敌弹推进
   │    角度差 ≤ SHIELD.arcDeg/2 且距离 < weaponRingRadius + SHIELD.gap + extra → 扣盾 + 抖屏
   ├ 未被挡 → player-combat.js:damagePlayer(dmg)
   │    └ economy/damage.js:playerIncomingDamage（先闪避判定，再乘 damageReduction）
+  │    └ 即时护盾吸收（在 playerIncomingDamage 之后、扣 HP 之前）：
+  │         remaining = actual；按 player.itemShields 顺序 absorb = min(sh.hp, remaining)
+  │         sh.hp<=0 → splice 移除 + hitEffects.push({color:SHIELD_HIT_COLOR}) + cameras.main.shake(SHIELD_SHAKE_MS, SHIELD_SHAKE_INTENSITY)
+  │         remaining<=0 → 不扣 HP、不置 hitFlash，直接 return（playerIncomingDamage **只调用一次**）
   │    └ 新手关血量下限 NEWBEE_MIN_HP=5（永不失败）
-  │    └ hp<=0 → this.state='fail' + syncUIState()
+  │    └ hp<=0 → this.triggerPlayerDefeat()（**玩家被击败失败流程**，幂等；带死亡运镜/黑幕，见 level-design §4⑨）
   └ 近身撞击走 player-combat.js:hitShield（先结算击杀，再走格挡）
 ```
+
+> **三个失败入口统一走 `triggerPlayerDefeat()`**：`player-combat.js:damagePlayer`（血量归零）、`boss25t5.js:boss25t5KillPlayer`（守卫已改为 `if (this.state==='fail' || this.playerDeathFlow) return;`）、`game-scene.js` 母舰贴身秒杀分支（`mothershipSelfDestruct(e)` 仍在后）。流程（死亡运镜 → 黑幕保持 → 结算页）详见 level-design §4⑨。
 
 ### 4.4 敌人死亡 → 掉落
 ```
 enemy-ai.js:defeatEnemy(e)
   ├ e.alive = false; this.kills++
+  ├ BOSS 击破运镜：mothership / boss-2-5t5 且 cutsceneId → **`if (!this.playerDeathFlow)`** 才 `this.playCutscene(clip, {focusTarget:'boss', x:e.x, y:e.y})`（抑制：否则同帧顶掉死亡运镜 → `playerDeathFlow` 卡在 cinematic → 结算页永不出现，见 §7 坑 50）
   └ this.spawnDrops(e)   → economy/drops.js（掉落内容与概率详见 economy-numbers skill）
 ```
 
@@ -274,6 +293,19 @@ enemy-ai.js:defeatEnemy(e)
      └ 可连锁引爆相邻油桶
 ```
 
+### 4.6 限时加成 / 临时武器 每帧推进
+
+```
+game-scene.js:update
+  ├ 战斗处理（子弹 / 敌人 / 掉落）
+  ├ this.updateRunItems(dt)          // 药水限时加成到期回退 + 临时武器倒计时
+  │    runEffects 到期 → applyStatEffect(combat, type, statMul(value), -1) 回退并移除
+  │    临时武器**仅「使用中」**扣 remainSec，归零 → cancelTempWeapon() + 清空 runTimedWeapons
+  └ this.updateBattleItemsInput(dt)  // 数字键 5 切换临时武器 → toggleTempWeapon()
+```
+
+> `updateRunItems` 排在战斗处理**之后** → 本帧到期的加成晚一帧回退，可忽略。开火链路：临时武器「使用中」时 `player.weapon` 已是设计稿武器运行时条目，`WEAPONS[player.weaponType].fire/stepBullet/drawBullet` 照常走（`useTempWeapon` 会把主武器态存进 `scene.tempWeaponSaved`）。
+
 ## 5. 关键常量与数值
 
 | 常量 | 位置 | 当前值 | 含义 | 调它影响 |
@@ -283,7 +315,11 @@ enemy-ai.js:defeatEnemy(e)
 | `HIT_FX_RADIUS` | `constants.js:67` | 40 | 命中特效绘制半径 | 特效大小 |
 | `SHIELD` | `constants.js:58` | `{color:'#00eeff', arcDeg:120, gap:10, fadeMs:500}` | 护盾扇形角度/间距/淡入 | 格挡覆盖面 |
 | `SHIELD_MAX` | `constants.js:59` | 50 | 护盾上限硬顶 | 存档 maxShield 天花板 |
-| `SHIELD_SHAKE_MS` / `_INTENSITY` | `constants.js:60-61` | 150 / 0.004 | 挡弹抖屏 | 打击感 |
+| `SHIELD_SHAKE_MS` / `_INTENSITY` | `constants.js:60-61` | 150 / 0.004 | 挡弹 / **盾碎**抖屏 | 打击感 |
+| 即时护盾 `itemShields` | `player-combat.js:damagePlayer` | `[{ hp, maxHp }]`（来源药水 `shield` 效果值，默认 50，对齐 `SHIELD_MAX`） | 药水护盾，先到先吸收 | 见 `economy-numbers` §3.4 |
+| 限时加成 `applyStatEffect(combat,type,mul,dir)` | `economy/run-items.js` | `dir=1` 乘 `mul` / `dir=-1` 乘 `1/mul`（`mul = statMul(value) = 1 + value/100`） | 药水改 `player.combat` 字段 | **互逆乘算**，多层同类非严格可逆（见 §7） |
+| 临时武器倒计时 | `run-items-runtime.js:updateRunItems` | 仅「使用中」扣 `remainSec`（时长来自表 `durationSec`，默认 15s） | 临时武器 | 归零自动 `cancelTempWeapon()` |
+| 即时护盾外圈绘制 | `entity-art.js:drawItemShields` | 半径 `PLAYER_ART.weaponRingRadius + SHIELD.gap`、线宽 `weaponRingThickness*1.25`、`alpha = 0.35 + 0.6*clamp(hp/maxHp)`（多盾按 `i*6` 外扩） | 护盾视觉（360° 弧） | 详见 `ui-interaction` |
 | `NEWBEE_MIN_HP` | `player-combat.js:23` | 5 | 新手关血量下限 | 新手关不会死 |
 | `HIT_FLASH_RADIUS` | `player-combat.js:24` | 70 | 受击闪屏挖空半径 | 视野遮挡程度 |
 | `radial.fireInterval` / `baseDamage` | `weapons.js:18-19` | 120ms / 10 | 基础武器 | 无限弹药主武器 DPS |
@@ -341,7 +377,7 @@ enemy-ai.js:defeatEnemy(e)
 > **母舰（`mothership`）是特殊敌人，不走通用行为机**，自检以下 7 处（默认值集中 `constants`/`state`，可被关卡预置条目覆盖）：
 > ① `ENEMY_TYPES.mothership`（`art`/`artScale` 进 `initEnemy`） ② `ENEMY_BEHAVIOR.mothership` + `MOTHERSHIP_SPAWN_TABLE`（`constants.js`）
 > ③ `enemy-ai.js:stepEnemy` 顶部派发 `stepMothership`（慢速逼近+hitFlashT 递减+按 `e.boss.spawnInterval`/`e.boss.spawnTable` 周期 `spawnMothershipMinions`）；`initEnemy` 补 `bossActive:false`+`boss:{spawnInterval,spawnTable,name}`
-> ④ `game-scene.js` 敌接触循环母舰分派（**Hitbox 用风筝形非圆**）：撞盾=清盾+`mothershipSelfDestruct`（`mothershipBodyDist<radius`）；贴身=秒杀(`state='fail'`)+自爆（`mothershipBodyDist<player.r`）；母舰命中用 `mothershipBulletHit`（`geometry.js`，含 `mothershipPolyVerts`/`mothershipBoundsR`），受击置 `e.hitFlashT=100`
+> ④ `game-scene.js` 敌接触循环母舰分派（**Hitbox 用风筝形非圆**）：撞盾=清盾+`mothershipSelfDestruct`（`mothershipBodyDist<radius`）；贴身=秒杀(`triggerPlayerDefeat()`)+自爆（`mothershipBodyDist<player.r`；`mothershipSelfDestruct(e)` 仍在后）；母舰命中用 `mothershipBulletHit`（`geometry.js`，含 `mothershipPolyVerts`/`mothershipBoundsR`），受击置 `e.hitFlashT=100`
 > ⑤ `entity-art.js:drawEnemyShape` 母舰分支：把设计稿相位偏转 `θ+π/2`（θ=敌→玩家方向）使长尖始终朝向玩家；`e.hitFlashT>0` 时对该设计元素 `fill:'#ffffff'`，把整个四边形（描边轮廓）填为实白
 > ⑥ 生成点走 `spawning.js:spawnMothership`（整圆穿墙排除+三档兜底保生成，防大身体卡墙/波次空转），经既有波次 `mode:'offscreen'` 触发
 > ⑦ Boss 化：母舰**预置**在关卡 `l.enemies[]`（`level-flow:283` 经 `initEnemy` 入队），`bossActive=false`=待机（无敌、不移动、不召唤、无血条，`stepMothership` 顶部早退；`game-scene` 子弹/接触/轨道命中都加 `&& e.bossActive`）。踩带 `bossBattle` 事件的触发器 → `triggers.js:startBossBattle(ev)`：`boss.bossActive=true; this.bossTarget=boss; this.bossBarReveal=0`；UI 血条见 `ui-interaction`（`drawBossBar`/`updateBossBar`）。大小=条目 `artScale`（编辑器「大小」字段）；`bossBattle` 事件类型双份维护（`state.js:EVENT_TYPES` 与 `editor/entity-properties.js:eventTypeOptions`）。
@@ -408,7 +444,7 @@ enemy-ai.js:defeatEnemy(e)
 10. **敌人寻路网格是关卡加载时一次性构建**（`level-flow.js:restart` 里 `buildGrid`），墙体运行时变化（如开门）**不会**自动重建网格，敌人可能穿过刚关的门附近或绕不必要的路。
 11. **`spawnLaser` 是即时伤害**（发射瞬间就判定完），激光的 `ttl` 只是视觉残留。改激光"持续伤害"需要改成每帧判定。
 12. **改件 `pierce` 只影响激光**（`spawnLaser` 里判），`ricochet`/`split` 只影响实体子弹（`game-scene.js:update` 里判）。加新改件要想清楚生效点在哪一侧。
-13. **既有隐患**：`src/systems/ui/entity-art.js:193` 的 `INTRO_RING_COUNT` 是未定义变量（原始代码遗留）。仅当 `fx.introRingCount` 为空时才会走到，目前只有 `data/levels/login.json` 用该特效且已配该字段，所以不会崩。改虫洞特效时注意。
+13. **已修**：`INTRO_RING_COUNT = 12` 现已在 `src/systems/ui/entity-art.js:170` 的 `INTRO_RING_*` 常量组正式定义（与 `state.js` 归一化默认值一致），未定义引用已消除。仅当 `fx.introRingCount` 为空时才会走到该兜底，目前只有 `data/levels/login.json` 用该特效且已配该字段。改虫洞特效时注意。
 14. **`this.player.combat` 可能为空**（`playerDamage` / `playerIncomingDamage` 都有 `if (!combat)` 兜底）。新写读 `combat` 的代码要带默认值。
 15. **宠物子弹必须带 `b.petDamage`**。现有命中分支只用 `playerDamage(this, weaponType)`；宠物子弹在 `firePet` 里补 `petDamage`，命中处 `b.petDamage != null` 才覆盖，否则按武器 baseDamage 结算（会偏高）。
 16. **敌弹命中宠物在 shield 之后、玩家之前**，且仅 `pet.invincible === false` 时结算。首帧 `draw` 可能先于 `updatePets`，`this.pets` 尚未初始化，`drawPets`/敌弹判定须用 `this.pets || []` 兜底。
@@ -450,11 +486,19 @@ enemy-ai.js:defeatEnemy(e)
 
 43. **技能1/2 对子弹的施力必须是「带距离预算的一次性施力」，不能每帧加速度**。现象：旧口径 `s1BulletForce`/`s2BulletForce`（每帧 `vx/vy += …` 加速度）会让子弹越推越快、**永不停下**（还会越界穿墙）。**正确做法**：授予一次性任务 `b.force = { mode, ownerId, speed, remain }`（`remain` = 剩余距离 px；速度复用玩家的 `s1DragSpeed`/`s2PushSpeed`，距离 = 玩家的 `s1DragDist`/`s2PushDist` × 2（模块常量 `BULLET_FORCE_DIST_MULT`））；每帧按 `speed` 定速写 `vx/vy` 并 `remain -= speed*sec`，距离用尽 / owner 消失 / drag 拖到 `innerRadius×artScale` 内缘 → `vx=vy=0; force=null`。`b.forceSrc`（= 区域 id）保证**同一区域只授予一次**（否则子弹停下后会被反复重新推动）；帧令牌 `b.forceStepT` 防同帧重复扣距离。**被漩涡捕获 / 释放时必须清 `b.force`**（`boss25t5VortexCapture`/`boss25t5ReleaseCaptured`），否则「释放后静止停驻」失效 —— 子弹会带着剩余距离继续跑。
 
+44. **限时加成靠「互逆乘算」回退而非快照**：`applyStatEffect(combat, type, mul, 1)` / `(..., -1)` 分别乘 `mul` 与 `1/mul`。因此**多个同类加成叠加时不是严格可逆**（浮点 + 顺序），但误差可忽略；若将来要精确回退，需改为「基础值快照 + 每次重算」。
+45. **`damagePlayer` 是玩家受伤的唯一入口**（子弹命中、敌人接触、母舰接触都走它），所以即时护盾在**这一处**拦截即可覆盖全部来源。护盾**不参与**闪避/免伤（`playerIncomingDamage` 只调用一次，护盾在其后）。若未来新增绕过 `damagePlayer` 的直接扣血，护盾会漏。
+46. **护盾吸收顺序 = `itemShields` 数组从前到后**，`splice` 后要 `i--` 修正位移；盾碎会记 `hitEffects` 并抖屏。
+47. **临时武器「使用中」才倒计时**（用户确认）；实现是替换 `player.weapon`/`weaponType`/`weaponArt`/`scheme`，并保留 `tempWeaponSaved` 以便取消时还原。**使用中会改 `weaponType` 但不改 `player.weapons`/`weaponIndex`** → 右下角武器轮盘高亮可能偏差；滚轮切武器由 `editor-camera.js:onWheel` 的 `isTempWeaponActive()` 守卫拦住。
+48. **设计稿武器的运行时条目经 `registerWeapon` 并入 `WEAPONS`**，所以临时武器可直接复用现有开火链路（`player.weapon.fire/stepBullet/drawBullet`）；若 `WEAPONS[id]` 尚未注册，`useTempWeapon` 会 `ensureWeaponDef(id)` 异步补拉后自动重试一次。
+49. `updateRunItems(dt)` 在 `game-scene.js:update()` 里排在战斗处理之后 → 本帧到期的加成晚一帧回退，可忽略。
+50. **`playCutscene` 覆盖正在播放的运镜时不回调旧 `onComplete`；BOSS 击破运镜必须让位给死亡运镜**。现象：母舰贴身秒杀 → `triggerPlayerDefeat` → `mothershipSelfDestruct → defeatEnemy` → BOSS 击破运镜顶掉死亡运镜 → `playerDeathFlow` 卡在 `cinematic`、结算页永不出现（`stopCutscene` 只 `cinematicTimer.remove()`，旧 `onComplete` 不触发）。**正确做法**：`enemy-ai.js:defeatEnemy` 里 `if (!this.playerDeathFlow) this.playCutscene(clip, …)` 抑制；同时「运镜已结束但流程未收尾」的窗口里 `cinematicInputLocked()` 返回 false，**身份类流程锁（`playerDeathFlow`）必须自己纳入 `inputLocked`**（`game-scene.js:171`），不能只依赖它（否则黑幕里按 F/4/5 能打开菜单页顶掉结算页）。完整链条见 level-design §4⑨ 与 engine-editor 坑 49-50。
+
 ## 8. 验证方式
 
 ```bash
 # 1) 构建必须过（能抓出 import 路径错、导出名错）
-npx vite build          # 基线：built 成功，约 83 modules
+npx vite build          # 基线：built 成功，90 modules（接线前 86）
 
 # 2) 单测必须与基线一致
 node --test test/       # 基线：20 tests / 19 pass / 1 fail
@@ -469,6 +513,8 @@ node -e "const c=require('fs').readFileSync('src/systems/combat/你改的文件.
 node server.js          # 然后浏览器打开，编辑器里选关卡 → 试玩
 ```
 
+mixin 同名自检（新增 mixin 方法前必做）：装配后方法数 **285 / 冲突 2**（仅 `if`/`for` 假阳性），有新增即需排查。
+
 手动冒烟对应关卡（`data/levels/`）：
 | 验什么 | 用哪个关卡 |
 |---|---|
@@ -477,6 +523,7 @@ node server.js          # 然后浏览器打开，编辑器里选关卡 → 试�
 | 敌人行为 / 寻路绕墙 / 波次 | `Level1-Scene1.json` |
 | advanced1 冲锋 / advanced2 点射 | `Level2-Scene1.json`、`Level3-Scene1.json` |
 | 油桶连锁 / 木箱破坏 | 任意含 `barrels`/`crates` 的关卡（用 `node -e` 搜 json） |
+| 局内消耗品 / 限时加成 / 即时护盾 / 临时武器 | 任意有售货机的关卡：买药水看状态图标与倒计时、数字键 5 切临时武器（使用中才倒计时）、护盾吸收后盾碎抖屏 |
 | 原型机-2-5T5 全技能 / 阻挡护盾（停驻变红弹）/ 护盾主动撞红弹消除 / 技能5 蓝色漩涡 + 捕获环绕 / 技能区域 + 黑遮罩 / 紫区减速（**观察点**：护盾存在窗口是否明显变长、技能占比是否约 4:4:2（半血后 4:4:2:2）、**每个技能的区域是否都朝玩家（不空放）**、三种技能的同心弧风格是否一致、区域是否 s1 从外向内 / s2 从内向外**方向性消散**、被拦红弹是否至少 5px、**护盾主动撞红弹能否消除且扣盾不扣血**、**半血后是否出现蓝色漩涡**、**红弹被吸回是否变白带彩色拖尾**、**半血后漩涡是否把转化红弹吸成内层环绕环（贴内圈公转、不扎堆）**、**漩涡被击杀 / BOSS 死亡后环绕弹是否静止停驻原地（仍能被打到、仍能撞死玩家）**、**技能1/2 是否会把区域内的转化红弹吸/推走、且拖尾变蓝（s1）/ 变红（s2）**、**技能1/2 拖/推的转化子弹是否走完固定距离后停下（不再无限加速）**、**技能2 的角度边缘（贴合绘制扇形斜线、外扩 ≤ `zoneHitPadPx`=30px 内）是否仍能命中**、**判定是否只在绘制扇形内（最多多出 ≤30px）**、**扇形方向是否全程不变（能靠横走躲开）**、**进吸力半径即被吸、越靠近涡心吸力越强（min→max）**、**被漩涡捕获后释放的子弹是否静止原地（不再被技能带着跑）**、**漩涡被击杀是否消散**、**入涡是否每 0.5s 掉血**） | `Boss2-Test.json` |
 
-改完必看的现象：子弹拖尾是否正常、命中是否有特效、敌人是否会绕墙而不是贴墙抖动、护盾能否挡下正面来弹、击杀后是否掉落。
+改完必看的现象：子弹拖尾是否正常、命中是否有特效、敌人是否会绕墙而不是贴墙抖动、护盾能否挡下正面来弹、击杀后是否掉落、**限时加成是否按时回退（属性复原且 HUD 图标消失）**、**即时护盾吸收后盾碎是否抖屏且玩家不掉血**、**临时武器使用中是否倒计时并到期自动还原主武器**。

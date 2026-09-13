@@ -194,8 +194,8 @@
   "triggers": [
     {
       "id": "trigger-boss25t5-start",
-      "x": 1450,
-      "y": 1200,
+      "x": 1410,
+      "y": 1050,
       "w": 120,
       "h": 400,
       "shape": "rect",
@@ -215,6 +215,7 @@
     }
   ],
   "cinematics": [],
+  "deathCinematic": "",
   "crates": [],
   "barrels": [],
   "chests": [],

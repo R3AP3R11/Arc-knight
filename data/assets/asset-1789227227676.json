@@ -1,0 +1,140 @@
+{
+  "id": "asset-1789227227676",
+  "name": "速度加成图标黑色",
+  "bgColor": "#0a1220",
+  "center": {
+    "x": 0,
+    "y": 0
+  },
+  "scale": 1,
+  "elements": [
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 20,
+      "sides": 6,
+      "cols": 12,
+      "rows": 12,
+      "cellSize": 8,
+      "gridColor": "",
+      "cells": [],
+      "lineWidth": 4,
+      "color": "#ffffff",
+      "fill": "#000000",
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "pattern": "plain",
+      "tickShortLen": 6,
+      "tickLongLen": 12,
+      "tickDensity": 12,
+      "tickRatio": 1,
+      "tickDir": "in",
+      "handLongRadius": 20,
+      "handShortRadius": 20,
+      "handLongColor": "#ffffff",
+      "handShortColor": "#ffffff",
+      "points": [
+        {
+          "x": -132.35714285714286,
+          "y": -197.35714285714286
+        },
+        {
+          "x": 26.642857142857142,
+          "y": -227.35714285714286
+        },
+        {
+          "x": -5.357142857142858,
+          "y": -38.35714285714286
+        },
+        {
+          "x": 44.642857142857146,
+          "y": 12.642857142857139
+        },
+        {
+          "x": -63.357142857142854,
+          "y": 78.64285714285714
+        },
+        {
+          "x": -183.35714285714286,
+          "y": 42.64285714285714
+        },
+        {
+          "x": -123.35714285714286,
+          "y": 36.64285714285714
+        },
+        {
+          "x": -83.35714285714286,
+          "y": 6.642857142857139
+        }
+      ],
+      "closed": true,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 20,
+      "sides": 6,
+      "cols": 12,
+      "rows": 12,
+      "cellSize": 8,
+      "gridColor": "",
+      "cells": [],
+      "lineWidth": 4,
+      "color": "#ffffff",
+      "fill": "#000000",
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "pattern": "plain",
+      "tickShortLen": 6,
+      "tickLongLen": 12,
+      "tickDensity": 12,
+      "tickRatio": 1,
+      "tickDir": "in",
+      "handLongRadius": 20,
+      "handShortRadius": 20,
+      "handLongColor": "#ffffff",
+      "handShortColor": "#ffffff",
+      "points": [
+        {
+          "x": 56.642857142857146,
+          "y": 72.64285714285714
+        },
+        {
+          "x": 56.642857142857146,
+          "y": 42.64285714285714
+        },
+        {
+          "x": 86.64285714285714,
+          "y": 12.642857142857139
+        },
+        {
+          "x": 116.64285714285714,
+          "y": 42.64285714285714
+        },
+        {
+          "x": 116.64285714285714,
+          "y": 72.64285714285714
+        },
+        {
+          "x": 86.64285714285714,
+          "y": 42.64285714285714
+        }
+      ],
+      "closed": true,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    }
+  ]
+}

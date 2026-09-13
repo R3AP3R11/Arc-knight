@@ -20,6 +20,9 @@ import { InteractablesMixin } from './systems/level/interactables.js';
 import { LevelFlowMixin } from './systems/level/level-flow.js';
 import { DropsMixin } from './systems/economy/drops.js';
 import { ProgressionMixin } from './systems/economy/progression.js';
+import { InnerShopMixin } from './systems/economy/inner-shop-runtime.js';
+import { RunItemsMixin } from './systems/economy/run-items-runtime.js';
+import { BattleItemsMixin } from './systems/ui/battle-items.js';
 import { HudMixin } from './systems/ui/hud.js';
 import { UiRuntimeMixin } from './systems/ui/ui-runtime.js';
 import { ScreensMixin } from './systems/ui/screens.js';
@@ -56,6 +59,8 @@ export function createGameScene(ctx) {
       // 原型机-2-5T5 技能5「蓝色漩涡」：场景级数组（不挂在 BOSS 实体上 → 技能结束/多 BOSS 都不影响）。
       // 元素契约见 systems/combat/boss25t5.js 顶部注释（渲染端按 id/x/y/r/hp/maxHp/t/hitT 取值）。
       this.boss25t5Vortices = [];
+      // 玩家被击败演出状态：{ phase:'cinematic'|'hold' }；null = 无演出（可直接结算）。
+      this.playerDeathFlow = null;
       this.gateTexts = new Map();
       if (!this.textures.exists(VENDOR_TEX_KEY)) {
         this.load.image(VENDOR_TEX_KEY, VENDOR_ICON);
@@ -97,7 +102,12 @@ export function createGameScene(ctx) {
         LEFT: Phaser.Input.Keyboard.KeyCodes.LEFT,
         RIGHT: Phaser.Input.Keyboard.KeyCodes.RIGHT,
         F: Phaser.Input.Keyboard.KeyCodes.F,
-        ESC: Phaser.Input.Keyboard.KeyCodes.ESC
+        ESC: Phaser.Input.Keyboard.KeyCodes.ESC,
+        // 局内消耗品交互键：小键盘 4/5 与主键盘 4/5（4=用药水/长按开轮盘，5=临时武器开/关）
+        NUMPAD4: Phaser.Input.Keyboard.KeyCodes.NUMPAD_FOUR,
+        NUMPAD5: Phaser.Input.Keyboard.KeyCodes.NUMPAD_FIVE,
+        DIGIT4: Phaser.Input.Keyboard.KeyCodes.FOUR,
+        DIGIT5: Phaser.Input.Keyboard.KeyCodes.FIVE
       });
       this.input.keyboard.enabled = true;
       this.game.canvas.setAttribute('tabindex', '0');
@@ -152,6 +162,14 @@ export function createGameScene(ctx) {
         return this.draw();
       }
 
+      // 玩家被击败演出：世界继续按运镜慢放 dt 跑（不早退），但锁死一切玩家输入。
+      // deathSim = 结算态 + 演出尚未结束（部分入口先置 state='fail' 再走演出）→ 放行本帧。
+      const deathSim = this.state === 'fail' && !!this.playerDeathFlow;
+      // playerDeathFlow 全程锁输入：stopCutscene 会先把 cinematicActive 置回 false 再回调 onComplete，
+      // 故 phase:'hold'（黑幕保持 ~500ms，state 仍为 'playing'）期间 cinematicInputLocked() 与 deathSim 均为 false，
+      // 若不单独纳入 playerDeathFlow，黑幕里玩家仍能按 F/4/5/ESC 打开菜单页顶掉结算页。
+      const inputLocked = deathSim || !!this.playerDeathFlow || (this.cinematicInputLocked?.() ?? false);
+
       if (this.menuScreen === 'workshop') {
         this.updateWorkshopLongPress();
         this.updateWorkshopScrollDrag();
@@ -193,7 +211,7 @@ export function createGameScene(ctx) {
           ctx.onExitPreview?.();
           return;
         }
-        this.toggleGrowth();
+        if (!inputLocked) this.toggleGrowth();
       }
 
       if (this.state === 'transition') {
@@ -206,14 +224,14 @@ export function createGameScene(ctx) {
         return;
       }
 
-      if (this.state !== 'playing') {
+      if (this.state !== 'playing' && !deathSim) {
         this.draw();
         return;
       }
 
       const nb = this.newbee;
       let dx = 0, dy = 0;
-      if (!nb || nb.allowMove) {
+      if ((!nb || nb.allowMove) && !inputLocked) {
         if (this.keys.A.isDown || this.keys.LEFT.isDown) dx--;
         if (this.keys.D.isDown || this.keys.RIGHT.isDown) dx++;
         if (this.keys.W.isDown || this.keys.UP.isDown) dy--;
@@ -240,9 +258,9 @@ export function createGameScene(ctx) {
 
       const pointer = this.input.activePointer;
       const rawFireDown = pointer.leftButtonDown();
-      const fireDown = (!this.isHubLevel() && (!nb || nb.allowFire)) && rawFireDown;
+      const fireDown = !inputLocked && (!this.isHubLevel() && (!nb || nb.allowFire)) && rawFireDown;
 
-      const wantShield = this.keys.SPACE.isDown && !this.player.shieldBroken;
+      const wantShield = !inputLocked && this.keys.SPACE.isDown && !this.player.shieldBroken;
       this.player.shieldActive = (!this.isHubLevel() && (!nb || nb.allowShield)) && wantShield;
       if (this.player.shieldActive) {
         this.player.shieldTimer = Math.min(1, this.player.shieldTimer + dt / SHIELD.fadeMs);
@@ -709,8 +727,7 @@ export function createGameScene(ctx) {
             this.player.shield = 0;
             this.player.shieldBroken = true;
             this.player.shieldActive = false;
-            this.state = 'fail';
-            this.syncUIState();
+            this.triggerPlayerDefeat();
             this.mothershipSelfDestruct(e);
             continue;
           }
@@ -809,15 +826,20 @@ export function createGameScene(ctx) {
       this.updateHud(dt);
       this.updateTriggers();
       this.updatePets(dt);
-      this.checkAsyncTriggerEvents();
+      // 死亡演出期间不派发异步触发器（避免 enemiesCleared 的 playCinematic 顶掉死亡运镜 → playerDeathFlow 卡死）
+      if (!inputLocked) this.checkAsyncTriggerEvents();
 
       this.updateNewbee(dt);
 
       this.updateHubInteract(dt);
-      this.updateVendorInteract(dt);
-      this.updateIdolInteract(dt);
-      this.updateIconInteract(dt);
-      this.updatePortalInteract(dt);
+      if (!inputLocked) this.updateVendorInteract(dt);
+      this.updateVendorSlot();
+      // 局内药水/限时武器推进 + 数字键 4/5 交互；须在 updateVendorInteract 之后，保证售货机页购买当帧即生效
+      this.updateRunItems(dt);
+      if (!inputLocked) this.updateBattleItemsInput(dt);
+      if (!inputLocked) this.updateIdolInteract(dt);
+      if (!inputLocked) this.updateIconInteract(dt);
+      if (!inputLocked) this.updatePortalInteract(dt);
       this.updateGuideArrows(dt);
 
       this.updatePlayCamera(dt);
@@ -887,7 +909,7 @@ export function createGameScene(ctx) {
   }
 
   // 战斗相关方法已外提至 systems/combat/ 下的 mixin，this 语义不变
-  Object.assign(EditorScene.prototype, EnemyAiMixin, Boss25T5Mixin, PlayerCombatMixin, DestructiblesMixin, PetMixin, SpawningMixin, TriggersMixin, InteractablesMixin, LevelFlowMixin, HudMixin, UiRuntimeMixin, ScreensMixin, SaveLoginMixin, NewbeeHubMixin, WorkshopMixin, DropsMixin, ProgressionMixin, EditorInputMixin, EditorCameraMixin, WorldRenderMixin, WorldOverlayMixin, MinimapMixin);
+  Object.assign(EditorScene.prototype, EnemyAiMixin, Boss25T5Mixin, PlayerCombatMixin, DestructiblesMixin, PetMixin, SpawningMixin, TriggersMixin, InteractablesMixin, LevelFlowMixin, HudMixin, UiRuntimeMixin, ScreensMixin, SaveLoginMixin, NewbeeHubMixin, WorkshopMixin, DropsMixin, ProgressionMixin, InnerShopMixin, RunItemsMixin, BattleItemsMixin, EditorInputMixin, EditorCameraMixin, WorldRenderMixin, WorldOverlayMixin, MinimapMixin);
 
   return EditorScene;
 }

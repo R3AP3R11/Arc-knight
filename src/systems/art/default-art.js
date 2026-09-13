@@ -33,10 +33,14 @@ export function buildPlayerDesign(scheme) {
     green: { id: 'default-player-green', name: '绿色武器方案', ringColor: '#42d978' }
   }[scheme];
   const ringColor = meta.ringColor;
+  // hex-ring（基础武器方案）去掉中心白色六边形描边；yellow / green 仍保留
+  const centerHex = scheme === 'hex-ring' ? [] : [
+    poly({ sides: 6, radius: PLAYER_ART.hexagonRadius, color: '#000000', fill: '#ffffff', lineWidth: PLAYER_ART.yLineThickness })
+  ];
   return {
     id: meta.id, name: meta.name, center: { x: 0, y: 0 }, scale: 1,
     elements: [
-      poly({ sides: 6, radius: PLAYER_ART.hexagonRadius, color: '#000000', fill: '#ffffff', lineWidth: PLAYER_ART.yLineThickness }),
+      ...centerHex,
       ring({ radius: PLAYER_ART.innerRingRadius, lineWidth: PLAYER_ART.innerRingThickness, color: ringColor }),
       ring({ radius: PLAYER_ART.outerRingRadius, lineWidth: PLAYER_ART.outerRingThickness, color: ringColor }),
       ring({ radius: PLAYER_ART.outer2RingRadius, lineWidth: PLAYER_ART.outer2RingThickness, color: ringColor }),

@@ -402,6 +402,9 @@
         <button id="cinematicDelete">删除</button>
         <button id="cinematicSave">保存</button>
         <button id="cinematicSetAnchor">设中心锚点</button>
+        <label class="artboard-flag" title="勾选后把当前运镜绑定为关卡『玩家被击败运镜』">
+          <input id="cinematicDeathFlag" type="checkbox"/>玩家被击败运镜
+        </label>
         <span class="sep"></span>
         <button id="cinematicPlay">▶ 播放</button>
         <button id="cinematicStop">■ 停止</button>
@@ -411,17 +414,23 @@
           <h3>时间轴</h3>
           <label>总时长(ms)<input id="cinematicDuration" type="number" min="1" step="50"/></label>
           <label>慢动作<input id="cinematicTimeScale" type="number" min="0.05" max="1" step="0.05"/></label>
-          <p class="hint">慢动作：0.3=整个运镜期间世界 30% 速度，1=正常。</p>
+          <label>焦点<select id="cinematicFocus">
+            <option value="none">固定 pan</option>
+            <option value="player">锁定玩家</option>
+            <option value="boss">锁定 BOSS</option>
+          </select></label>
+          <label>黑屏停顿(ms)<input id="cinematicBlackHold" type="number" min="0" max="3000" step="50"/></label>
+          <p class="hint">慢动作：0.3=整个运镜期间世界 30% 速度，1=正常。焦点为玩家/BOSS 时 pan 被焦点覆盖（与运行时一致）；取不到焦点则退回 pan。黑屏停顿：末帧黑屏坚持毫秒，0~3000。</p>
           <div id="cinematicKeyframes"></div>
           <div class="art-list-actions"><button id="cinematicAddKeyframe">+ 加关键帧</button></div>
           <h3>参照物（运镜锚点）</h3>
           <div id="cinematicRefs"></div>
           <div class="art-list-actions"><button id="cinematicAddRef">+ 加参照物</button></div>
-          <p class="hint">关键帧 t 为毫秒；点击刻度回放该帧。点击右侧预览的世界区域可添加参照物（红/蓝块为世界实体）。播放会按 zoom/pan/rotation/alpha 用画布 transform 模拟运镜。</p>
+          <p class="hint">关键帧 t 为毫秒；点击刻度回放该帧。点击右侧预览的世界区域可添加参照物（红/蓝块为世界实体）。关键帧 panX/panY = 相机视口左上角世界坐标（与运行时 cam.scrollX/scrollY 一致），叠层顺序 tint→暗角→黑幕→黑边→闪光。</p>
         </aside>
         <div class="art-preview">
           <h3>运镜预览</h3>
-          <canvas id="cinematicPreviewCanvas" width="800" height="600"></canvas>
+          <canvas id="cinematicPreviewCanvas" width="800" height="450"></canvas>
         </div>
       </div>
     </section>

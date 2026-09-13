@@ -2,7 +2,7 @@
  * 关卡流程混入模块（分类：关卡设计）
  *
  * 职责：关卡进入与切换阶段的镜头与状态机推进——玩家出生后的相机边界修正、
- * 开场演出（战斗关拉近镜头 / 普通关短过场）的启动与逐帧推进、关卡切换与外部流程的淡出启动。
+ * 开场演出（黑幕渐显，不再做镜头拉近）的启动与逐帧推进、关卡切换与外部流程的淡出启动。
  *
  * 方法清单：
  *   applyPlayerBounds                  —— 以玩家为中心扩展相机边界
@@ -12,7 +12,7 @@
  * 通过 Object.assign(EditorScene.prototype, LevelFlowMixin) 混入，
  * 内部 this 恒为 EditorScene 实例，语义与原类内方法完全一致。
  */
-import { CELL, SHIELD_MAX, PLAYER_COLLISION_RADIUS, PLAYER_ART } from '../constants.js';
+import { CELL, SHIELD_MAX, PLAYER_COLLISION_RADIUS } from '../constants.js';
 import { WEAPONS } from '../combat/weapons.js';
 import { buildGrid } from '../../pathfinding.js';
 import { HUD_IDLE_MS } from '../ui/hud.js';
@@ -39,14 +39,11 @@ export const LevelFlowMixin = {
       const battle = this.isBattleLevel();
       const duration = battle ? 3.5 : 1.2;
       if (battle) {
-        const targetZoom = this.playZoom();
-        const startZoom = 1920 / 340;   // 初始视野约 340
-        this.levelIntro = { t: 0, duration, battle: true, startZoom, targetZoom };
-        this.cameras.main.setZoom(startZoom);
+        // 战斗关开场只保留黑幕渐显（ui-runtime 按 levelIntro.t / duration 推进），镜头不再做「拉近」演出
+        this.cameras.main.setZoom(this.playZoom());
         this.centerCameraOnPlayer();
-      } else {
-        this.levelIntro = { t: 0, duration, battle: false };
       }
+      this.levelIntro = { t: 0, duration };
       this.state = 'transition';
     },
 
@@ -55,13 +52,6 @@ export const LevelFlowMixin = {
       const intro = this.levelIntro;
       intro.t += dt / 1000;
       const p = Math.min(1, intro.t / intro.duration);
-      if (intro.battle) {
-        const eased = Math.pow(p, 2.4);   // 先慢后快
-        const zoom = intro.startZoom + (intro.targetZoom - intro.startZoom) * eased;
-        this.cameras.main.setZoom(zoom);
-        this.cameras.main.scrollX = this.player.x - this.cameras.main.width / 2;
-        this.cameras.main.scrollY = this.player.y - this.cameras.main.height / 2;
-      }
       if (p >= 1) {
         this.levelIntro = null;
         this.state = 'playing';
@@ -96,6 +86,9 @@ export const LevelFlowMixin = {
       this.runGoldGained = 0;
       this.runExpGained = 0;
       this.settleStart = undefined;
+      // 玩家被击败演出状态随重开清零；残留黑幕一并撤掉（避免上一局死亡演出遗黑）。
+      this.playerDeathFlow = null;
+      this.hideCinematicFade?.();
       this.bullets = [];
       this.lasers = [];
       this.orbitHit = new Map();
@@ -144,7 +137,14 @@ export const LevelFlowMixin = {
       this.vendors = (l.vendors || []).map(v => ({ ...v }));
       this.vendorNearest = null;
       this.vendorTipT = 0;
-      this.vendorBought = new Set();
+      this.runItems = [];                 // 局内消耗品（药水队列；仅当局，随关卡重开清零，不写存档）
+      this.runTimedWeapons = [];          // 局内限时武器（仅当局）
+      this.runEffects = [];               // 局内限时加成（生效中，仅当局）
+      this.tempWeaponActive = false;      // 临时武器是否使用中（仅当局）
+      this.tempWeaponSaved = null;        // 启用临时武器时保存的主武器态（仅当局）
+      this.potionWheel = null;            // 药水选择轮盘状态（仅当局）
+      this.potionKeyHold = null;          // 数字键 4 按住状态（仅当局）
+      this.vendorActive = null;           // 当前打开的售货机实体
       this.idols = (l.idols || []).map(v => ({ ...v, used: false }));
       this.idolNearest = null;
       this.idolTipT = 0;
@@ -254,7 +254,7 @@ export const LevelFlowMixin = {
         weaponDirection: 1,
         previousFireDown: false,
         firing: false,
-        moveHexRadius: PLAYER_ART.hexagonRadius,
+        weaponIntroAt: this.time?.now || 0,
         moveLeanX: 0,
         moveLeanY: 0,
         shieldActive: false,
@@ -263,6 +263,7 @@ export const LevelFlowMixin = {
         shield: maxShield,
         maxShield,
         shieldBroken: false,
+        itemShields: [],            // 局内即时护盾（按顺序吸收伤害；仅当局，不写存档）
         hitFlash: null,
         combat,
         points: source?.points || {},
@@ -286,6 +287,8 @@ export const LevelFlowMixin = {
         this.buildUITexts();
         this.syncUIState();
       }
+      if (!this.editing) this.preloadRunItemArt();   // 预取药水图标（fire-and-forget）
+      this.hidePotionWheelTexts?.();                   // 重开时隐藏轮盘名称文本（独立 Phaser Text）
       if (!this.editing) this.setupPlayCamera();
       if (!this.editing && !this.isMenuLevel()) this.startLevelIntro();
       this.draw();
@@ -341,6 +344,37 @@ export const LevelFlowMixin = {
       }
       if (levelId) p.levels.current = levelId;
       this.persistSave(p);
+    },
+
+    // 玩家被击败流程：先播死亡运镜（可选）→ 黑幕停留 → 再进结算页。
+    // 幂等：多个失败入口（玩家受击 / BOSS 秒杀 / 母舰贴身）都会调用，重复调用直接返回。
+    // 无死亡运镜（id 为空）/ 找不到 clip / 非 play|trial 模式（编辑器态、打包端异常态）→ 走 fallback 直接结算。
+    triggerPlayerDefeat() {
+      const ctx = this.ctx;
+      if (this.editing) return;
+      if (this.playerDeathFlow) return;   // 演出进行中，防重复进入
+      const failStraight = () => { this.state = 'fail'; this.syncUIState(); };
+      const mode = ctx?.state?.mode;
+      if (mode !== 'play' && mode !== 'trial') { failStraight(); return; }
+      const id = ctx?.state?.level?.deathCinematic;
+      const clip = id ? (ctx.state.level.cinematics || []).find(c => c.id === id) : null;
+      if (!clip) { failStraight(); return; }
+      this.playerDeathFlow = { phase: 'cinematic' };
+      // playCutscene 可能因 clip 无关键帧而同步调用 stopCutscene → 触发下方 onComplete，链路须能承受同步回调。
+      this.playCutscene(clip, {
+        focusTarget: (clip.focus && clip.focus !== 'none') ? clip.focus : 'player',
+        holdBlack: true,
+        onComplete: () => {
+          this.playerDeathFlow = { phase: 'hold' };
+          this.time.delayedCall(Math.max(0, clip.blackHoldMs ?? 500), () => {
+            this.playerDeathFlow = null;
+            this.state = 'fail';
+            this.syncUIState();
+            this.draw();               // 先把结算页画出来（此时黑幕仍盖着，不会闪帧）
+            this.hideCinematicFade?.(); // 画完再撤黑幕
+          });
+        },
+      });
     },
 
     updateTransition(dt) {

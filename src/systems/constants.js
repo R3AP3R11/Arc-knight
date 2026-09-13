@@ -58,7 +58,18 @@ export const PLAYER_ART = {
 export const PLAYER_COLLISION_RADIUS = PLAYER_ART.weaponRingRadius + PLAYER_ART.weaponRingThickness;
 
 // ── 玩家倾斜与护盾 ──
-export const PLAYER_LEAN = { hex: 12, inner: 9, middle: 7, outer: 5, speed: 48, minHexRadius: 8 };
+export const PLAYER_LEAN = { hex: 12, inner: 9, middle: 7, outer: 5, speed: 48 };
+
+// ── 武器内圈环链 / 出场动画 ──
+export const WEAPON_RING_CHAIN = {
+  count: 120,     // 以「最内侧元素」为样板向内递归复制的个数（不含样板本身）
+  ratio: 0.75,    // 每个副本的半径 / 厚度 / 径向位置 = 前一个 × 此值
+  minPx: 1,      // 链环屏幕绝对厚度 < 1px 时不渲染、且不占出场时间片（按 refZoom 折算）
+  minZoom: 1.8,  // 相机 zoom 低于此值（战斗 zoom≈1、蓄力最高 1.6）完全不生成环链，保证战斗观感不变
+  refZoom: 3.5,  // 厚度判据的参考相机缩放：固定值 → 可见集合稳定，放大途中不会逐个冒出来变成「慢慢生成」
+  stepMs: 100,   // 出场：每 0.1s 启动下一个元素
+  fadeMs: 100    // 出场：每个元素自身 0.1s 渐显
+};
 export const SHIELD = { color: '#00eeff', arcDeg: 120, gap: 10, fadeMs: 500 };
 export const SHIELD_MAX = 50;
 export const SHIELD_SHAKE_MS = 150;

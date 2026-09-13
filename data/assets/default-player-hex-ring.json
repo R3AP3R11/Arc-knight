@@ -8,23 +8,6 @@
   "scale": 1,
   "elements": [
     {
-      "shape": "polygon",
-      "count": 1,
-      "orbitRadius": 0,
-      "radius": 10,
-      "sides": 6,
-      "lineWidth": 1.5,
-      "color": "#000000",
-      "fill": "#ffffff",
-      "rotSpeed": 0,
-      "phase": 0,
-      "dir": 1,
-      "arcStart": 0,
-      "arcEnd": 300,
-      "points": [],
-      "closed": false
-    },
-    {
       "shape": "arc",
       "count": 1,
       "orbitRadius": 0,

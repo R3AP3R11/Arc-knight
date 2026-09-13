@@ -20,7 +20,7 @@ export const ICON_CONTINUE = `/icons/${encodeURIComponent('继续.png')}`;
 export const WEAPON_SLOT_LEVELS = [12, 30];
 
 // 页面 蒙层淡入/淡出 时长（与选关页旧关闭渐隐一致）
-export const PAGE_FADE_MS = 280;
+export const PAGE_FADE_MS = 140;
 
 export const UiRuntimeMixin = {
     setupUI() {
@@ -301,7 +301,7 @@ export const UiRuntimeMixin = {
       const uph = this.uiPointer();
       const activeGraph = this.idolOffer || this.settingsMode || this.menuScreen ? null
         : this.isMenuLevel() ? ui.login
-        : (this.state === 'end' || this.state === 'fail') ? null
+        : (this.state === 'end' || this.state === 'fail' || this.playerDeathFlow) ? null
         : (this.state === 'paused' || interfaceLevel) ? ui.interface
         : this.isHubLevel() ? null
         : ui.battle;
@@ -329,7 +329,7 @@ export const UiRuntimeMixin = {
       }
       if (this.menuScreen) {
         this.hideHudOverlay();
-        this.uiG.fillStyle(0x000000, 1);
+        this.uiG.fillStyle(0x000000, this.menuScreen === 'vendor' ? 0.85 : 1);
         this.uiG.fillRect(0, 0, VIEW_W, VIEW_H);
         if (this.menuScreen === 'weapon') this.drawWeaponShop(ui.weapon || {});
         else if (this.menuScreen === 'workshop') this.drawWorkshopUI();
@@ -371,6 +371,9 @@ export const UiRuntimeMixin = {
           renderGraph(this.uiG, ui.login, this.uiState, BINDINGS, uiCtx({ texts: this.uiTexts?.login, images: this.uiImages?.login, buttons: this.buttons }));
           if (this.drawLoginButtons) this.drawLoginButtons();
         }
+      } else if (this.playerDeathFlow) {
+        // 玩家被击败演出中（死亡运镜 / 黑幕停留）：世界 + 运镜叠层以外什么都不画。
+        this.hideHudOverlay();
       } else if (this.state === 'end' || this.state === 'fail') {
         this.hideHudOverlay();
         this.drawSettlement();
@@ -603,7 +606,8 @@ export const UiRuntimeMixin = {
           else if (b.id && b.id.startsWith('buyWeapon_')) { this.pressAnim(b.id); this.buyWeapon(b.id.slice(10)); }
           else if (b.id && b.id.startsWith('buyMod_')) { this.pressAnim(b.id); this.buyMod(b.id.slice(7)); }
           else if (b.id && b.id.startsWith('buyPet_')) { this.pressAnim(b.id); this.buyPet(b.id.slice(7)); }
-          else if (b.id && b.id.startsWith('buyBuff_')) { this.pressAnim(b.id); this.buyBuff(b.id.slice(8)); }
+          else if (b.id && b.id.startsWith('buyVendor_')) { this.pressAnim(b.id); this.buyVendorItem(Number(b.id.slice(10))); }
+          else if (b.id === 'vendorRoll') { this.pressAnim(b.id); this.rollVendorSlot(); }
           else if (b.id && b.id.startsWith('idolCard_')) { this.pressAnim(b.id); this.chooseIdolBuff(Number(b.id.slice(9))); }
           else if (b.id && b.id.startsWith('workshopCard_')) { this.pressAnim(b.id); this.toggleWorkshopWeapon(b.id.slice(13)); }
           else if (b.id && b.id.startsWith('workshopTab_')) { this.pressAnim(b.id); this.workshopTab = b.id.slice(12); this.drawUI(); }

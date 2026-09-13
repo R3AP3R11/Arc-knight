@@ -11,7 +11,7 @@
  *   updateChests / updatePortals                —— 宝箱与传送门特效计时、自动开箱
  *   updateIdolInteract / updateIconInteract     —— 神像 / 图标靠近提示与 F 键互动
  *   triggerIconEvent                            —— 图标事件派发到对应菜单页
- *   updatePortalInteract / updateVendorInteract —— 传送门 / 售货机靠近提示与 F 键互动
+ *   updatePortalInteract / updateVendorInteract —— 传送门 / 售货机靠近提示与 F 键互动（售货机 F 键经 openVendorShop 打开局内商店页）
  *   openIdolOffer / closeIdolOffer / chooseIdolBuff —— 神像祝福开关与选取生效
  *
  * 通过 Object.assign(EditorScene.prototype, InteractablesMixin) 混入，
@@ -244,7 +244,7 @@ export const InteractablesMixin = {
 
       if (nearest && this.keys.F && Phaser.Input.Keyboard.JustDown(this.keys.F)) {
         nearest.guideUsed = true;   // 指引「交互后停止」标记（见 world-overlay.js:updateGuideArrows）
-        this.openMenuScreen('vendor');
+        this.openVendorShop(nearest);
       }
     },
 };

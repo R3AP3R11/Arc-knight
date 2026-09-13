@@ -327,7 +327,8 @@ export const EnemyAiMixin = {
         const clip = ctx?.state?.level?.cinematics?.find(c => c.id === bossCutsceneId);
         if (clip) {
           this.cameras.main.flash(120, 255, 255, 255);   // 击杀白闪增强冲击
-          this.playCutscene(clip, { focusTarget: 'boss', x: e.x, y: e.y });
+          // 玩家死亡运镜优先：此时若被 BOSS 击破运镜顶替，playerDeathFlow 会卡在 cinematic 阶段（playCutscene 覆盖时不回调旧 onComplete）→ 结算页永不出现。
+          if (!this.playerDeathFlow) this.playCutscene(clip, { focusTarget: 'boss', x: e.x, y: e.y });
         }
       }
       // 原型机-2-5T5 死亡：清掉它护盾拦截后停驻在场上的红子弹。

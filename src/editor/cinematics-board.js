@@ -9,6 +9,7 @@
 // ============================================================
 import { saveDraft } from '../api.js';
 import { setStatus } from '../ui.js';
+import { VIEW_W, VIEW_H } from '../systems/constants.js';
 
 // ── 模块级状态 ──
 let cur = null;          // 正在编辑的 CinematicDef
@@ -22,16 +23,39 @@ let stateRef = null;
 let domRef = null;
 let pickAnchor = false;   // 锚点选点模式（设中心锚点工具）
 
+// 缓动：与运行时 editor-camera.js:_easeValue 的 12 个分支逐字等价
+// （easeOut = Sine.Out、easeInOut = Sine.InOut；easeIn 为旧数据兼容，不在下拉中提供）
 const EASES = {
   linear: p => p,
-  easeIn: p => p * p,
-  easeOut: p => p * (2 - p),
-  easeInOut: p => p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2
+  sineIn: p => 1 - Math.cos((p * Math.PI) / 2),
+  sineOut: p => Math.sin((p * Math.PI) / 2),
+  sineInOut: p => -(Math.cos(Math.PI * p) - 1) / 2,
+  quadIn: p => p * p,
+  quadOut: p => p * (2 - p),
+  quadInOut: p => p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2,
+  cubicIn: p => p * p * p,
+  cubicOut: p => 1 - Math.pow(1 - p, 3),
+  cubicInOut: p => p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2,
+  easeOut: p => Math.sin((p * Math.PI) / 2),
+  easeInOut: p => -(Math.cos(Math.PI * p) - 1) / 2,
+  easeIn: p => p * p
 };
+
+// 下拉可选键：运行时 _easeValue 支持的 12 种
+const EASE_KEYS = ['linear', 'sineIn', 'sineOut', 'sineInOut', 'quadIn', 'quadOut', 'quadInOut',
+  'cubicIn', 'cubicOut', 'cubicInOut', 'easeOut', 'easeInOut'];
+
+// 焦点模式（与运行时语义一致：player/boss 时 pan 被焦点目标覆盖）
+const FOCUS_MODES = ['none', 'player', 'boss'];
+// 叠层 0~1 强度字段（编辑器输入即时 clamp）
+const OVERLAY_KEYS = ['vignette', 'letterbox', 'tint', 'flash', 'desat'];
+const TINT_COLOR_DEFAULT = '#1a0a0a';
+const FLASH_COLOR_DEFAULT = '#ffffff';
 
 // ── 数值工具 ──
 function num(v, d) { return Number.isFinite(Number(v)) ? Number(v) : d; }
 function clamp01(v) { return Math.max(0, Math.min(1, Number(v) || 0)); }
+function colorOf(v, d) { return (typeof v === 'string' && v.trim()) ? v : d; }
 
 function normKf(k) {
   const t = Math.max(0, Number(k && k.t) || 0);
@@ -42,7 +66,15 @@ function normKf(k) {
     panY: num(k && k.panY, 0),
     rotation: num(k && k.rotation, 0),
     alpha: num(k && k.alpha, 0),
-    ease: (k && k.ease) ? String(k.ease) : 'linear'
+    ease: (k && k.ease) ? String(k.ease) : 'linear',
+    timeScale: Math.max(0.05, Math.min(1, num(k && k.timeScale, 1))),
+    vignette: clamp01(num(k && k.vignette, 0)),
+    letterbox: clamp01(num(k && k.letterbox, 0)),
+    tint: clamp01(num(k && k.tint, 0)),
+    tintColor: colorOf(k && k.tintColor, TINT_COLOR_DEFAULT),
+    flash: clamp01(num(k && k.flash, 0)),
+    flashColor: colorOf(k && k.flashColor, FLASH_COLOR_DEFAULT),
+    desat: clamp01(num(k && k.desat, 0))
   };
 }
 
@@ -57,6 +89,8 @@ function normDef(d) {
     name: (d && d.name) == null ? '' : String(d.name),
     durationMs: dur,
     timeScale: Math.min(1, Math.max(0.05, num(d && d.timeScale, 1))),
+    focus: FOCUS_MODES.includes(d && d.focus) ? d.focus : 'none',
+    blackHoldMs: Math.round(Math.max(0, Math.min(3000, num(d && d.blackHoldMs, 0)))),
     keyframes
   };
 }
@@ -67,7 +101,9 @@ function emptyDef() {
     name: '新运镜',
     durationMs: 2000,
     timeScale: 1,
-    keyframes: [{ t: 0, zoom: 1, panX: 0, panY: 0, rotation: 0, alpha: 0, ease: 'linear' }]
+    focus: 'none',
+    blackHoldMs: 0,
+    keyframes: [normKf({ t: 0 })]
   };
 }
 
@@ -81,7 +117,13 @@ function evalAt(t) {
   const kfs = cur.keyframes;
   const dur = cur.durationMs || 1;
   t = Math.max(0, Math.min(t, dur));
-  if (!kfs.length) return { zoom: 1, panX: 0, panY: 0, rotation: 0, alpha: 0 };
+  if (!kfs.length) {
+    return {
+      zoom: 1, panX: 0, panY: 0, rotation: 0, alpha: 0, timeScale: 1,
+      vignette: 0, letterbox: 0, tint: 0, tintColor: TINT_COLOR_DEFAULT,
+      flash: 0, flashColor: FLASH_COLOR_DEFAULT, desat: 0
+    };
+  }
   if (kfs.length === 1) return kfs[0];
   if (t <= kfs[0].t) return kfs[0];
   if (t >= kfs[kfs.length - 1].t) return kfs[kfs.length - 1];
@@ -98,19 +140,69 @@ function evalAt(t) {
     panX: lerp(a.panX, b.panX),
     panY: lerp(a.panY, b.panY),
     rotation: lerp(a.rotation, b.rotation),
-    alpha: lerp(a.alpha, b.alpha)
+    alpha: lerp(a.alpha, b.alpha),
+    timeScale: lerp(a.timeScale, b.timeScale),
+    vignette: lerp(a.vignette, b.vignette),
+    letterbox: lerp(a.letterbox, b.letterbox),
+    tint: lerp(a.tint, b.tint),
+    flash: lerp(a.flash, b.flash),
+    desat: lerp(a.desat, b.desat),
+    // 颜色不插值：取所在段起点帧 a 的颜色
+    tintColor: a.tintColor,
+    flashColor: a.flashColor
   };
 }
 
-// 相机模型：视口=canvas，把 camera.width 世界宽映射到 canvas 宽，中心对准 camCenterWorld
-function camParams(level, ev) {
-  const cw = 800, ch = 600;
-  const worldW = level.world.width || 1920, worldH = level.world.height || 1080;
+// ── 相机模型（与运行时一致：panX/panY = 视口左上角世界坐标，cam.scrollX = panX）──
+function cameraSize(level) {
+  const worldW = (level.world && level.world.width) || VIEW_W;
   const camW = (level.camera && level.camera.width) || worldW;
+  return { camW, camH: camW * VIEW_H / VIEW_W };
+}
+
+// 预览画布像素尺寸（与 index.html canvas 属性一致；缺省按 16:9）
+function canvasSize() {
+  const c = domRef && domRef.cinematicPreviewCanvas;
+  const cw = (c && c.width) || 800;
+  const ch = (c && c.height) || Math.round(cw * VIEW_H / VIEW_W);
+  return { cw, ch };
+}
+
+// 焦点目标（运行时 _resolveFocusTarget 的编辑器版）：取不到返回 null → 退回 pan
+function focusTarget(level, mode) {
+  if (mode === 'player') {
+    const s = level.spawn;
+    if (s && Number.isFinite(Number(s.x)) && Number.isFinite(Number(s.y))) return { x: Number(s.x), y: Number(s.y) };
+    return null;
+  }
+  if (mode === 'boss') {
+    const list = level.enemies || [];
+    const en = list.find(e => e && e.bossActive)
+      || list.find(e => e && (e.type === 'mothership' || e.type === 'boss-2-5t5'));
+    if (en && Number.isFinite(Number(en.x)) && Number.isFinite(Number(en.y))) return { x: Number(en.x), y: Number(en.y) };
+  }
+  return null;
+}
+
+// 当前时刻有效状态：focus 覆盖 pan（语义同运行时 _applyCutsceneState：px = 焦点.x - camW/2）
+function effectiveEv(level) {
+  const ev = evalAt(playT);
+  const mode = (cur && cur.focus) || 'none';
+  const tgt = mode === 'none' ? null : focusTarget(level, mode);
+  if (!tgt) return ev;
+  const { camW, camH } = cameraSize(level);
+  return { ...ev, panX: tgt.x - camW / 2, panY: tgt.y - camH / 2 };
+}
+
+// 视口 = canvas：camera.width 世界宽 → canvas 宽；视口左上角(panX,panY) → 画布中心对准视口中心
+function camParams(level, ev) {
+  const { cw, ch } = canvasSize();
+  const worldW = level.world.width || VIEW_W, worldH = level.world.height || VIEW_H;
+  const { camW, camH } = cameraSize(level);
   const viewportScale = cw / camW; // 世界单位→像素（使相机宽填满画布）
-  const camCenterWorld = { x: worldW / 2 + (ev.panX || 0), y: worldH / 2 + (ev.panY || 0) };
+  const camCenterWorld = { x: (ev.panX || 0) + camW / 2, y: (ev.panY || 0) + camH / 2 };
   return {
-    cw, ch, worldW, worldH, camW,
+    cw, ch, worldW, worldH, camW, camH,
     viewportScale,
     camCenterWorld,
     rot: (ev.rotation || 0) * Math.PI / 180,
@@ -119,9 +211,20 @@ function camParams(level, ev) {
   };
 }
 
-// 画布像素 → 世界坐标（当前播放时刻的相机逆变换）
+// 世界 → 画布像素（camParams 的正变换，含旋转）
+function worldToScreen(cam, x, y) {
+  const s = cam.zoom * cam.viewportScale;
+  const dx = x - cam.camCenterWorld.x, dy = y - cam.camCenterWorld.y;
+  const ca = Math.cos(cam.rot), sa = Math.sin(cam.rot);
+  return {
+    x: cam.cw / 2 + (dx * ca - dy * sa) * s,
+    y: cam.ch / 2 + (dx * sa + dy * ca) * s
+  };
+}
+
+// 画布像素 → 世界坐标（当前播放时刻的有效相机逆变换）
 function screenToWorld(level, sx, sy) {
-  const cam = camParams(level, evalAt(playT));
+  const cam = camParams(level, effectiveEv(level));
   const px = sx - cam.cw / 2, py = sy - cam.ch / 2;
   const ang = -cam.rot, ca = Math.cos(ang), sa = Math.sin(ang);
   const rx = px * ca - py * sa, ry = px * sa + py * ca;
@@ -185,18 +288,87 @@ function drawWorld(ctx, cam) {
   ctx.restore();
 }
 
+// ── 叠层（顺序与运行时一致：tint → vignette → 黑幕 → letterbox → flash）──
+function drawOverlays(ctx, canvas, ev) {
+  const w = canvas.width, h = canvas.height;
+  const fillA = (c, a) => {
+    ctx.globalAlpha = a; ctx.fillStyle = c; ctx.fillRect(0, 0, w, h); ctx.globalAlpha = 1;
+  };
+  if (ev.tint > 0) fillA(ev.tintColor, ev.tint * 0.55);
+  if (ev.vignette > 0) {
+    const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.25, w / 2, h / 2, Math.hypot(w / 2, h / 2));
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, 'rgba(0,0,0,1)');
+    ctx.globalAlpha = ev.vignette;
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalAlpha = 1;
+  }
+  if (ev.alpha > 0) { ctx.fillStyle = `rgba(0,0,0,${ev.alpha})`; ctx.fillRect(0, 0, w, h); }
+  if (ev.letterbox > 0) {
+    const bh = h * 0.125 * ev.letterbox;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, w, bh);
+    ctx.fillRect(0, h - bh, w, bh);
+  }
+  if (ev.flash > 0) fillA(ev.flashColor, ev.flash * 0.8);
+}
+
+// 焦点标记：十字 + 圈（player 绿 / boss 红）
+function drawFocusMarker(ctx, canvas, cam) {
+  const mode = (cur && cur.focus) || 'none';
+  if (mode === 'none') return;
+  const tgt = focusTarget(stateRef.level, mode);
+  if (!tgt) return;
+  const p = worldToScreen(cam, tgt.x, tgt.y);
+  const col = mode === 'player' ? '#4dff88' : '#ff3355';
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.strokeStyle = col; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(p.x - 20, p.y); ctx.lineTo(p.x + 20, p.y);
+  ctx.moveTo(p.x, p.y - 20); ctx.lineTo(p.x, p.y + 20);
+  ctx.stroke();
+  ctx.beginPath(); ctx.arc(p.x, p.y, 26, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = col; ctx.font = '14px sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+  ctx.fillText(mode === 'player' ? '焦点:玩家' : '焦点:BOSS', p.x + 30, p.y - 8);
+  ctx.restore();
+}
+
+// 预览左上角参数行：t / duration · 焦点 · 慢动作
+function drawPreviewHud(ctx, canvas, ev) {
+  const hold = (cur && cur.blackHoldMs) || 0;
+  const txt = `t ${Math.round(playT)} / ${cur.durationMs}ms · focus ${(cur && cur.focus) || 'none'}`
+    + ` · 慢 ${Number(ev.timeScale == null ? 1 : ev.timeScale).toFixed(2)}`
+    + (hold ? ` · 末帧黑屏 ${hold}ms` : '');
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.font = '14px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(6, 6, Math.min(canvas.width - 12, 420), 24);
+  ctx.fillStyle = '#cfe9ff';
+  ctx.fillText(txt, 12, 11);
+  ctx.restore();
+}
+
 function drawPreview(dom) {
   const canvas = dom.cinematicPreviewCanvas;
   if (!canvas || !cur || !stateRef) return;
   const ctx = canvas.getContext('2d');
-  const ev = evalAt(playT);
+  const ev = effectiveEv(stateRef.level);
   const cam = camParams(stateRef.level, ev);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.filter = 'none';
+  ctx.globalAlpha = 1;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // 世界层：desat 用 ctx.filter 灰化，save/restore 保证 filter 不泄漏到叠层
+  ctx.save();
+  if (ev.desat > 0) ctx.filter = `grayscale(${Math.round(ev.desat * 100)}%)`;
   drawWorld(ctx, cam);
-  // alpha 蒙层（淡出到黑）
-  ctx.fillStyle = `rgba(0,0,0,${cam.alpha})`;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
+  ctx.filter = 'none';
+  drawOverlays(ctx, canvas, ev);
   // 相机视口框 + 中心十字
   ctx.strokeStyle = 'rgba(77,166,255,0.8)'; ctx.lineWidth = 2;
   ctx.strokeRect(6, 6, canvas.width - 12, canvas.height - 12);
@@ -205,6 +377,8 @@ function drawPreview(dom) {
   ctx.moveTo(canvas.width / 2 - 10, canvas.height / 2); ctx.lineTo(canvas.width / 2 + 10, canvas.height / 2);
   ctx.moveTo(canvas.width / 2, canvas.height / 2 - 10); ctx.lineTo(canvas.width / 2, canvas.height / 2 + 10);
   ctx.stroke();
+  drawFocusMarker(ctx, canvas, cam);
+  drawPreviewHud(ctx, canvas, ev);
   if (pickAnchor) drawAnchorHint(ctx, canvas, cam);
   updatePlayhead(dom);
 }
@@ -220,14 +394,13 @@ function drawAnchorHint(ctx, canvas, cam) {
   ctx.font = '16px sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('选点中：点击画面拾取中心', canvas.width / 2, 17);
-  // 选中帧镜头中心十字/圆环（选中帧中心经当前相机 transform 折算到画布像素）
+  // 选中帧镜头中心十字/圆环（与运行时同模型：中心 = 视口左上角 + 视口半宽/半高）
   if (selectedKf >= 0 && cur && cur.keyframes[selectedKf]) {
     const kf = cur.keyframes[selectedKf];
-    const { worldW, worldH } = stateRef.level.world;
-    const selCenter = { x: worldW / 2 + kf.panX, y: worldH / 2 + kf.panY };
-    const s = cam.zoom * cam.viewportScale;
-    const cx = canvas.width / 2 + (selCenter.x - cam.camCenterWorld.x) * s;
-    const cy = canvas.height / 2 + (selCenter.y - cam.camCenterWorld.y) * s;
+    const { camW, camH } = cameraSize(stateRef.level);
+    const selCenter = { x: kf.panX + camW / 2, y: kf.panY + camH / 2 };
+    const p = worldToScreen(cam, selCenter.x, selCenter.y);
+    const cx = p.x, cy = p.y;
     ctx.strokeStyle = '#ff2255'; ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(cx - 18, cy); ctx.lineTo(cx + 18, cy);
@@ -261,7 +434,8 @@ function stopPlay() {
 
 // ── 关键帧列表 + 时间轴渲染 ──
 function easeOptions(sel) {
-  return Object.keys(EASES).map(k =>
+  const keys = (!sel || EASE_KEYS.includes(sel)) ? EASE_KEYS : [...EASE_KEYS, sel];
+  return keys.map(k =>
     `<option value="${k}" ${k === sel ? 'selected' : ''}>${k}</option>`).join('');
 }
 
@@ -282,6 +456,14 @@ function renderKeyframes(dom) {
       <label>panY<input data-kf="panY" type="number" step="10" value="${k.panY}"/></label>
       <label>rot<input data-kf="rotation" type="number" step="1" value="${k.rotation}"/></label>
       <label>α<input data-kf="alpha" type="number" step="0.05" value="${k.alpha}"/></label>
+      <label>慢<input data-kf="timeScale" type="number" step="0.05" min="0.05" max="1" value="${k.timeScale}"/></label>
+      <label>暗角<input data-kf="vignette" type="number" step="0.05" min="0" max="1" value="${k.vignette}"/></label>
+      <label>黑边<input data-kf="letterbox" type="number" step="0.05" min="0" max="1" value="${k.letterbox}"/></label>
+      <label>色<input data-kf="tint" type="number" step="0.05" min="0" max="1" value="${k.tint}"/></label>
+      <label class="kf-color" title="色调颜色"><input data-kf="tintColor" type="color" value="${k.tintColor}"/></label>
+      <label>闪<input data-kf="flash" type="number" step="0.05" min="0" max="1" value="${k.flash}"/></label>
+      <label class="kf-color" title="闪光颜色"><input data-kf="flashColor" type="color" value="${k.flashColor}"/></label>
+      <label>去色<input data-kf="desat" type="number" step="0.05" min="0" max="1" value="${k.desat}"/></label>
       <label>ease<select data-kf="ease">${easeOptions(k.ease)}</select></label>
       <button class="kf-del" data-delkf="${i}">删除</button>
     </div>`).join('');
@@ -332,11 +514,11 @@ function applyCenterMigration(dom, ax, ay) {
     setStatus(dom, '请先选中一个关键帧', true);
     return;
   }
-  const { worldW, worldH } = stateRef.level.world;
+  const { camW, camH } = cameraSize(stateRef.level);
   const kf = cur.keyframes[selectedKf];
-  // 当前帧镜头中心 = worldW/2 + panX, worldH/2 + panY
-  const dx = ax - (worldW / 2 + kf.panX);
-  const dy = ay - (worldH / 2 + kf.panY);
+  // 当前帧镜头中心 = 视口左上角 + 视口半宽/半高（与运行时 cam.scrollX = panX 同模型）
+  const dx = ax - (kf.panX + camW / 2);
+  const dy = ay - (kf.panY + camH / 2);
   // 选中帧镜头中心对准锚点，其余帧按相同 delta 整体平移（相对轨迹不变）
   cur.keyframes.forEach(k => { k.panX += dx; k.panY += dy; });
   renderKeyframes(dom); drawPreview(dom);
@@ -379,6 +561,14 @@ function refreshSelect(dom) {
   else dom.cinematicSelect.value = '';
 }
 
+// 玩家被击败运镜：勾选 → 当前运镜 id 写进 state.level.deathCinematic；取消 → 置 ''
+// （deathCinematic 是关卡字段，不进 CinematicDef）
+function writeDeathFlag(dom) {
+  if (!stateRef || !stateRef.level) return;
+  const on = !!(dom.cinematicDeathFlag && dom.cinematicDeathFlag.checked && cur);
+  stateRef.level.deathCinematic = on ? cur.id : '';
+}
+
 function saveCurrent(dom) {
   if (!cur) { setStatus(dom, '没有可保存的运镜', true); return; }
   cur = normDef(cur);
@@ -386,6 +576,7 @@ function saveCurrent(dom) {
   const list = getCinematics(stateRef);
   const i = list.findIndex(c => c.id === cur.id);
   if (i >= 0) list[i] = cur; else list.push(cur);
+  writeDeathFlag(dom);
   refreshSelect(dom);
   setStatus(dom, `运镜已保存：${cur.name}`);
   return saveDraft(stateRef.levelId, stateRef.level)
@@ -398,6 +589,8 @@ function deleteCurrent(dom) {
   const list = getCinematics(stateRef);
   const i = list.findIndex(c => c.id === cur.id);
   if (i >= 0) { list.splice(i, 1); setStatus(dom, `运镜已删除：${cur.name || cur.id}`); }
+  // 删掉的正好是被击败运镜 → 清掉关卡上的悬挂引用
+  if (stateRef.level.deathCinematic === cur.id) stateRef.level.deathCinematic = '';
   stopPlay();
   pickAnchor = false;
   cur = normDef(emptyDef());
@@ -412,6 +605,12 @@ function renderAll(dom) {
   dom.cinematicName.value = cur.name || '';
   dom.cinematicDuration.value = cur.durationMs;
   if (dom.cinematicTimeScale) dom.cinematicTimeScale.value = cur.timeScale;
+  if (dom.cinematicFocus) dom.cinematicFocus.value = cur.focus || 'none';
+  if (dom.cinematicBlackHold) dom.cinematicBlackHold.value = cur.blackHoldMs || 0;
+  // 勾选状态跟随关卡字段刷新（切换运镜 / 载入运镜时）
+  if (dom.cinematicDeathFlag) {
+    dom.cinematicDeathFlag.checked = !!(stateRef && stateRef.level && stateRef.level.deathCinematic === cur.id);
+  }
   renderKeyframes(dom);
   renderRefs(dom);
   refreshSelect(dom);
@@ -484,6 +683,30 @@ export function initCinematicsBoard(dom, state) {
     drawPreview(dom);
   };
 
+  // 焦点：none 用固定 pan；player/boss 预览与运行时一致地覆盖 pan
+  dom.cinematicFocus.onchange = () => {
+    if (!cur) return;
+    cur.focus = FOCUS_MODES.includes(dom.cinematicFocus.value) ? dom.cinematicFocus.value : 'none';
+    dom.cinematicFocus.value = cur.focus;
+    drawPreview(dom);
+  };
+
+  // 末帧黑屏停顿（0~3000ms）
+  dom.cinematicBlackHold.onchange = () => {
+    if (!cur) return;
+    const v = Math.round(Math.max(0, Math.min(3000, Number(dom.cinematicBlackHold.value) || 0)));
+    cur.blackHoldMs = v;
+    dom.cinematicBlackHold.value = v;
+  };
+
+  // 玩家被击败运镜绑定：勾选 → 当前运镜 id 落 state.level.deathCinematic；取消 → 置 ''
+  dom.cinematicDeathFlag.onchange = () => {
+    writeDeathFlag(dom);
+    setStatus(dom, dom.cinematicDeathFlag.checked
+      ? `已绑定玩家被击败运镜：${cur ? (cur.name || cur.id) : ''}`
+      : '已解绑玩家被击败运镜');
+  };
+
   dom.cinematicSave.onclick = () => saveCurrent(dom);
   dom.cinematicDelete.onclick = () => deleteCurrent(dom);
   dom.cinematicSetAnchor.onclick = () => {
@@ -520,9 +743,15 @@ export function initCinematicsBoard(dom, state) {
     const i = Number(row.dataset.kfindex); const kf = cur.keyframes[i]; if (!kf) return;
     const key = t.dataset.kf; if (!key) return;
     if (key === 'ease') { kf.ease = t.value; drawPreview(dom); return; }
+    if (key === 'tintColor' || key === 'flashColor') {   // 颜色不插值，直接落段起点帧
+      kf[key] = colorOf(t.value, key === 'tintColor' ? TINT_COLOR_DEFAULT : FLASH_COLOR_DEFAULT);
+      drawPreview(dom); return;
+    }
     const v = Number(t.value);
-    if (!Number.isFinite(v)) return;
-    kf[key] = v;
+    if (!Number.isFinite(v)) return;   // 清空输入框：保留旧值，兜底交给 normKf
+    if (key === 'timeScale') kf.timeScale = Math.max(0.05, Math.min(1, v));
+    else if (OVERLAY_KEYS.includes(key)) kf[key] = clamp01(v);
+    else kf[key] = v;
     drawPreview(dom);
   });
   dom.cinematicKeyframes.addEventListener('change', e => {

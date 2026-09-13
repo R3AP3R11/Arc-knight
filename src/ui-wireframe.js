@@ -14,7 +14,7 @@ const HANDLE = 12; // 屏幕像素手柄半径
 function computeView() {
   let bg = null, area = 0;
   for (const s of shapes) {
-    if (s.shape === 'text') continue;
+    if (s.shape === 'text' || s.shape === 'line') continue;
     const a = (s.w || 0) * (s.h || 0);
     if (a > area) { area = a; bg = s; }
   }
@@ -69,6 +69,20 @@ function drawLabel(ctx, s, X, Y, W, H, sc) {
   ctx.textAlign = 'start';
 }
 
+// 连线折线：points 相对 bbox 原点 → 屏幕坐标
+function linePoints(s) {
+  const sc = view.scale;
+  return (s.points || []).map(p => ({ x: (s.x + p.x) * sc + view.ox, y: (s.y + p.y) * sc + view.oy }));
+}
+
+// mxGraph 圆角半径：arcSize 默认 15(%)，absoluteArcSize=1 时 arcSize 直接是设计单位。
+// 不能退化成 min(8px, 半边) —— 那样小尺寸圆角矩形会被夹成圆形。
+function cornerRadius(s, W, H) {
+  const raw = Number.isFinite(Number(s.arcSize)) ? Number(s.arcSize) : 15;
+  const r = s.absoluteArcSize ? raw * view.scale : Math.min(W, H) * Math.max(0, Math.min(50, raw)) / 100;
+  return Math.max(0, Math.min(r, W / 2, H / 2));
+}
+
 // 1:1 还原 mxGraph 界面元素：按 shape/颜色/旋转/文字样式绘制（套视图变换）
 function drawShape(ctx, s) {
   const sc = view.scale;
@@ -76,17 +90,33 @@ function drawShape(ctx, s) {
   const W = s.w * sc, H = s.h * sc;
   const kind = s.shape || (s.rounded ? 'rounded' : 'rect');
   const isText = kind === 'text';
-  const fill = isText ? null : (s.fill || null);
+  const isLine = kind === 'line';
+  const fill = (isText || isLine) ? null : (s.fill || null);
   const stroke = isText ? null : (s.stroke || null);
   const cx = X + W / 2, cy = Y + H / 2;
 
   ctx.save();
   if (s.rotation) {
     ctx.translate(cx, cy);
-    ctx.rotate(-s.rotation * Math.PI / 180);
+    // mxGraph 的 rotation 正向 = 顺时针（与 canvas rotate 同向），别写负号
+    ctx.rotate(s.rotation * Math.PI / 180);
     ctx.translate(-cx, -cy);
   }
-  if (!isText) {
+  if (isLine) {
+    const pts = linePoints(s);
+    if (stroke && pts.length > 1) {
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.globalAlpha = s.strokeOpacity ?? 1;
+      ctx.lineWidth = Math.max(0.1, (s.strokeWidth || 1) * sc);
+      ctx.strokeStyle = stroke;
+      if (s.dashed) ctx.setLineDash([4 * sc, 4 * sc]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
+  } else if (!isText) {
     ctx.beginPath();
     if (kind === 'ellipse') {
       ctx.ellipse(cx, cy, W / 2, H / 2, 0, 0, Math.PI * 2);
@@ -96,8 +126,24 @@ function drawShape(ctx, s) {
       ctx.lineTo(cx, Y + H);
       ctx.lineTo(X, cy);
       ctx.closePath();
+    } else if (kind === 'triangle') {
+      // mxTriangle：默认朝东（顶点在右边中点），direction=north/south/west 改朝向
+      const dir = s.direction || 'east';
+      if (dir === 'north') { ctx.moveTo(cx, Y); ctx.lineTo(X + W, Y + H); ctx.lineTo(X, Y + H); }
+      else if (dir === 'south') { ctx.moveTo(X, Y); ctx.lineTo(X + W, Y); ctx.lineTo(cx, Y + H); }
+      else if (dir === 'west') { ctx.moveTo(X, cy); ctx.lineTo(X + W, Y); ctx.lineTo(X + W, Y + H); }
+      else { ctx.moveTo(X + W, cy); ctx.lineTo(X, Y); ctx.lineTo(X, Y + H); }
+      ctx.closePath();
+    } else if (kind === 'parallelogram') {
+      // mxGraph stencil：上下边水平、左右边右倾；倾斜量 = style 的 size（设计单位，缺省 20）
+      const off = Math.min(Math.max((Number(s.size) || 20) * sc, 0), W / 2);
+      ctx.moveTo(X + off, Y);
+      ctx.lineTo(X + W, Y);
+      ctx.lineTo(X + W - off, Y + H);
+      ctx.lineTo(X, Y + H);
+      ctx.closePath();
     } else if (kind === 'rounded' || s.rounded) {
-      ctx.roundRect(X, Y, W, H, Math.min(8 * sc, W / 2, H / 2));
+      ctx.roundRect(X, Y, W, H, cornerRadius(s, W, H));
     } else {
       ctx.rect(X, Y, W, H);
     }
@@ -124,6 +170,27 @@ function toUI(canvas, e) {
 function toDesign(canvas, e) {
   const u = toUI(canvas, e);
   return { x: (u.x - view.ox) / view.scale, y: (u.y - view.oy) / view.scale };
+}
+
+// 命中检测：普通控件用包围盒；连线用「点到线段距离」（细线若用包围盒会点中大片空白）
+function hitShape(s, p) {
+  const pts = s.points || [];
+  if (s.shape === 'line' && pts.length > 1) {
+    const abs = pts.map(q => ({ x: s.x + q.x, y: s.y + q.y }));
+    const pad = Math.max(3, 6 / view.scale);
+    for (let i = 0; i < abs.length - 1; i++) {
+      if (segDistance(p, abs[i], abs[i + 1]) <= pad) return true;
+    }
+    return false;
+  }
+  return p.x >= s.x && p.x <= s.x + s.w && p.y >= s.y && p.y <= s.y + s.h;
+}
+
+function segDistance(p, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0;
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
 }
 
 function renderCanvas(dom) {
@@ -171,12 +238,13 @@ function renderNote(dom) {
   const noteBox = dom.wireframeNote;
   const s = shapes[selected];
   if (!s) { noteBox.innerHTML = '<p class="hint">先选中一个控件</p>'; return; }
+  const isLine = s.shape === 'line';
   noteBox.innerHTML = `
     <label>名称<input type="text" data-note="label" value="${s.label || ''}"></label>
     <label>X<input type="number" data-note="x" value="${Math.round(s.x)}"></label>
     <label>Y<input type="number" data-note="y" value="${Math.round(s.y)}"></label>
-    <label>宽<input type="number" data-note="w" value="${Math.round(s.w)}"></label>
-    <label>高<input type="number" data-note="h" value="${Math.round(s.h)}"></label>
+    ${isLine ? '' : `<label>宽<input type="number" data-note="w" value="${Math.round(s.w)}"></label>
+    <label>高<input type="number" data-note="h" value="${Math.round(s.h)}"></label>`}
     <label>功能 / 动画 / 逻辑描述<textarea data-note="note" rows="5">${s.note || ''}</textarea></label>`;
   noteBox.querySelectorAll('[data-note]').forEach(inp => {
     inp.oninput = () => {
@@ -206,7 +274,7 @@ function bindCanvas(dom) {
     const p = toDesign(canvas, e);
     for (let i = shapes.length - 1; i >= 0; i--) {
       const s = shapes[i];
-      if (p.x >= s.x && p.x <= s.x + s.w && p.y >= s.y && p.y <= s.y + s.h) {
+      if (hitShape(s, p)) {
         selected = i;
         drag = { mode: 'move', si: i, start: p, x: s.x, y: s.y };
         renderAll(dom);

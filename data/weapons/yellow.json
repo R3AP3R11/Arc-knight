@@ -24,7 +24,7 @@
         "shape": "polygon",
         "count": 1,
         "orbitRadius": 0,
-        "radius": 8,
+        "radius": 15,
         "sides": 3,
         "lineWidth": 0,
         "color": "#ffffff",
@@ -37,6 +37,16 @@
         "offsetSpeed": 5,
         "arcStart": 0,
         "arcEnd": 360,
+        "pattern": "plain",
+        "tickShortLen": 6,
+        "tickLongLen": 12,
+        "tickDensity": 12,
+        "tickRatio": 1,
+        "tickDir": "in",
+        "handLongRadius": 8,
+        "handShortRadius": 8,
+        "handLongColor": "#ffffff",
+        "handShortColor": "#ffffff",
         "points": [],
         "closed": false
       },
@@ -57,6 +67,16 @@
         "offsetSpeed": 5,
         "arcStart": 0,
         "arcEnd": 360,
+        "pattern": "plain",
+        "tickShortLen": 6,
+        "tickLongLen": 12,
+        "tickDensity": 12,
+        "tickRatio": 1,
+        "tickDir": "in",
+        "handLongRadius": 9,
+        "handShortRadius": 9,
+        "handLongColor": "#ffffff",
+        "handShortColor": "#ffffff",
         "points": [],
         "closed": false
       },
@@ -77,6 +97,16 @@
         "offsetSpeed": 5,
         "arcStart": 0,
         "arcEnd": 360,
+        "pattern": "plain",
+        "tickShortLen": 6,
+        "tickLongLen": 12,
+        "tickDensity": 12,
+        "tickRatio": 1,
+        "tickDir": "in",
+        "handLongRadius": 36,
+        "handShortRadius": 36,
+        "handLongColor": "#fff700",
+        "handShortColor": "#fff700",
         "points": [],
         "closed": false
       },
@@ -97,6 +127,16 @@
         "offsetSpeed": 5,
         "arcStart": 0,
         "arcEnd": 360,
+        "pattern": "plain",
+        "tickShortLen": 6,
+        "tickLongLen": 12,
+        "tickDensity": 12,
+        "tickRatio": 1,
+        "tickDir": "in",
+        "handLongRadius": 35,
+        "handShortRadius": 35,
+        "handLongColor": "#ffffff",
+        "handShortColor": "#ffffff",
         "points": [],
         "closed": false
       }
@@ -129,6 +169,16 @@
         "offsetSpeed": 1,
         "arcStart": 0,
         "arcEnd": 360,
+        "pattern": "plain",
+        "tickShortLen": 6,
+        "tickLongLen": 12,
+        "tickDensity": 12,
+        "tickRatio": 1,
+        "tickDir": "in",
+        "handLongRadius": 5,
+        "handShortRadius": 5,
+        "handLongColor": "#feed34",
+        "handShortColor": "#feed34",
         "points": [],
         "closed": false
       }
@@ -139,8 +189,11 @@
     "spreadDeg": 30,
     "baseAngleOffset": 0,
     "range": 0,
+    "speed": 500,
+    "fadeDuration": 0,
     "spreadRandom": 0,
     "randomColor": false,
+    "randomPalette": [],
     "shape": {
       "scale": 1,
       "center": {
@@ -165,6 +218,16 @@
           "offsetSpeed": 1,
           "arcStart": 0,
           "arcEnd": 360,
+          "pattern": "plain",
+          "tickShortLen": 6,
+          "tickLongLen": 12,
+          "tickDensity": 12,
+          "tickRatio": 1,
+          "tickDir": "in",
+          "handLongRadius": 4.5,
+          "handShortRadius": 4.5,
+          "handLongColor": "#ffffff",
+          "handShortColor": "#ffffff",
           "points": [],
           "closed": false
         }
@@ -207,5 +270,11 @@
         }
       }
     }
+  },
+  "mechanic": {
+    "aim": "auto",
+    "charge": null,
+    "ampArcs": [],
+    "orbit": null
   }
 }

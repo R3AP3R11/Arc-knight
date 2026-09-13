@@ -151,6 +151,41 @@ export async function startServer(options = {}) {
   async function listTestPlayers() { return await readJson(testPlayersIndex, []); }
   async function saveTestPlayers(slots) { await writeJson(testPlayersIndex, slots); }
 
+  // 策划表格 → 内购数据：开发期优先实时解析 xlsx（按三份表 mtime 缓存），
+  // 解析失败（文件缺失/被占用/格式异常/打包环境无 exceljs）时回退 data/inner-shop.json。
+  const tablesDir = options.tablesDir || path.join(root, '策划文档', 'server');
+  const TABLE_FILES = ['消耗品.xlsx', '武器.xlsx', '老虎机.xlsx'];
+  const innerShopEmpty = { consumables: [], weapons: [], lottery: { drawCost: 15, goldPrize: 15, kinds: [] } };
+  let innerShopCache = { key: '', value: null };
+  async function tableMtimeKey() {
+    const parts = [];
+    for (const name of TABLE_FILES) {
+      try { const st = await fs.stat(path.join(tablesDir, name)); parts.push(String(st.mtimeMs)); }
+      catch { parts.push('missing'); }
+    }
+    return parts.join('|');
+  }
+  async function readInnerShopFallback() {
+    try {
+      const doc = JSON.parse(await fs.readFile(path.join(dataRoot, 'inner-shop.json'), 'utf8'));
+      if (doc && Array.isArray(doc.consumables) && Array.isArray(doc.weapons) && doc.lottery) return doc;
+    } catch {}
+    return structuredClone(innerShopEmpty);
+  }
+  async function getInnerShop() {
+    const key = await tableMtimeKey();
+    if (innerShopCache.value && innerShopCache.key === key) return innerShopCache.value;
+    try {
+      const { buildInnerShop } = await import('./tools/export-tables.mjs');
+      const value = await buildInnerShop({ tablesDir });
+      innerShopCache = { key, value };
+      return value;
+    } catch (e) {
+      console.warn('[inner-shop] 解析策划表格失败，回退 data/inner-shop.json：', e.message);
+      return await readInnerShopFallback();
+    }
+  }
+
   async function serveStatic(req, res, url) {
     const rel = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\/+/, '');
     const rootAbs = path.resolve(staticDir);
@@ -219,6 +254,7 @@ export async function startServer(options = {}) {
           }
           if (req.method === 'POST') { await fs.writeFile(path.join(dataRoot, 'flow.json'), JSON.stringify(await body(req), null, 2)); return json(res, { ok: true }); }
         }
+        if (parts[1] === 'inner-shop' && req.method === 'GET') return json(res, await getInnerShop());
         if (parts[1] === 'level') {
           const id = parts[2] || 'level-1';
           if (req.method === 'GET') return json(res, JSON.parse(await fs.readFile(await file('levels', id), 'utf8')));

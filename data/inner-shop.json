@@ -1,0 +1,129 @@
+{
+  "generatedAt": 1789300223405,
+  "consumables": [
+    {
+      "id": "1000001",
+      "name": "恢复药水",
+      "desc": "局内使用的恢复药水，能够一次性回复25生命。",
+      "cost": 25,
+      "artType": "像素",
+      "artName": "恢复图标",
+      "artTypeInRun": "",
+      "artNameInRun": "",
+      "instant": false,
+      "inLottery": false,
+      "slot": 1,
+      "effectType": "heal",
+      "effectValue": 25,
+      "effectSec": 0
+    },
+    {
+      "id": "1000002",
+      "name": "力量药水",
+      "desc": "局内使用的力量药水，使用后60秒内攻击力增加25%。",
+      "cost": 25,
+      "artType": "动态资产",
+      "artName": "攻击力加成图标",
+      "artTypeInRun": "",
+      "artNameInRun": "",
+      "instant": false,
+      "inLottery": false,
+      "slot": 1,
+      "effectType": "attackPower",
+      "effectValue": 25,
+      "effectSec": 60
+    },
+    {
+      "id": "1000003",
+      "name": "即时护盾",
+      "desc": "购买后立刻在自己身边生成一个围绕自身的一次性护盾，护盾碎裂后消失。",
+      "cost": 25,
+      "artType": "轮廓",
+      "artName": "即时护盾图标",
+      "artTypeInRun": "",
+      "artNameInRun": "",
+      "instant": true,
+      "inLottery": true,
+      "slot": 0,
+      "effectType": "shield",
+      "effectValue": 50,
+      "effectSec": 0
+    },
+    {
+      "id": "1000004",
+      "name": "速度药水",
+      "desc": "局内使用的速度药水，使用后移动速度增加25%。",
+      "cost": 25,
+      "artType": "动态资产",
+      "artName": "速度加成图标黑色",
+      "artTypeInRun": "",
+      "artNameInRun": "",
+      "instant": false,
+      "inLottery": false,
+      "slot": 1,
+      "effectType": "moveSpeed",
+      "effectValue": 25,
+      "effectSec": 30
+    }
+  ],
+  "weapons": [
+    {
+      "id": "101",
+      "weaponId": "yellow",
+      "name": "散射",
+      "cost": 25,
+      "durationSec": 15,
+      "inLottery": true
+    },
+    {
+      "id": "102",
+      "weaponId": "green",
+      "name": "激光",
+      "cost": 25,
+      "durationSec": 15,
+      "inLottery": true
+    },
+    {
+      "id": "103",
+      "weaponId": "weapon-1788012926999",
+      "name": "地狱火霰弹枪",
+      "cost": 25,
+      "durationSec": 15,
+      "inLottery": true
+    }
+  ],
+  "lottery": {
+    "drawCost": 15,
+    "goldPrize": 15,
+    "kinds": [
+      {
+        "key": "weapon",
+        "name": "武器",
+        "weight": 5,
+        "artType": "动态资产",
+        "artName": "枪械售货机图标"
+      },
+      {
+        "key": "shield",
+        "name": "护盾",
+        "weight": 10,
+        "artType": "轮廓",
+        "artName": "护盾图标"
+      },
+      {
+        "key": "gold",
+        "name": "金币",
+        "weight": 15,
+        "artType": "像素",
+        "artName": "商城"
+      },
+      {
+        "key": "trash",
+        "name": "垃圾",
+        "weight": 15,
+        "artType": "动态资产",
+        "artName": "黑色叉号"
+      }
+    ]
+  }
+}

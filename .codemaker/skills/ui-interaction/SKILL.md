@@ -1,6 +1,6 @@
 ---
 name: ui-interaction
-description: 改 HUD / 全屏弹窗页 / 世界层渲染与悬浮提示与特效 / data/ui 节点图 / 点击命中与按钮回调时读这份；覆盖 src/systems/ui/**、src/ui-layer.js、src/ui-bindings.js、data/ui/*.json。
+description: 改 HUD（含局内消耗品·药水槽·限时武器槽·状态图标）/ 全屏弹窗页（含局内售货机·老虎机抽奖页）/ 世界层渲染与悬浮提示与特效 / 玩家被击败运镜期间的 HUD 隐藏（playerDeathFlow 分支）/ data/ui 节点图 / 点击命中与按钮回调时读这份；覆盖 src/systems/ui/**、src/ui-layer.js、src/ui-bindings.js、data/ui/*.json。触发词：售货机 / 局内商店 / 老虎机 / 抽奖 / 商品卡片 / 卡片翻面 / 摇奖动画 / 全屏弹窗页 / 局内消耗品 / 药水槽 / 药水选择轮盘 / 数字键4 / 数字键5 / 临时武器槽 / 状态图标 / 药水掉落 / 环链 / 内圈环链 / 出场动画 / 武器出场 / 六边形 / 运镜 / 过场运镜 / 死亡运镜 / 玩家被击败 / 运镜预览。
 ---
 
 # UI交互 开发指南
@@ -34,12 +34,15 @@ description: 改 HUD / 全屏弹窗页 / 世界层渲染与悬浮提示与特效
 | 头像 + 血条 + 护盾条 | (b) | `hud-art.js:13/30` |
 | 右下武器轮盘 + 武器图标 + 弹药数 | (b) | `hud-art.js:49/97`、`hud.js:167 drawAmmo` |
 | 充能条（yellow / green） | (b) | `hud.js:129 drawChargeBars` |
+| 局内消耗品槽 + 限时武器槽（左下药水槽/临时武器槽 + 队列小点 + 剩余时间条） | (b) | `hud.js:drawHud` 末尾调 `battle-items.js:drawBattleItems`（几何纯函数 `battle-items-art.js`） |
+| 药水选择轮盘（长按数字键 4 呼出，全屏蒙层 + 4 扇区 + 死区叉号） | (b) | `battle-items.js:updateBattleItemsInput`（输入/状态）+ `battle-items-art.js:drawPotionWheel`（绘制） |
+| 局内状态图标（限时加成白色小图标，玩家左下角 2 列×4 行） | (b) | `battle-items-art.js:drawBattleStatusIcons`（世界层 `world-render.js` 调用） |
 | 右上设置按钮 | (b) | `hud.js:147 drawSettingsButton` |
 | 设置蒙层（退出/再来一次/继续 + 二次确认） | (b) | `ui-runtime.js:541 drawSettingsOverlay` |
 | 暂停界面（面板 + 统计 + ✕） | (a) `data/ui/interface.json` | `ui-runtime.js:337`（`state==='paused'` 或 `level.ui==='interface'`） |
 | 商店页（页签式·黑白极简，顶部标题+双币、左侧4页签选中=白色矩形、右卡片5/排纵向滚动带顶/底留白；**武器页签列表=`weaponCatalog()` 已注册武器（不含基础 radial）；卡片中央渲染「固定图标背景资产 `assets/asset-1788442424562`（下层）+ 武器外观 `appearance`（上层）」两层叠加，用 `drawDesignCentered` 以设计原点居中；无 `appearance` 回退 `drawWeaponGlyph`；未达解锁等级显示锁+「到达xx级后解锁」；可达则购买按钮黑底+金币图标（画到 cardG）+价格+聚焦放大10%**） | (b) 参数取自 `data/ui/weapon.json`（含 `padV`） | `screens.js:131 drawWeaponShop` |
 | 关卡选择（2 页：页1=模式选关 探险/守卫，页2=探险子关选关） | (b) | `screens.js:84 drawLevelSelect` |
-| 局内商店 + 老虎机占位（售货机） | (b) | `screens.js:15 drawVendorShop` |
+| 局内售货机页（左老虎机抽奖 + 右 2×2 商品购买卡，设计稿 `docs/ui-designs/ui-ingame-shop.json` 等比放大 6 倍） | (b) | `screens.js:22 drawVendorShop`（图标解析 `vendor-shop-art.js`；数据/交互 `economy/inner-shop-runtime.js`） |
 | 神像三选一祝福卡（底部黑条蒙层飞入 + 白卡悬停放大 10%，点空白反向滑出关闭） | (b) | `world-overlay.js:214 drawIdolOffer` |
 | 存档选择页 | (b) | `save-login.js:32 drawSaveSelectUI` |
 | 工坊页（拖拽/背包/加点） | (b) | `workshop.js:14 drawWorkshopUI`（**属 gameplay，详见 gameplay-systems skill**） |
@@ -49,30 +52,34 @@ description: 改 HUD / 全屏弹窗页 / 世界层渲染与悬浮提示与特效
 | 转场黑幕 / 关卡入场淡入 / 虫洞开场 | (b) | `ui-runtime.js:383-391` |
 | 全屏菜单页/设置蒙层开关 蒙层淡入淡出 | (b) | `ui-runtime.js:412 openMenuScreen` / `:422 closeMenuScreen` / `:434 pageFadeAlpha` / `:442 drawPageFadeOverlay` / `:455 openSettingsOverlay` / `:464 closeSettingsOverlay`；恒定 `PAGE_FADE_MS` |
 
-**跨分类指路**：工坊页交互与背包 → gameplay-systems skill；编辑器画布手柄、UI 配置页、关卡 schema → engine-editor skill；伤害/价格/掉落数字 → economy-numbers skill；子弹与武器行为 → combat 相关 skill。
+**跨分类指路**：工坊页交互与背包 → gameplay-systems skill；编辑器画布手柄、UI 配置页、关卡 schema → engine-editor skill；伤害/价格/掉落数字 → economy-numbers skill（**局内消耗品/限时武器数据层 `RunItemsMixin`、`inner-shop.js` 也在此**）；子弹与武器行为 → combat 相关 skill。
 
 ## 2. 文件地图
 
 | 文件 | 职责 | 关键导出 | 行数 |
 | --- | --- | --- | --- |
-| `src/systems/ui/ui-runtime.js` | UI 运行时核心：相机装配、文本/贴图工厂、屏幕状态判定、`drawUI` 主调度、点击派发、按下动画 | `UiRuntimeMixin`（30 个方法）、`ICON_SETTINGS/EXIT/RETRY/CONTINUE`、`WEAPON_SLOT_LEVELS`、`PAGE_FADE_MS` | 634 |
-| `src/systems/ui/hud.js` | 战斗 HUD 状态机（explore/combat/secure/black 脉冲）与 HUD 各元素绘制；`drawHud` 调 `_trackHudGhosts` 维护血/盾受伤残弧状态（hp/shield 下降记 from→to，约 1s 渐隐）；**HUD 整体入场动画**：`hudEnterAlpha()` 在关卡开场(`levelIntro`)后驱动战斗 HUD（battle 节点图+血盾/弹药/充能+顶部 EXPLORE 条+小地图）淡入 0.5s→停留 0.2s→闪烁(消失 0.3s→渐显 0.5s 出现)，渐显用 smoothstep(`hudEaseInOut`，开头慢/中段自然/结尾缓，避免前段跳涨观感像瞬现)；`setHudAlpha(a)` 把 alpha 统一应用到全部独立对象；`hudIntro/hudIntroDone` 由 `level-flow.js restart` 重置 | `HudMixin`（14 个方法）、`HUD_IDLE_MS` | 324 |
-| `src/systems/ui/screens.js` | 全屏弹窗页绘制：局内商店 / 关卡选择（2 页：页1 模式选关 探险/守卫 卡、页2 探险子关平行四边形+旋转圆环+可拖背景网格）/ 商店页 / **关卡结算全屏页**（页签式+纵向滚动+购买逻辑，黑白极简：黑面板+白卡+黑字+灰边；**武器页签接入武器系统数据：武器列表 = `weaponCatalog()` 已注册武器（**不含基础武器 radial**，新注册自动同步）；卡片中央用固定「武器图标背景」资产+武器 `appearance` 两层叠加渲染，外观/背景用 `drawDesignCentered`（**以设计原点为中心**而非 `renderAssetFit` 的包围盒几何中心——旋转动画元素致 bcx/bcy 偏移使 minigun 等外观偏离中心）；无 `appearance` 回退 `drawWeaponGlyph`；解锁等级读 `getWeaponDef(type).unlockLevel`，未达级显示锁+「到达xx级后解锁」无购买按钮；购买按钮黑底+金币图标（**黄菱形画到 `cardG`，不能复用 drawDiamond 的 `g`=uiG depth1000 会被按钮黑底 depth1001 盖住**）+价格数字+聚焦放大10%（`shopBuyHover`），价格取 `node.prices[type] ?? def.price`**） | `ScreensMixin`（11 个方法）、`drawWeaponShop`、`drawSettlement`、`drawBigLevelSelect`、`drawSmallLevelSelect`、`drawTechRing`、`handleShopPointerDown/Up`、`updateShopScrollDrag`、`buyPet` | 773 |
-| `src/systems/ui/world-render.js` | 世界层：背景图、6 类精灵 Map 同步、主渲染循环 `draw()`（含掉落物绘制分派 `:550`）；未知房间揭示 alpha（`roomRevealAlpha`）应用到敌人/木箱/传送门/掉落及各精灵 sync（`syncXxxSprite` `setAlpha`/`setVisible`） | `WorldRenderMixin`（12 个方法） | 711 |
+| `src/systems/ui/ui-runtime.js` | UI 运行时核心：相机装配、文本/贴图工厂、屏幕状态判定、`drawUI` 主调度、点击派发、按下动画；**全屏页遮罩 alpha 独立**（`menuScreen==='vendor'` 时 0.85，其余页 1.0，`drawUI` `:332`）；**玩家被击败运镜期间隐藏 HUD**（`drawUI` `:374` `else if (this.playerDeathFlow) hideHudOverlay()`，放在 `state==='end'/'fail'` 结算分支**之前**，`activeGraph` 计算也排除它） | `UiRuntimeMixin`（28 个方法）、`ICON_SETTINGS/EXIT/RETRY/CONTINUE`、`WEAPON_SLOT_LEVELS`、`PAGE_FADE_MS` | 654 |
+| `src/systems/ui/hud.js` | 战斗 HUD 状态机（explore/combat/secure/black 脉冲）与 HUD 各元素绘制；`drawHud` 调 `_trackHudGhosts` 维护血/盾受伤残弧状态（hp/shield 下降记 from→to，约 1s 渐隐）；**HUD 整体入场动画**：`hudEnterAlpha()` 在关卡开场(`levelIntro`)后驱动战斗 HUD（battle 节点图+血盾/弹药/充能+顶部 EXPLORE 条+小地图）淡入 0.5s→停留 0.2s→闪烁(消失 0.3s→渐显 0.5s 出现)，渐显用 smoothstep(`hudEaseInOut`，开头慢/中段自然/结尾缓，避免前段跳涨观感像瞬现)；`setHudAlpha(a)` 把 alpha 统一应用到全部独立对象；`hudIntro/hudIntroDone` 由 `level-flow.js restart` 重置；**绘制末尾调 `this.drawBattleItems(g)`**（局内消耗品/临时武器槽），`hideHudOverlay` 额外调 `hidePotionWheelTexts?.()` 隐藏轮盘名文本（**`setHudAlpha` 已移除轮盘文本 alpha 处理**，原因见坑 42） | `HudMixin`（14 个方法）、`HUD_IDLE_MS` | 393 |
+| `src/systems/ui/screens.js` | 全屏弹窗页绘制：局内售货机页（`drawVendorShop` 完整设计稿页面，左老虎机抽奖 + 右 2×2 商品购买卡）/ 关卡选择（2 页：页1 模式选关 探险/守卫 卡、页2 探险子关平行四边形+旋转圆环+可拖背景网格）/ 商店页 / **关卡结算全屏页**（页签式+纵向滚动+购买逻辑，黑白极简：黑面板+白卡+黑字+灰边；**武器页签接入武器系统数据：武器列表 = `weaponCatalog()` 已注册武器（**不含基础武器 radial**，新注册自动同步）；卡片中央用固定「武器图标背景」资产+武器 `appearance` 两层叠加渲染，外观/背景用 `drawDesignCentered`（**以设计原点为中心**而非 `renderAssetFit` 的包围盒几何中心——旋转动画元素致 bcx/bcy 偏移使 minigun 等外观偏离中心）；无 `appearance` 回退 `drawWeaponGlyph`；解锁等级读 `getWeaponDef(type).unlockLevel`，未达级显示锁+「到达xx级后解锁」无购买按钮；购买按钮黑底+金币图标（**黄菱形画到 `cardG`，不能复用 drawDiamond 的 `g`=uiG depth1000 会被按钮黑底 depth1001 盖住**）+价格数字+聚焦放大10%（`shopBuyHover`），价格取 `node.prices[type] ?? def.price`**；**老虎机 3 窗口内图标 `REEL_ICON_SIZE = 88`（窗口白卡 120×120，四周各留 16px 内边距）**） | `ScreensMixin`（13 个方法）、`drawVendorShop`、`drawWeaponShop`、`drawSettlement`、`drawBigLevelSelect`、`drawSmallLevelSelect`、`drawTechRing`、`handleShopPointerDown/Up`、`updateShopScrollDrag`、`buyPet` | 998 |
+| `src/systems/ui/vendor-shop-art.js` | 售货机图标解析纯逻辑（无 Phaser 状态）：按「美术方案类型（图标）」（`动态资产`/`轮廓`/`像素`）定位 `api.js` 三库、按「美术方案名称（图标）」**精确匹配** → design；轮廓转 `shape:'stroke'` 元素、像素转 `shape:'pixel'` 元素、动态资产直用（三种 artType 统一经 `recenter` 把 `center` 设为负包围盒中心，见第 5 章口径）；**白卡/黑卡对比度变体**：`isNearWhite` 判纯白款、`blackVariant` 换黑款、`whiteVariant` 换白款（供局内 HUD 黑底槽用，非空颜色全→`#ffffff`）、`shopIconVariant(design,darkCard)` 白卡返回黑款/黑卡非白款反色；`designCache`/`listCache` 缓存，失败落 `null` 不抛 | `resolveArtRef`、`preloadArtRefs`、`getArtRef`、`invertDesign`、`drawShopIcon`、`isNearWhite`、`blackVariant`、`whiteVariant`、`shopIconVariant`（9 个） | 196 |
+| `src/systems/ui/battle-items-art.js` | 局内消耗品/限时武器 HUD **纯绘制 + 轮盘几何**（无 `this`，签名 `(g, ...)`）：药水槽/临时武器槽/队列小点/剩余时间条、药水选择轮盘（蒙层 + 4 扇区 + 死区 + 悬停**线性径向渐变**高亮 + 呼出/消失动画）、状态图标；几何常量全在文件顶部（背景框 `836,588,320×180` = 1920×1080 的 1/6，一律 ×6；**药水槽黑底白框白图；武器槽武器图案恒为「原色」（不反白），**两态（含使用中）都叠加圆形黑底盘 `WEAPON_BG_ASSET`**，两态差异 = 底色（黑/白）+ 边框色（白/`ringColor`）+ 底盘可见性（黑底上不可见/白底上显为黑盘）+ 有无顶条**；轮盘每项名称文本几何 `wheelIconPos`（图标中心）/`wheelNamePos`（图标正下方）+ `WHEEL_NAME_FONT=24`/`WHEEL_NAME_GAP=12`） | `POTION_DOT_GAP`、`WHEEL_NAME_FONT`/`WHEEL_NAME_GAP`、`WHEEL_HOVER_FADE_MS/RINGS/ALPHA_IN/ALPHA_OUT`、`wheelHoverIndex`、`wheelIconPos`、`wheelNamePos`、`drawItemSlotFrame`、`drawPotionQueueDots`、`drawPotionSlot`、`drawTempWeaponSlot`、`drawPotionWheel`、`drawBattleStatusIcons`（10 个纯函数） | 228 |
+| `src/systems/ui/battle-items.js` | `BattleItemsMixin`：局内消耗品 HUD **输入 + 绘制**（长按数字键 4 开轮盘/短按用前方药水、数字键 5 切临时武器）；`drawBattleItems` 画到 `uiG`，`drawBattleStatusIcons` 画到世界层；轮盘维护 `hoverT0` 渐显起点、武器槽透传 `tSec`（动态自转）、懒建**最多 4 个**轮盘药水名文本数组 `potionWheelTexts`（`WHEEL_NAME_FONT`=**24px**，每项位置 `wheelNamePos(i, scale)`、alpha 跟随轮盘动画）；新增 `hidePotionWheelTexts()` 批量隐藏 | `BattleItemsMixin`（4 方法）：`updateBattleItemsInput(dt)` / `drawBattleItems(g)` / `hidePotionWheelTexts()` / `drawBattleStatusIcons(g, player)` | 155 |
+| `src/systems/economy/inner-shop-runtime.js` | 局内售货机运行时（**归属 economy-numbers，作 UI 页的数据/交互支撑**）：打开页面、刷新/购买商品、老虎机摇奖与结算；依赖 `economy/inner-shop.js` + `ui/vendor-shop-art.js` | `InnerShopMixin`（12 个方法）：`openVendorShop`/`ensureVendorStock`/`setupVendorStock`/`preloadVendorArt`/`getVendorStock`/`isVendorBought`/`addRunItem`/`addRunTimedWeapon`/`buyVendorItem`/`rollVendorSlot`/`updateVendorSlot`/`settleVendorRoll` | 163 |
+| `src/systems/ui/world-render.js` | 世界层：背景图、6 类精灵 Map 同步、主渲染循环 `draw()`（含掉落物绘制分派 `:550`）；未知房间揭示 alpha（`roomRevealAlpha`）应用到敌人/木箱/传送门/掉落及各精灵 sync（`syncXxxSprite` `setAlpha`/`setVisible`）；**`drawShieldArc` 之后调 `drawItemShields(g, this.player)`（import 自 `entity-art.js` 的独立函数，非 `this.` 方法）+ `this.drawBattleStatusIcons(g, this.player)`**；掉落分派新增 `potion` 掉落物图标（尺寸 30，取不到图标退化白点并 `resolveArtRef` 补拉）；**`drawPlayer(g, this.player, t, { screenScale: this.cameras.main.zoom })` 把相机 zoom 透传给武器本体环链** | `WorldRenderMixin`（12 个方法） | 735 |
 | `src/systems/ui/world-overlay.js` | 世界层悬浮 UI 与特效：4 种 tips、宝箱十字星、神像祝福卡（底部黑条飞入+白卡悬停放大 20%；卡片图标读 `card.icon` 画板资产渲染，张数按 `offer.cards.length` 自适应）、屏外实体指引箭头（视窗边缘白箭头） | `WorldOverlayMixin`（11 个方法） | 454 |
 | `src/systems/ui/minimap.js` | **多箱庭小地图**（左上角**固定视窗** `MM_VIEW_W×MM_VIEW_H=480×270`，玩家白点恒居中、世界随玩家滚动）：等大箱庭正方形（`MM_CELL=80`，大小差异不体现）+ 每格标记（战斗/神像/宝箱/商人/BOSS）+ 灰色通道（`MM_CHANNEL 0x808080`，箱庭间距 `MM_GAP=45`）。仅 `roomLayout.mode==='multi'` 且非编辑态/非菜单/非结算时绘制；黑底白框直角（箱庭同款，`MM_BG 0x000000`/`MM_BORDER 0xffffff`，视窗白框 `MM_FRAME_W=20`）；**视窗裁剪用持久 `GeometryMask`**（`minimapMaskG`/`minimapContentG`/`minimapFrameG`，参照 `screens.js` shopCard 模式）；标记图标走画板动态资产（`getDesign`+`renderAsset`，空则中文文字占位）；**未知房间未揭示时以「未知」占位，揭示后显示真实标记**（`roomRevealAlpha` 判定）；**玩家在箱庭内用所属箱庭映射，在通道/间隙时用相邻两箱庭参考系线性融合（`refOf`+A→B 投影 `u`），保证穿越边界/切换锚点小地图位置连续不跳变**。在 `ui-runtime.js` 战斗态兜底分支调用 | `MinimapMixin`（`drawMinimap` / `hideMinimapOverlay`） | 211 |
-| `src/systems/ui/entity-art.js` | 实体美术纯函数（无 `this`）：玩家六边形+环、敌人形状、墙体、木箱、虫洞、护盾弧、平行四边形、掉落货币四角菱形图标 | `color`、`drawPlayer`、`drawEnemyShape`、`drawWallShape`、`drawWormhole`、`drawShieldArc`、`drawParallelogram`、`strokeDiamond`、`drawDropDiamond` 等 30+ | 613 |
-| `src/systems/ui/hud-art.js` | HUD 绘制纯函数：左下角「武器外观+图标背景」叠加头像（背景 144px/外观 96px；**普通武器局内本体 `drawHexRingPlayer` 用 `weaponAngle = t*2.5` 动态绕环转动**）、**270° 圆弧血条（外圈 r105）/护盾条（内圈 r84）**（中心 `(70,970)` 上移防遮挡、顶起顺时针、弧厚 7.5；受伤残弧 from→当前，红/深蓝随 `ghost.age` 渐隐）、武器轮盘、武器图标底座 | `drawHudAvatar`、`drawHudBars`、`drawArcBar`、`drawWeaponWheel`、`drawWeaponIcon`、`wheelOrder`、`lerpColor` | 140 |
+| `src/systems/ui/entity-art.js` | 实体美术纯函数（无 `this`）：玩家本体环组（**不再画中心六边形**；`drawHexRingPlayer(graphics, player, scale=1, opts=null)`，`opts={screenScale, elapsedMs}` 走「内圈环链 + 出场渐显」局内路径、`opts=null` 的 HUD/工坊 UI 保持静态全显；链环用**显式 `chain:true` 标记**（不能用半径判断——武器球半径比内环还小）、**两趟绘制（原件先/链环后）**、厚度判据用固定 `chainRefScale()`、链环对象带 `revealIndex` 供出场计时；`drawPlayer(graphics, player, t=0, opts=null)` 第 4 参，设计稿/武器外形分支与 **orbit（环绕机制）分支都走 `renderWeaponBody`**（禅灭等同样生成环链））、敌人形状、墙体、木箱、虫洞、护盾弧、**局内道具护盾整圈 `drawItemShields`**、平行四边形、掉落货币四角菱形图标 | `color`、`drawPlayer`、`drawHexRingPlayer`、`updatePlayerMoveLean`、`drawEnemyShape`、`drawWallShape`、`drawWormhole`、`drawShieldArc`、`drawItemShields`、`drawParallelogram`、`strokeDiamond`、`drawDropDiamond` 等 30+ | 758 |
+| `src/systems/ui/hud-art.js` | HUD 绘制纯函数：左下角「武器外观+图标背景」叠加头像（背景 144px/外观 96px；**普通武器局内本体 `drawHexRingPlayer` 用 `weaponAngle = t*2.5` 动态绕环转动**）、**270° 圆弧血条（外圈 r105）/护盾条（内圈 r84）**（中心 `(70,970)` 上移防遮挡、顶起顺时针、弧厚 7.5；受伤残弧 from→当前，红/深蓝随 `ghost.age` 渐隐）、武器轮盘、武器图标底座；**HUD 路径 `drawHexRingPlayer(..., 1.275)` 不传 `opts` → 静态全显，不受环链/出场动画影响（工坊卡片同理）** | `drawHudAvatar`、`drawHudBars`、`drawArcBar`、`drawWeaponWheel`、`drawWeaponIcon`、`wheelOrder`、`lerpColor` | 140 |
 | `src/ui-layer.js` | 数据驱动渲染器 + 共享绘制件（**含 hover/press 状态感知 + 自定义多边形 poly**） | `renderGraph`、`drawPanel/Bar/Button/Shape/Poly`、`drawWeaponGlyph`、`drawLock`、`UI_COLORS` | 319 |
 | `src/ui-bindings.js` | 节点 id → 运行时数据绑定表（9 条） | `BINDINGS` | 12 |
 | `src/ui-config.js` | 编辑器 UI 配置页（节点属性表单、新增节点模板、绑定下拉、**可视化画布编辑器入口**、interact/hover 交互字段、poly 顶点编辑） | `NEW_NODE` 模板、表单渲染、`renderUIConfigPage`（**详见 engine-editor skill**） | 231 |
 | `src/ui-editor.js` | UI 配置页可视化画布编辑器：点选/拖动/缩放节点、选中覆盖层、与表单实时同步、**hover 实时预览 + poly 点拖动编辑** | `UIEditor` `initUIEditor` `getUIEditor`（**详见 engine-editor skill**） | 391 |
 | `src/ui-preview.js` | Canvas 2D 侧的节点图预览（编辑器用，非 Phaser，**支持 hover 渐变 + poly**） | `renderUIPreview` | 215 |
 | `src/ui-interact.js` | **数据驱动 UI 交互状态纯函数引擎**：hover 渐变插值、事件/命中矩形、自定义多边形绘制参数混合（Phaser 运行时与 Canvas 编辑器预览共用） | `interactProgress` `blend` `lerpColor` `nodeRect` `lerp` | 57 |
-| `src/ui.js` | DOM 辅助：取节点、状态条、关卡列表、预览面板（改件区按库存数量渲染 + 宠物区「拥有/装备」） | `getDom`、`setStatus`、`renderLevels`、`renderPreviewWeapons/Mods/Pets` | 125 |
+| `src/ui.js` | DOM 辅助：取节点、状态条、关卡列表、预览面板（改件区按库存数量渲染 + 宠物区「拥有/装备」） | `getDom`、`setStatus`、`renderLevels`、`renderPreviewWeapons/Mods/Pets` | 137 |
 | `src/ui-library.js` | 可复用 UI 组件库（注册表 + 组件定义）：`LoginButton`（登录按钮）/ `GiftCard`（赐福卡）/ `WeaponCard`（工坊武器卡，含可配置通用/专属改件槽数） | `registerComponent` `getLibrary` `registerBuiltinComponents` `LoginButton` `GiftCard` `WeaponCard` | 323 |
-| `src/systems/constants.js` | UI 相关共享常量 | `VIEW_W/VIEW_H`、`FONT_TECH(_SC)`、`PLAYER_ART`、`SETTLE_*`、`WEAPON_BG_ASSET`、各贴图键 | 91 |
-| `src/game-scene.js` | 场景骨架：`create` 装 UI、`update` 驱动，末尾 `Object.assign` 装配 21 个 mixin | `createGameScene` | 603 |
+| `src/systems/constants.js` | UI 相关共享常量 | `VIEW_W/VIEW_H`、`FONT_TECH(_SC)`、`PLAYER_ART`、`SETTLE_*`、`WEAPON_BG_ASSET`、`WEAPON_RING_CHAIN`、各贴图键 | 113 |
+| `src/game-scene.js` | 场景骨架：`create` 装 UI、`update` 驱动，末尾 `Object.assign` 装配 **25 个 mixin**（含 `InnerShopMixin`，其后**紧跟 `RunItemsMixin`、`BattleItemsMixin`**；`update` 里 `updateVendorInteract(dt)` → `updateVendorSlot()` → `updateRunItems(dt)` → `updateBattleItemsInput(dt)`）；`addKeys` 含 `NUMPAD4/NUMPAD5/DIGIT4/DIGIT5` | `createGameScene` | 922 |
 | `data/ui/battle.json` | 战斗 HUD 数据节点（5 个） | — | 13 |
 | `data/ui/interface.json` | 暂停/界面页节点（6 个）+ `stats` / `sections` | — | 21 |
 | `data/ui/login.json` | 登录页节点（3 个：image + 2 text） | — | 11 |
@@ -100,12 +107,21 @@ description: 改 HUD / 全屏弹窗页 / 世界层渲染与悬浮提示与特效
 | 改传送门 / 神像 / 售货机悬浮提示文案 | `src/systems/ui/world-overlay.js:109 / :154 / drawVendorUI` 的 `tip.setText` |
 | 改屏外实体指引箭头（边缘白箭头 / 图标 / 淡入淡出） | `world-overlay.js:376 updateGuideArrows` + `:414 drawGuideArrows`；数据字段 `guide/guideRange/guideIcon/guideStopAfterUse` 见 level-design skill；外观依设计稿 `docs/ui-designs/ui-arrow.json` 放大 1.5 倍（白圆 r12 图标位 + 白三角尖端朝实体：尖 33/底 13.5/半宽 9.75；图标资产半径系数 11、名称占位文本 20px） |
 | 改宝箱 / 传送门 / 桶精灵尺寸与贴图 | `src/systems/constants.js`（`CHEST_SIZE`、`CHEST_*_KEY`、`BARREL_ICON`…）+ `world-render.js` 对应 `syncXxxSprites` |
-| 改玩家外观（六边形 / 环 / 倾斜） | `src/systems/constants.js:39 PLAYER_ART` + `src/systems/ui/entity-art.js:523 drawHexRingPlayer` |
+| 改玩家外观（环 / 环链 / 倾斜；**中心六边形已移除**） | `src/systems/constants.js:61 PLAYER_LEAN` + `:64 WEAPON_RING_CHAIN` + `src/systems/ui/entity-art.js:532 drawHexRingPlayer`（第 4 参 `opts={screenScale, elapsedMs}` 走环链+出场；链环显式 `chain:true` + 两趟绘制（原件先/链环后）+ `revealIndex` 供出场计时 + 厚度判据 `chainRefScale()`）/ `:643 drawPlayer`（第 4 参 `opts`；世界层传 `cameras.main.zoom`；**orbit 环绕分支也走 `renderWeaponBody`**）/ `src/systems/art/weapon-body.js:renderWeaponBody`（两趟绘制：原件先/链环后） |
 | 改敌人形状 | `src/systems/ui/entity-art.js:395 drawEnemyShape`（按 `e.type` 分支） |
 | 改掉落物图标（金币黄菱形 / 钻石天蓝菱形 / 经验充能圆点） | `world-render.js:550` 按 `d.type` 分派 + `entity-art.js:423 drawDropDiamond`（颜色在分派处传参 `0xffd54f` / `0x00e5ff`） |
 | 新增一个点击按钮回调 | 绘制处 `this.buttons.push({id,x,y,w,h})` → `src/systems/ui/ui-runtime.js:615 onUIPointer` 加 id 分支 |
 | 调整每帧渲染顺序 | `src/systems/ui/world-render.js:336 draw()`（世界层）与 `ui-runtime.js:243 drawUI()`（UI 层） |
 | 改/加小地图（多箱庭） | `src/systems/ui/minimap.js`（`MinimapMixin:drawMinimap`，战斗态兜底分支 `ui-runtime.js` 调 `this.drawMinimap(this.uiG)`）+ 格子/面板布局常量在文件顶部；标记数据契约见 level-design skill §3.8 `cells[].marker` |
+| 改售货机页布局 / 商品卡坐标 / 动画时长 | `src/systems/ui/screens.js:22 drawVendorShop`（坐标与动画时长写死在函数内，取设计稿 `docs/ui-designs/ui-ingame-shop.json` ×6；见第 5 章「售货机页布局与动画」表） |
+| 改售货机商品池 / 老虎机种类 / 抽奖价 | 改 `策划文档/server/{消耗品,武器,老虎机}.xlsx` → `node tools/export-tables.mjs` 重生成 `data/inner-shop.json`（纯逻辑 `economy/inner-shop.js`），**无需改代码**；详见 economy-numbers skill |
+| 改售货机图标解析 / 反色规则 | `src/systems/ui/vendor-shop-art.js`（`resolveArtRef` 按名精确匹配三库、`invertDesign` 已购反色） |
+| 改售货机 F 键交互 / 商品落袋 / 摇奖结算 | `src/systems/economy/inner-shop-runtime.js`（`InnerShopMixin` 12 方法）；关卡侧入口 `level/interactables.js:updateVendorInteract`（level-design skill） |
+| 改局内药水槽 / 临时武器槽位置或外观 | `src/systems/ui/battle-items-art.js`（顶部常量 `ITEM_SLOT_SIZE`/`POTION_SLOT_POS`/`TEMP_SLOT_POS`/`TEMP_TIME_BAR_*`）+ `drawPotionSlot`/`drawTempWeaponSlot` |
+| 改药水选择轮盘几何 / 动画 / 命中 | `src/systems/ui/battle-items-art.js`（`WHEEL_*` 常量 + `drawPotionWheel` + `wheelHoverIndex`）+ 输入 `battle-items.js:updateBattleItemsInput` |
+| 改局内状态图标位置 / 排序 | `src/systems/ui/battle-items-art.js`（`STATUS_*` 常量，**世界坐标**；`drawBattleStatusIcons` 列优先填充） |
+| 改局内消耗品 / 限时武器数据（队列 / 使用 / 时长） | `src/systems/economy/run-items-runtime.js`（`RunItemsMixin` 14 方法）→ **economy-numbers skill** |
+| 改「护盾」消耗品的即时吸收逻辑 | `src/systems/combat/player-combat.js:damagePlayer`（扣血前消费 `player.itemShields`）→ **combat skill** |
 | 加/改一层 depth | 见第 5 章 depth 分层表，改对应 `setDepth()` 调用点 |
 
 ## 3. 核心数据结构
@@ -169,7 +185,7 @@ description: 改 HUD / 全屏弹窗页 / 世界层渲染与悬浮提示与特效
 
 | 字段 | 说明 |
 | --- | --- |
-| `id` | 分支键，约定前缀：`upgrade_` `buyWeapon_` `buyMod_` `buyPet_` `buyBuff_` `idolCard_` `workshopCard_` `workshopTab_` `workshopSlot_` `shopTab_` `selectSave_` `levelMode_` `levelSmall_`；固定 id：`menuClose` `close` `levelBack` `settings_exit/retry/continue/confirm/cancel` `saveSelectBack` `settleHome` |
+| `id` | 分支键，约定前缀：`upgrade_` `buyWeapon_` `buyMod_` `buyPet_` `buyVendor_` `idolCard_` `workshopCard_` `workshopTab_` `workshopSlot_` `shopTab_` `selectSave_` `levelMode_` `levelSmall_`；固定 id：`menuClose` `close` `vendorRoll` `levelBack` `settings_exit/retry/continue/confirm/cancel` `saveSelectBack` `settleHome`（`buyBuff_`/`buyBuff` 随旧三条 buff 商店一并删除） |
 | `x` `y` `w` `h` | UI 坐标矩形（左上角 + 尺寸），命中判定是纯 AABB |
 | `disabled` | 仅 `button` 节点会带；`onUIPointer` **当前不检查它** |
 | `node` | 可选透传：`levelMode_` 用 `node.key`(explore/guard)+`node.unlocked`、`levelSmall_` 用 `node.levelId`+`node.unlocked`、`buyWeapon_` 用 `node.type/price` |
@@ -191,6 +207,7 @@ description: 改 HUD / 全屏弹窗页 / 世界层渲染与悬浮提示与特效
 | `this.settingsMode` | `null` / `'menu'` / `'confirm'` | 点设置按钮 → `menu`；`settings_exit` → `confirm`；`settings_cancel` → `menu`；`settings_continue`/ESC → null |
 | `this.settingsPrev` | `'playing'` / `null` | 同 `prevState` 语义，用于设置蒙层 |
 | `this.state`（场景态，非 UI 私有） | `playing` `paused` `transition` `end` `fail` | 决定 `drawUI` 走哪个分支 |
+| `this.playerDeathFlow`（场景态，非 UI 私有） | `null` / `{phase:'cinematic'\|'hold'}` | 玩家被击败演出进行中：`drawUI` 走 `else if (this.playerDeathFlow) hideHudOverlay()`（在 `end/fail` 结算分支**之前**）+ `activeGraph` 排除它；由 `level-flow.js:triggerPlayerDefeat` 置位/收尾清空（详见 level-design §4⑨）。**黑幕保持期 `cinematicInputLocked()` 已为 false，输入锁靠它自己承担**（见第 7 章坑 46） |
 | `this.idolOffer` | `null` / `{idol, cards[3], startT, hoverT[3], closing, closeStart}` | `interactables.js:195` 触发神像；选卡或**点空白触发离场**后置 null，点空白**不消耗神像**可再交互。**优先级最高**，盖过 settings/menu；`startT` 驱动滑入、`hoverT` 插值 hover 放大、`closing=true` 时 `closeStart` 驱动反向滑出，结束调 `closeIdolOffer` |
 | `this.levelSelectPage` | `1` / `2` | 选关页当前页：1=模式选关(探险/守卫卡)，2=探险子关选关。`openMenuScreen('levelSelect')` 重置 1；`levelMode_explore` → 2；`levelBack` → 1；关闭时 `ui-runtime.js:268` 重置 1 |
 | `this.pageFade` | `null` / `{phase:'in'\|'out', t0, dur}` | 全屏菜单页/设置蒙层开关的蒙层淡入淡出机：`openMenuScreen`/`openSettingsOverlay` 置 `'in'`（蒙层 alpha 1→0，页面淡入）；`closeMenuScreen`/`closeSettingsOverlay` 置 `'out'`（蒙层 0→1，页面淡出），均 `dur=PAGE_FADE_MS`。`drawUI` 内 `pageFadeAlpha()`+`drawPageFadeOverlay()` 每帧叠黑幕，'out' 完成调 `finishCloseMenuScreen`/`finishCloseSettings` 真正关页并恢复 `state`。旧 `levelSelectClosing`/`levelSelectFadeStart`（仅选关页特例）已并入本机制移除 |
@@ -203,6 +220,16 @@ description: 改 HUD / 全屏弹窗页 / 世界层渲染与悬浮提示与特效
 | `this.killTally` / `this.runGoldGained` / `this.runExpGained` | 对象 / number | 结算页数据源（**只读**）：`killTally={type:count}` 由 `enemy-ai.js:defeatEnemy` 增量、`runGoldGained/runExpGained` 由 `drops.js:collectDrop` 增量，三者均在 `level-flow.js:restart` 归零（属 combat/economy，见各自 skill） |
 | `this.guideAlphas` / `this.guideMarkers` / `this.guideTexts` | `Map<entity,alpha>` / `[{x,y,angle,alpha,entity,label}]` / `Map<entity,Text>` | 屏外实体指引箭头状态：`updateGuideArrows(dt)`（`game-scene.js:510` 调度）每帧重建 markers（淡入淡出 200ms，`GUIDE_FADE_MS/GUIDE_EDGE_INSET` 模块常量）；`drawGuideArrows(g)`（`world-render.js:571`）画白圆+白三角+资产/名称占位文本（depth 13，`uiCam.ignore`）；三者在 `level-flow.js:restart` 清空重建（markers 键是实体对象，重开换引用） |
 | `this.wheelAnim` | `null` / `{from,to,t,dur:500}` | 换武器时 `player-combat.js:85` 设置 |
+| `this.vendorActive` | 对象 / `null` | 当前打开的售货机实体（`openVendorShop(vendor)` 记录）；该 `vendor` 是 `level-flow.restart` 生成的副本，随重开换引用 |
+| `vendor.stock` | `[{kind,id,name,desc,cost,artType,artName,durationSec?}]` / `undefined` | 该实体随机抽取并**持久**的 4 个商品（`rollShopStock` 商品池 7 选 4 不重复）；未就绪时 `undefined`（页面显「加载中…」）。同一实体重复打开不变、不同实体互相独立 |
+| `vendor.bought` | `Set<index>` | 已购下标（每商品限购 1 次）；购买后卡片翻面黑底白边「已购买」+图标**纯白（`whiteVariant`，非反色）**、不再响应点击 |
+| `vendor.slot`（7 字段） | 对象 / `null` | 老虎机状态：`{icons:[k0,k1,k2], prize:{kind,item?/amount?}, rolling, rollAt, settleAt, prizeAt, granted}`；`settleAt = rollAt + LOTTERY_ROLL_MS(2500)`，`prizeAt` 为中奖卡滑入起点 |
+| `this.vendorView` | 对象 | 售货机页**自持**动画/装饰态（非实体字段）：`{vendor, t0, hover{}, flip{}, bought{}, deco[3], whiteCache, variantCache}`；`vendor` 换实体时整体重置→触发入场翻牌重播。未摇奖时窗口滚动图标层用的是**页面自持的 `deco`**（不叫 `slotPrefill`，该名全仓不存在）。`whiteCache`（`design → whiteVariant(design)` 纯白变体）供已购黑卡图标用（旧 `invCache`（反色）已删、`inv()`→`wh()`）；`variantCache` 为页面自持对比度缓存 `Map(design → Map(darkCard → design))`（白卡/黑卡两套变体不可混用），消耗品图标统一走 `screens.js` 内局部 `shopIcon(d, darkCard)` 取它 |
+| `this.vendorCardContentG` / `this.vendorCardMaskG` / `this.vendorCardMask` | Graphics ×2 / GeometryMask | 售货机页私有「窗口滚动图标」裁剪层（懒建，content depth 1001、mask 源 depth 999）；`drawUI` 不清理它，靠 `this.events.on('preupdate')` 在非 vendor 页 `clear()` 兜底（见第 7 章坑 21） |
+| `this.runItems` / `this.runTimedWeapons` | `[{id,count}]` / `[{id,name,ringColor?,durationSec,remainSec}]` | 局内消耗品（药水队列 **≤4**）/ 限时武器（**≤1**）仓库（**挂 scene 不挂 `state.player`**，随 `level-flow.restart` 清零）；`buyVendorItem`/`settleVendorRoll` 经 `addRunItem`/`addRunTimedWeapon` 写入（数据层 `RunItemsMixin`，见第 7 章坑 22） |
+| `this.runEffects` / `this.tempWeaponActive` / `this.tempWeaponSaved` | `[{id,name,sec,...}]` / bool / 对象\|`null` | 限时生效中加成（**仅 `sec>0` 进此队列**，驱动状态图标）/ 临时武器使用中标志 / 使用临时武器时暂存的 `player.weaponType`（取消时还原）。**均挂 scene、随 `restart` 清零** |
+| `this.potionWheel` / `this.potionKeyHold` / `this.potionWheelTexts` | `null`/`{phase:'in'\|'open'\|'out',t0,hover}` / number(ms) / Phaser `Text[]`（**最多 4 个**，懒建复用） | 药水轮盘状态机、数字键 4 长按计时、轮盘**每项各一份**药水名文本（第 i 项在**自己图标正下方**，字号 `WHEEL_NAME_FONT`=24）。**独立 `Text` 数组，`uiG.clear()` 清不掉**，须经 `hidePotionWheelTexts()` 在「屏蔽分支 / `hideHudOverlay` / `level-flow.js:restart`」三处隐藏；alpha 由 `drawBattleItems` 每帧跟随轮盘动画设置，**不进 `setHudAlpha`**（见第 7 章坑 28/42） |
+| `player.itemShields` | 列表（含 `sec` 等） | 玩家身上**待吸收**的即时护盾列表（护盾消耗品生成）；`player-combat.js:damagePlayer` 扣血前消费、盾碎移除并记 `hitEffects`+抖屏（见第 7 章 + combat skill） |
 
 文本 / 贴图 Map 组织：
 
@@ -226,12 +253,12 @@ description: 改 HUD / 全屏弹窗页 / 世界层渲染与悬浮提示与特效
 **② 每帧渲染顺序**
 `game-scene.js:139 update(_, dt)` → （编辑态直接 `draw()` 返回）→ 工坊长按/滚动 → 闸门动画 → `updateLoginHover()` → intro/ESC/transition/非 playing 各分支都以 `this.draw()` 收尾 → 正常帧跑玩家移动、战斗、`:480 updateHud(dt)`、`:493 syncUIState()` → `:494 draw()`
 → `world-render.js:336 draw()`（世界层，画到 `bgG`/`g`）：`bgG.clear()` + 底色 → `applyBackground()` → `syncLevelImages()` → `g.clear()` → 虫洞 fx → 网格 → 墙 → 木箱 → `syncBarrelSprites` → `syncChestSprites` / `syncVendorSprites` / `syncIdolSprites` / `syncIconSprites` → `drawIcons` → `syncPortalSprites` → `drawChestEffects` → 传送门形状 + `drawPortalEffects` → `drawGates` → 触发器 / 生成区（编辑态）→ 敌人 + 命中特效 + 掉落 → `drawPlayer` + `drawShieldArc` → 新手提示 → `drawHubUI` / `drawVendorUI` / `drawIdolUI` / `drawIconUI` / `drawPortalUI` / `drawGuideArrows`（`:565-571`）→ 子弹与拖尾 + `drawHitFlash` → **`:579 drawUI()`**
-→ `ui-runtime.js:243 drawUI()`（UI 层，画到 `uiG`）：`uiG.clear()` → `buttons = []` → **所有 uiTexts / uiImages / menuIconSprites / settingsTexts 及各页 Map `setVisible(false)`** → fail 分支（黑幕 + 返回）→ 按优先级分支：`idolOffer` > `settingsMode` > `menuScreen`（黑底 + 对应页 + 右上关闭按钮）> `isMenuLevel()`（login 节点图 + 登录按钮，intro 期全隐）> `end/fail`（`drawSettlement` 结算全屏页）> `paused/interface`（interface 节点图）> `isHubLevel()`（只隐 HUD）> 兜底战斗（battle 节点图 + `drawHud()` + `drawHudIndicator()`）→ 最后叠 `transition` 黑幕与 `levelIntro` 淡入。
+→ `ui-runtime.js:243 drawUI()`（UI 层，画到 `uiG`）：`uiG.clear()` → `buttons = []` → **所有 uiTexts / uiImages / menuIconSprites / settingsTexts 及各页 Map `setVisible(false)`** → fail 分支（黑幕 + 返回）→ 按优先级分支：`idolOffer` > `settingsMode` > `menuScreen`（黑底 + 对应页 + 右上关闭按钮）> `isMenuLevel()`（login 节点图 + 登录按钮，intro 期全隐）> `playerDeathFlow`（`hideHudOverlay()`，纯黑遮罩，**在结算分支之前**）> `end/fail`（`drawSettlement` 结算全屏页）> `paused/interface`（interface 节点图）> `isHubLevel()`（只隐 HUD）> 兜底战斗（battle 节点图 + `drawHud()` + `drawHudIndicator()`）→ 最后叠 `transition` 黑幕与 `levelIntro` 淡入。
 
 **③ 点击链路**
 `create():72 input.on('pointerdown')` → `editor-input.js:12 pointerDown(p)` → 非编辑态：`menuScreen` 存在时（工坊先吃 `handleWorkshopPointerDown`）→ `onUIPointer(p)`；`isMenuLevel()` 时遍历 `loginButtonRects` → `pressAnim(id)` + `onLoginButtonClick(id)`；`playing` 且命中 `settingsButtonRect` → `openSettingsOverlay()`；`paused` → `onUIPointer(p)`；`end/fail` → `onUIPointer(p)`（命中 `settleHome` → `pressAnim` + `exitToHome()` 回骑士之家，旧 `restart()` 已移除，无重试）
 → `ui-runtime.js:226 uiPointer()` 换算：读 `canvas.getBoundingClientRect()`，按 `scale = min(rect.w/1920, rect.h/1080)` 还原 CSS `object-fit: contain` 的黑边偏移，输出 1920×1080 空间坐标
-→ `ui-runtime.js:507 onUIPointer(p)`：`idolOffer.closing` 时直接 `return`；否则遍历 `this.buttons` 做 AABB 命中 → 按 id / id 前缀派发到业务回调（`applyUpgrade` / `buyWeapon` / `buyMod` / `buyBuff` / `chooseIdolBuff` / `toggleWorkshopWeapon` / `clickWorkshopSlot` / `ctx.onSelectSave` / `ctx.onOpenLevel` …）→ 命中即 `return`（一次只触发一个按钮）；**若 `idolOffer` 存在且未命中任何卡 → 置 `closing=true` 触发离场滑出（不消耗神像），动画完成后 `closeIdolOffer()`**。
+→ `ui-runtime.js:507 onUIPointer(p)`：`idolOffer.closing` 时直接 `return`；否则遍历 `this.buttons` 做 AABB 命中 → 按 id / id 前缀派发到业务回调（`applyUpgrade` / `buyWeapon` / `buyMod` / `buyPet` / `buyVendorItem` / `rollVendorSlot` / `chooseIdolBuff` / `toggleWorkshopWeapon` / `clickWorkshopSlot` / `ctx.onSelectSave` / `ctx.onOpenLevel` …）→ 命中即 `return`（一次只触发一个按钮）；**若 `idolOffer` 存在且未命中任何卡 → 置 `closing=true` 触发离场滑出（不消耗神像），动画完成后 `closeIdolOffer()`**。
 hover 态不走事件：各 `drawXxx` 每帧自己调 `uiPointer()` 比矩形（如 `hud.js:150`、`ui-runtime.js:317`）。
 
 **④ HUD 状态切换与脉冲**
@@ -248,6 +275,23 @@ hover 态不走事件：各 `drawXxx` 每帧自己调 `uiPointer()` 比矩形（
 **⑥ 世界层精灵同步（为何用 Map 缓存）**
 `draw()` 内每帧调 `syncBarrelSprites` / `syncChestSprites` / `syncVendorSprites` / `syncIdolSprites` / `syncIconSprites` / `syncPortalSprites` / `syncLevelImages`。模式统一：贴图未就绪则直接 return → 数据源按 `this.editing` 在 `ctx.state.level.xxx`（编辑态，显示全部）与运行时数组（过滤 `alive`/`spawned`/`visible`）间切换 → `seen` 集合记录本帧存在的 id → Map 里没有则 `add.image(...).setDepth(9)` 并 `uiCam.ignore(sprite)` → 有则只 `setPosition/setTexture/setScale/setVisible` → 遍历 Map，`seen` 里没有的 `destroy()` + 删键。
 Map 缓存的原因：Phaser 精灵创建/销毁成本高且贴图是异步的，60fps 下不能每帧重建；用 id 作键可让「数据数组顺序变化 / 元素增删」都稳定复用，同时保证被删数据对应的精灵一定被销毁不残留。
+
+**⑦ 售货机页链路（F 键 → 商品购买 / 老虎机抽奖）**
+`interactables.js:225 updateVendorInteract`（靠近显 tips、按 F）→ `inner-shop-runtime.js:15 openVendorShop(nearest)`：记 `this.vendorActive=vendor`、`this.vendorView=null`（触发入场翻牌重播）、`ensureVendorStock(vendor)` → `setupVendorStock`：`rollShopStock(data)` 写 `vendor.stock`（商品池 7 选 4 不重复）+ `vendor.bought=new Set()` + `preloadVendorArt`（预取商品与老虎机种类画板资产）→ `openMenuScreen('vendor')`（暂停态）。
+每帧 `drawUI` 走 `menuScreen==='vendor'` 分支（`ui-runtime.js:332` 黑幕 alpha **0.85**、`:336` 调 `screens.js:22 drawVendorShop`）→ 页面绘左老虎机 + 右 2×2 商品卡 + 金币栏。
+点击派发（`ui-runtime.js:606-607`）：`buyVendor_<i>` → `buyVendorItem(i)`（扣 `player.gold`、`vendor.bought.add(i)`、消耗品 `addRunItem`/武器 `addRunTimedWeapon`）；`vendorRoll` → `rollVendorSlot()`（扣 `lottery.drawCost`、`rollLottery` 出 `{icons,prize}`、置 `vendor.slot{rolling:true,rollAt,settleAt}`）。
+到点结算：`game-scene.js:819 updateVendorSlot()` 每帧检查 `time.now >= slot.settleAt` → `settleVendorRoll()`（`rolling=false`、`granted=true`、`prizeAt=now`、发奖）；`drawVendorShop` 在 `now>=settleAt` 时也会调一次（页面可见时即时定格），两条路径都走**幂等** `settleVendorRoll`。发奖：武器→随机 1 把入 `runTimedWeapons`；护盾→`inLottery` 消耗品随机 1 个入 `runItems`；金币→`player.gold += lottery.goldPrize`；垃圾/未中奖→不发。
+页面 **7 类动画**（全在 `drawVendorShop` 内按 `time.now - vv.t0` 插值）：① 入场翻牌 `flipAt(delay)=Clamp((now-t0-delay)/200,0,1)` 横向缩放，各级 delay `0/30/180/60+i*30`ms（旧 `/400` + `0/60/360/120+i*60` 全部减半）；② 摇奖滚动——`slot.rolling` 时 3 窗图标纵向循环（pitch 130 / speed 1.2 / 每窗相位 +37），无 `slot` 预览态 speed 0.35 用 `deco`；③ 依次定格——`now >= slot.settleAt + i*140` 第 i 窗切 `slot.icons[i]`（错开 140ms）；④ 中奖卡滑入——`!rolling && prizeAt>0` 自下 40px 滑入 `(now-prizeAt)/300`，展示 1800ms 后收起；⑤ 购买翻面——`vv.flip[i].t0` 起 `(now-t0)/300` 做 `|1-2fp|` 翻转、过半换「已购买」+ 图标纯白（`whiteVariant`，旧为反色）；⑥ 悬停放大 10%——`hoverOf` 每帧 ±0.18 插值 → `1+0.1*t`（滚动中禁用）；⑦ 按下缩放——`pressScale`（120ms `0.85→1`）叠乘。
+
+**⑧ 局内消耗品 / 临时武器 HUD 链路（药水槽 → 轮盘 → 状态图标）**
+
+数据层 `RunItemsMixin`（`run-items-runtime.js`，14 方法，**详见 economy-numbers**）持有 `runItems`/`runTimedWeapons`/`runEffects`/`tempWeaponActive`；UI 层 `BattleItemsMixin` 只读它并画 HUD。每帧 `game-scene.js` `update` 里 `updateVendorSlot()` → `updateRunItems(dt)`（推进限时武器/生效倒计时）→ `updateBattleItemsInput(dt)`。
+
+- **药水槽**：`hud.js:drawHud` 末尾调 `battle-items.js:drawBattleItems(g)` → 读 `getFrontPotion()` 画左下药水槽（**有药水 = 黑底 + 白框 + 纯白图标 `whiteVariant`**（与设计稿「白底黑图」相反，与局内黑底 HUD 统一），取「最先获得且未被使用」那瓶；空槽 = 黑底 `#CFCFCF` 边）+ 槽下 4 个队列小点（前 N 个实心白，间距 `POTION_DOT_GAP`=8）。右侧临时武器槽取 `getTempWeapon()`，**三态**：空（无武器/外观未加载）= 黑底 `0x000000` + 灰边 `#CFCFCF`、无时间条（无武器不画底盘）；**有武器未使用 = `0x000000` 黑底 + `0xffffff` 白框 + **原色**武器图案 + **圆形黑底盘（`WEAPON_BG_ASSET`，黑底上不可见）****（图案 `drawDesignCentered(g, design, x, y, size*0.62, t)`，**不反白**）；**使用中 = `0xffffff` 白底 + 武器 `ringColor` 亮框 + **原色**武器图案 + **同款圆形黑底盘（白底上显出黑盘）** + 槽上 12px 剩余时间条**（宽 = `90×remainSec/durationSec`、色 = `ringColor`）。`color` 由 `battle-items.js` 传 `WEAPONS[id]?.ringColor || getWeaponDef(id)?.medium?.ringColor || '#ffffff'`。**武器槽两态（含使用中）都叠加圆形黑底盘 —— `WEAPON_BG_ASSET`（`systems/constants.js`）与 `getDesign`（`systems/art/design-store.js`）的 import 已恢复，该文件依赖回到 4 个（constants / asset-render / design-store / vendor-shop-art）；武器图案两态恒为原色，两态视觉区别回到 4 处（底色 + 边框色 + 底盘可见性 + 有无顶条）；图案透传 `t` 保持自转。**
+- **轮盘**：`updateBattleItemsInput` 记 `potionKeyHold`，**长按数字键 4 ≥ `POTION_HOLD_MS`(160ms) 且队列非空** 才置 `potionWheel={phase:'in',t0,hover:-1,hoverT0}`；`potionWheel.phase` 走 `'in'→'open'→'out'→null`，**300ms**(`WHEEL_ANIM_MS`) 内 alpha 0↔1 且**以圆心为缩放中心**缩放 0.8↔1。打开时每帧用 `uiPointer()`（UI 坐标）算 `wheelHoverIndex` 定位悬停扇区（**切换扇区 / 进出死区都重置 `hoverT0`**）；**淡出相位冻结 hover 更新**（否则高亮跳扇区、渐显重亮）；悬停蒙层按 `hoverT0` 独立渐显 `hoverFade`（`WHEEL_HOVER_FADE_MS`=160ms，线性径向渐变见第 5 章）；**死区内悬停 = 不选中（-1）**。**轮盘名称文本改为「每项图标下各一份」（共 ≤4 个）**：`battle-items.js:drawBattleItems` 懒建 `this.potionWheelTexts` 数组 → 每帧 `setPosition(wheelNamePos(i, scale))` + `setText(entries[i].name)` + `setAlpha(alpha).setVisible(!!name)`，多出 `entries.length` 的隐藏；字号固定 `WHEEL_NAME_FONT`=**24px**（**不随 `scale` 变**，避免每帧重排文字纹理），只按 `scale` 挪位置；文本 alpha 跟随轮盘自身呼出/消失动画 alpha（**与轮盘同进同出**）。显示的是**药水名称 `entries[i].name`（消耗品 `name`，非 `desc`）**——依据设计稿 `docs/ui-designs/ui-useRoundInGame.json` 该文本元素 note「显示对应的药水名称（如有）」。**候选药水图标为黑底实心圆 + 白色图标、无任何边框**（圆心死区的圆仍有白边 + 白叉号）。**轮盘打开期间绝不改 `this.state`、游戏不暂停**（照常移动/开火）。
+- **按键语义**：短按 4 → `useFrontPotion()`（用前方药水）；长按松手 → `usePotionAt(hoverIndex)`（hover = -1 不用）；数字键 5 → `toggleTempWeapon()`（使用/取消临时武器）。
+- **状态图标**：游玩态 `world-render.js` 在 `drawShieldArc` 后调 `this.drawBattleStatusIcons(g, this.player)` → `battle-items-art.js:drawBattleStatusIcons` 按 `runEffects` 在玩家左下角画 18×18 **白色**图标（`whiteVariant`），**列优先**（先第一列自上而下、再第二列），最多 8 个，画在**世界层**随相机缩放。
+- **屏蔽条件**：`this.editing` / `menuScreen` / `settingsMode` / `state !== 'playing'` / 菜单关 / Hub 关 → 每帧清空 `potionKeyHold`/`potionWheel`、调 `hidePotionWheelTexts()` 隐藏轮盘名文本并提前 return（否则离态后轮盘/文字残留 / 误吃按键）。
 
 ## 5. 关键常量与数值
 
@@ -275,8 +319,8 @@ Map 缓存的原因：Phaser 精灵创建/销毁成本高且贴图是异步的�
 | 神像祝福卡 | `systems/ui/world-overlay.js:230-278` | 黑色蒙层条 `barH 336`(80% 黑)贴视窗底；白卡 `cardW 408 / cardH 216 / gap 96`，卡内图标 `r66`(圆心偏移 -24，读 `card.icon` 画板资产渲染，缺省/未加载退回黑圆)；hover 放大 `1+0.1*t`(t 每帧 ±0.14 插值)；滑入/离场均 `SLIDE_MS 450` 缓动 `1-(1-t)^3`（入场 `slide=(1-ease)*barH`，离场 `slide=ease*barH`，`closing` 结束调 `closeIdolOffer`）；文本 name 24px / desc 20px 黑字；张数按 `offer.cards.length` 自适应 | 三选一卡片 | 卡片布局 + 入场/离场滑出 + hover 缩放动画（设计稿 ui-shenxiang.json 按 1:6 放大） |
 | `pressAnim` 时长 / 缩放 | `systems/ui/ui-runtime.js:650,661` | 120ms，`0.85 → 1.0` | 按钮按下缩放反馈 | 所有按钮点击手感 |
 | `WEAPON_SLOT_LEVELS` | `systems/ui/ui-runtime.js:21` | `[12, 30]` | 出战槽解锁等级 | `uiState.slots`（1/2/3） |
-| `PAGE_FADE_MS` | `systems/ui/ui-runtime.js:23` | `280` | 全屏菜单页/设置蒙层 蒙层淡入/淡出时长 | 页面开关的溶解快慢（选关页旧特例同为 280） |
-| `WEAPON_BG_ASSET` | `systems/constants.js` | `asset-1788442424562` | 商店/工坊/HUD 武器卡的「武器图标背景」固定动态资产（`data/assets`，名称「武器图标背景」） | 卡片/头像下层背景渲染；上层叠武器 `appearance`/玩家本体 |
+| `PAGE_FADE_MS` | `systems/ui/ui-runtime.js:23` | `140` | 全屏菜单页/设置蒙层 蒙层淡入/淡出时长 | 页面开关的溶解快慢（**所有全屏页共用**：售货机/武器商店/工坊/选关/存档选择…；选关页旧特例同为 140） |
+| `WEAPON_BG_ASSET` | `systems/constants.js` | `asset-1788442424562` | 商店/工坊/头像的「武器图标背景」固定动态资产（`data/assets`，名称「武器图标背景」；**运行期是黑盘 —— 3 个元素色全 `#000000`（实心 24 边形 + 两条旋转黑弧），其 `bgColor:"#ffffff"` 运行期不渲染（见坑 38）**） | 商店卡片/头像下层背景渲染；上层叠武器 `appearance`/玩家本体。**局内武器槽两态（含使用中）都渲染它**（`battle-items-art.js` 已恢复该 import + `getDesign`，见坑 38） |
 | `ICON_SETTINGS/EXIT/RETRY/CONTINUE` | `systems/ui/ui-runtime.js:16-19` | `/icons/设置.png`、`退出.png`、`再来一次.png`、`继续.png`（URL 编码） | 菜单图标路径 | 设置按钮与蒙层图标；走 `/icons/` HTTP 接口 |
 | 武器图标 | `systems/ui/ui-runtime.js:130` | `图标/ninja_icon.svg`，贴图键 `weapon-yellow`，80×80 | yellow 武器图标 | 轮盘中心图标（仅 yellow 用图，其他用文字） |
 | 贴图键 | `systems/constants.js:18-32` | `__barrel__` `__chest_closed__` `__chest_open__` `__vendor__` `__idol__` | 世界层精灵贴图键 | `textures.exists` 判定与 `setTexture`；动态键：`__level_bg__`、`__lvl_img_{id}__`、`__ui_img_{page}_{id}__`、`__menu_icon_{id}__` |
@@ -285,7 +329,8 @@ Map 缓存的原因：Phaser 精灵创建/销毁成本高且贴图是异步的�
 | `CHEST_OPEN_FX_MS` / `CHEST_SPAWN_FX_MS` | `systems/constants.js:24-25` | 320 / 260 | 十字星特效时长 | 宝箱开启/出现闪光快慢 |
 | `PORTAL_ALPHA` / `PORTAL_LABEL` / `PORTAL_COLOR` | `systems/constants.js:26-28` | 0.6 / `EVACUATION` / `0x00ffff` | 传送门表现 | 传送门透明度、标签、主体色 |
 | `PLAYER_ART` / `PLAYER_ART_SCALE` | `systems/constants.js:38-53` | scale 0.5；hex 10、inner 12、outer 16、outer2 20、body 35、weaponRing 40 | 玩家六边形与 5 层环 | 玩家整体体型；`PLAYER_COLLISION_RADIUS` 由 weaponRing 推导，改了会连带改碰撞 |
-| `PLAYER_LEAN` | `systems/constants.js:57` | `{hex:12,inner:9,middle:7,outer:5,speed:48,minHexRadius:8}` | 移动倾斜量 | 玩家移动时各层偏移手感 |
+| `PLAYER_LEAN` | `systems/constants.js:61` | `{hex:12,inner:9,middle:7,outer:5,speed:48}`（本轮删 `minHexRadius`） | 移动倾斜量 | 玩家移动时各层偏移手感 |
+| `WEAPON_RING_CHAIN` | `systems/constants.js:64` | `{count:120, ratio:0.75, minPx:1, minZoom:1.8, refZoom:3.5, stepMs:100, fadeMs:100}` | 武器内圈环链 / 出场动画 | 链环数 / 半径厚度比 / 屏幕最小厚度(px) / 最小相机 zoom / **厚度判据的参考相机缩放(固定值)** / 每元素出场间隔(ms) / 单元素渐显(ms)；**zoom<minZoom 时不生成环链，仅放大（运镜/缩放）时可见**；厚度剔除用 `chainRefScale(refZoom)` 固定值（不用当帧 zoom），可见集合稳定 |
 | `SHIELD` | `systems/constants.js:58` | `{color:'#00eeff',arcDeg:120,gap:10,fadeMs:500}` | 护盾弧外观 | `drawShieldArc` 表现 |
 | `UI_COLORS` | `src/ui-layer.js:75-86` | panelBg `#0e2233`、panelStroke `#2f5a7a`、hpFill `#e84c5e`、expFill `#4fc3f7`、coin `#ffd54f`、text `#eaf4fb`… | 数据驱动 UI 默认配色 | 所有未显式指定 `fill/stroke/color` 的节点 |
 | tips 面板 | `systems/ui/world-overlay.js:92-93` | `w 200 / h 44 / skew 18`，偏移玩家 `+20,-20`，字号 22px | 世界层交互提示条 | 4 种 tips 统一外观 |
@@ -293,6 +338,81 @@ Map 缓存的原因：Phaser 精灵创建/销毁成本高且贴图是异步的�
 | `ROTATE_HANDLE_OFFSET` | `systems/constants.js:78` | 28 | 编辑器旋转手柄距离 | 编辑器选中手柄（详见 engine-editor skill） |
 | `SETTLE_SUCCESS_COLOR` / `SETTLE_FAIL_COLOR` | `systems/constants.js:14-15` | `#33ff33` / `#ff3b3b` | 结算页标题（成功绿/失败红）与过关球绿 | `drawSettlement` 顶左文案与进度球配色 |
 | `SETTLE_BALL_R` | `systems/constants.js:16` | 42 | 结算页进度球半径（设计 7px×6） | 进度球大小 |
+
+### 局内消耗品 / 轮盘 / 状态图标几何（`battle-items-art.js`）
+
+设计稿背景框 `836,588,320×180` = 1920×1080 的 1/6，**一律 ×6**（坐标一律为**中心点**语义；槽底对齐基准线 = `VIEW_H-16` = 1064）：
+
+| 常量 | 值 | 含义 |
+| --- | --- | --- |
+| `ITEM_SLOT_SIZE` / `SLOT_CORNER` | 90 / 12 | 槽位边长 / 圆角 |
+| `POTION_SLOT_POS` | (1220, 1019) | 药水槽中心（槽底 = y+45 = 1064，与底角 HUD 基准线平齐） |
+| `TEMP_SLOT_POS` | (1329.5, 1019) | 临时武器槽中心（与药水槽同步右移 50px、下移 53px，两槽一起挪） |
+| `POTION_DOT_GAP` | 8 | 槽底与队列小点中心间距（旧硬编码 12；下移后收 8，点范围 1068~1076 不越 1080 底边） |
+| `TEMP_TIME_BAR_GAP` / `TEMP_TIME_BAR_H` | 12 / 6 | 武器剩余时间条（槽上方 12px、高 6、宽 = 90×剩余比例、色 = 武器 `ringColor`；按中心点算，槽位移动自动跟随） |
+| `WHEEL_CX` / `WHEEL_CY` | 967.5 / 512.25 | 轮盘圆心 |
+| `WHEEL_RADIUS` / `WHEEL_ICON_SIZE` | 224 / 114 | 图标所在半径 / 图标直径 |
+| `WHEEL_DEAD_ZONE` / `WHEEL_LINE_LEN` / `WHEEL_LINE_W` / `WHEEL_RING_R` | 48 / 212 / 3 / 284 | 中心死区半径 / 45° 分隔线长 / 线宽 / 扇区外半径 |
+| `WHEEL_ANIM_MS` | 300 | 轮盘呼出·消失动画时长（渐显渐隐 + 缩放 0.8↔1，旧值 600） |
+| `WHEEL_NAME_FONT` / `WHEEL_NAME_GAP` | 24 / 12 | 轮盘**每项**药水名文本字号 / 描述文本与图标**下边缘**的间距（`wheelNamePos(i,scale)` 使用；旧版「单点定位 + 更大字号」方案已作废） |
+| `WHEEL_HOVER_FADE_MS` / `WHEEL_HOVER_RINGS` | 160 / 24 | 悬停蒙层自身渐显时长 / 径向渐变分层数 |
+| `WHEEL_HOVER_ALPHA_IN` / `WHEEL_HOVER_ALPHA_OUT` | 0.5 / 0.1 | 最内侧 / 最外侧透明度（沿半径**线性**插值） |
+| `STATUS_ICON` / `STATUS_PITCH` / `STATUS_COLS` / `STATUS_ROWS` / `STATUS_ORIGIN` | 18 / 24 / 2 / 4 / (-105, -31.5) | 状态图标尺寸 / 间距 / 列 / 行 / **相对玩家中心左上角（世界坐标）** |
+| `POTION_HOLD_MS`（`battle-items.js`） | 160 | 数字键 4 长按阈值（ms） |
+
+**武器槽三态配色**（`drawTempWeaponSlot`，与药水槽口径不同；药水槽仍恒为「有药水 = 黑底白框纯白图」）：
+
+| 状态 | 槽位底色 | 边框 | 武器图案 | 背景盘（`WEAPON_BG_ASSET`） | 时间条 |
+| --- | --- | --- | --- | --- | --- |
+| 空槽位（无武器 / 外观未加载） | `0x000000` | `#CFCFCF` | — | 不画 | 无 |
+| 有武器**未使用** | `0x000000` 黑底 | `0xffffff` 白框 | **原色**（`drawDesignCentered`，不反白） | **画**（`size*0.82`，黑底上不可见） | 无 |
+| **使用中** | `0xffffff` 白底 | 武器 `ringColor` 亮框（`hexToInt(color)`） | **原色**（不反白） | **画**（同款黑盘，白底上显出） | 有（槽上方 `TEMP_TIME_BAR_GAP`=12px，宽 = 槽宽 × `remainSec/durationSec`、色 = `ringColor`） |
+
+> 两态视觉区别有**四处**：槽位底色（黑/白）+ 边框色（白 / `ringColor`）+ **底盘可见性**（黑底上不可见 / 白底上显出黑盘）+ 有无时间条 —— 不是「只差时间条」。**武器图案两态恒为原色**（用户明确要求），**两态（含使用中）都渲染圆形黑底盘**（用户原话：「临时武器槽位的圆形黑色底盘背景即使在已使用状态，也需要渲染」）；`color` 由 `battle-items.js:drawBattleItems` 传 `WEAPONS[id]?.ringColor || getWeaponDef(id)?.medium?.ringColor || '#ffffff'`；`t`（秒）驱动**武器图案与背景盘的旋转元素**自转（`tSec = time.now / 1000`）。
+
+轮盘 4 扇区（上/右/下/左，index 0..3，**顺时针、正上方为 0**）扇区中心角 = `-90° + i×90°`；**该角度公式只在 `wheelIconPos(i, scale)` 内实现一份**（`drawPotionWheel` 的图标坐标与 `wheelNamePos` 都调用它，勿在别处内联）；每瓶为黑底实心圆 + **白色图标**（`whiteVariant`）、**无任何边框**；**每项名称文本位于该项图标正下方**（`wheelNamePos(i, scale)` = 图标中心 + `(WHEEL_ICON_SIZE/2 + WHEEL_NAME_GAP) * scale`）；悬停扇区用灰 `#CFCFCF` **`WHEEL_HOVER_RINGS`(=24) 层细密同心扇环做线性径向渐变**（每层取环中点半径比例插值 `alpha = ALPHA_IN + (ALPHA_OUT-ALPHA_IN)×(环中点半径/R)`，最内 0.5 → 最外 0.1），每层再乘 `hoverFade`（由 `battle-items.js` 按 `hoverT0` 独立渐显）与轮盘整体 alpha；圆心黑底白边圆 + 白色叉号。
+
+### 售货机页布局与动画（设计稿 `docs/ui-designs/ui-ingame-shop.json`，背景 320×180 @(485,797) ×6 放大到 1920×1080）
+
+换算：`sx=(dx-485)*6, sy=(dy-797)*6, sw=dw*6`。关键坐标（屏幕 px，**写死在** `screens.js:22 drawVendorShop`）：
+
+| 元素 | 坐标 (x,y,w,h) | 备注 |
+| --- | --- | --- |
+| 老虎机白卡 | `(204,228,594,330)` | 中心 `WC_CX=501` |
+| 老虎机底板 | `(216,540,570,390)` | 黑底 + 白边 24；`PANEL_CX=501`（路径 `216..786`、白色外沿 `204..798` 与上半白卡 `204..798` 对齐；宽仍 570、线宽仍 24） |
+| 3 个窗口框 | x=`258/429/603`，`(_,318,144,144)` | 窗口中心 `wCx=[330,501,675.18]` |
+| 窗口图标卡 | x=`270/441/615.18`，`(_,330,120,120)` | 滚动图标裁剪到本矩形 |
+| 抽奖按钮 | `(344.7,564,315,90)` | id `vendorRoll`，价签 = `lottery.drawCost` |
+| 中奖弹出卡 | `(365.4,703.5,271.2,153)` | 从下 40px 滑入 |
+| 右 2×2 商品卡 | x=`1050/1410`，y=`228/618`，`(_,_,285,324)` | 4 张 |
+| 金币栏 | `(1326,30,324,72)` | 显示 `player.gold` |
+| 卡内图标中心 | `(x0+141, y0+129)` | 商品卡图标中心 |
+| 购买按钮 | `(x0+30, y0+252, 222, 60)` | id `buyVendor_<i>` |
+
+| 常量 / 数值 | 当前值 | 含义 |
+| --- | --- | --- |
+| 遮罩 alpha | `0.85`（仅 vendor 页；其余页 1.0） | `ui-runtime.js:332` |
+| 图标统一 boxSize | 商品卡 150 / 老虎机窗口内图标 88 / 中奖卡 88 | `drawShopIcon` / `drawDesignCentered` 的 box；各类图标取 box 的系数见下方「售货机图标口径」 |
+| `LOTTERY_ROLL_MS` | 2500 | 摇奖滚动时长（`economy/inner-shop.js:13`）= `settleAt - rollAt` |
+| 定格错开 | 140 ms | 第 i 窗定格延迟（`settleAt + i*140`） |
+| 中奖卡展示 | 1800 ms | `prizeAt` 起计时，到点 `prizeAt=0` 收起 |
+| 入场翻牌时长 / 错开 | 200 ms / 30 ms | `flipAt` 区间与各级 delay（旧 400/60 全部减半）：`0/30/180/60+i*30` |
+| 购买翻面时长 | 300 ms | `vv.flip[i]` |
+| 中奖卡滑入时长 | 300 ms（位移 40px） | `(now-prizeAt)/300` |
+| `SHOP_ITEM_COUNT` | 4 | 商店商品数（`economy/inner-shop.js:11`）；池 = 消耗品全量 + 武器「是否加入局内临时=1」 |
+| `lottery.drawCost` / `lottery.goldPrize` | 15 / 15 | 抽奖价 / 金币奖（`data/inner-shop.json`；导表常量 `DEFAULT_DRAW_COST`/`DEFAULT_GOLD_PRIZE`） |
+| 老虎机种类权重 | 武器 5 / 护盾 10 / 金币 15 / 垃圾 15 | 「直接出货权重」（`data/inner-shop.json`）：先按权重判直接出货（命中则三窗同款并发放），未命中则 3 窗各自等概率 4 选 1，三窗同款才发奖 |
+
+**售货机图标口径（尺寸 / 居中 / 对比度 / 底板对齐）**
+
+| 项 | 口径 | 说明 |
+| --- | --- | --- |
+| 商品卡图标 | 武器外观 `box*0.5`、武器背景盘 `box*0.72`、消耗品图标 `box*0.5`（`box = 150*s`） | `screens.js:drawVendorShop` 商品卡分支；消耗品原为 `box*1.0`，现统一到武器卡尺寸；缺图兜底白圆半径 `box*0.25` |
+| 老虎机 3 窗图标 | `REEL_ICON_SIZE` = **88**（固定，不随卡片缩放；窗口白卡 120×120 → 四周各留 16px 内边距） | `screens.js:drawVendorShop` 局部常量；`drawShopIcon(..., REEL_ICON_SIZE, tSec)`（原硬编码 `120` 顶格）；图标未就绪白圆占位半径 `REEL_ICON_SIZE * 0.34`（≈30） |
+| 中奖卡图标 | 消耗品 `88*0.5`、武器背景盘 `88*0.72` / 外观 `88*0.5` | `screens.js:drawVendorShop` 中奖弹出卡分支 |
+| 居中（`recenter`） | 把 `design.center` 设为**负的包围盒中心** `-(minX+maxX)/2, -(minY+maxY)/2`（用 `designBounds(d,0)`） | `drawDesignCentered` 位置锚点是 **design 原点**、缩放按**包围盒**；归位后包围盒中心落在给定 `(cx,cy)`，不再偏出框外。三种 artType 统一走它 |
+| 对比度 | 白卡（未购买）：`shopIcon(d, false)` = `shopIconVariant(d, false)` → `isNearWhite(d) ? blackVariant(d) : d`；**已购黑卡：`wh(d)` = `whiteVariant(d)` 纯白**（旧为 `shopIconVariant(d, true)`/`invertDesign`，本轮改）；背景盘（`WEAPON_BG_ASSET`）一律**保持原色** | 不是「按背景自动反色」：白卡只把近白款改黑款；已购黑卡要「统一白」**必须用 `whiteVariant`**（`invertDesign` 逐通道取反会把黄变蓝紫）。`isNearWhite` 要求所有可见颜色每通道 ≥ 0.85；`shopIconVariant` 的黑卡分支（`invertDesign`）保留导出但卡片不再调用 |
+| 底板对齐 | `PANEL_CX = 501` | 底板路径 `216..786`、白色外沿 `204..798`，与上半白卡完全对齐；`PL_CX = 502.2` 继续用于抽奖按钮/金币菱形/抽奖价格文本/中奖弹出卡 |
 
 ### depth 分层（必须遵守）
 
@@ -306,9 +426,9 @@ Map 缓存的原因：Phaser 精灵创建/销毁成本高且贴图是异步的�
 | 9 | 世界层 | 桶 / 售货机 / 神像 / 图标 / 宝箱 精灵 | `world-render.js:144,171,200,236,313` |
 | 10 | 世界层 | `this.g`（主 Graphics：墙、敌人、玩家、子弹、特效、tips 底板）+ 传送门标签文本 | `game-scene.js:42`、`world-render.js:281` |
 | 13 | 世界层 | 交互 tips 文本（portal/idol/icon/vendor）+ F 键帽 | `world-overlay.js:105,150,195,292` |
-| 999 | UI 层 | 工坊卡片遮罩 `workshopCardMaskG`（GeometryMask 源，alpha 0 不可见） | `ui-runtime.js:30` |
+| 999 | UI 层 | 卡片裁剪遮罩源：工坊 `workshopCardMaskG`（`ui-runtime.js:30`）/ 售货机 `vendorCardMaskG`（`screens.js:104`）（GeometryMask 源，alpha 0 不可见） | — |
 | **1000** | UI 层 | `this.uiG`（所有 UI 图形：HUD、弹窗底板、蒙层、黑幕） | `ui-runtime.js:26` |
-| **1001** | UI 层 | UI 文本与贴图：`uiTexts`/`uiImages` 节点、`settleTexts`、weaponLabels、ammo、hudIndicatorText、weaponIconImage、`vendorShopTexts`、`levelSelectTexts`、`idolOfferTexts` | `ui-runtime.js:47-158`、`screens.js:21,88,424`、`world-overlay.js:220` |
+| **1001** | UI 层 | UI 文本与贴图：`uiTexts`/`uiImages` 节点、`settleTexts`、weaponLabels、ammo、hudIndicatorText、weaponIconImage、`vendorShopTexts`、`levelSelectTexts`、`idolOfferTexts`（另有售货机页私有 Graphics `vendorCardContentG` 也在 depth 1001） | `ui-runtime.js:47-158`、`screens.js:21,88,424`、`world-overlay.js:220` |
 | **1002** | UI 层（弹窗最上层） | `settingsTexts`、`weaponShopTexts`、`menuIconSprites` | `ui-runtime.js:549`、`screens.js:148`、`world-render.js:20` |
 
 规则：世界层用 0-13（要跟主相机跑，必须 `uiCam.ignore(...)`）；UI 层从 999 起（必须 `cameras.main.ignore(...)`）。图形一律画在 `uiG`(1000)，因此**任何要盖在 UI 图形之上的文本/图标至少 1001**；弹窗内需要压过同层文本的用 1002。新增层级不要插进 0-13 与 1000-1002 之间，会打乱两相机的语义分界。
@@ -352,9 +472,31 @@ Map 缓存的原因：Phaser 精灵创建/销毁成本高且贴图是异步的�
 
 1. 纯几何函数写在 `src/systems/ui/entity-art.js`（无 `this`，签名 `(g, ...)`），照 `entity-art.js:377 drawAdvanced2` 的写法。
 2. 挂到分发点 `entity-art.js:395 drawEnemyShape(g, e, dynamic, target)`：按 `e.type` 分支；尺寸/行为参数取 `ENEMY_BEHAVIOR[type]`（`systems/constants.js:70`），不要在美术函数里硬编码体型。
-3. 玩家外观改 `entity-art.js:523 drawHexRingPlayer` + `systems/constants.js:39 PLAYER_ART`；注意 `PLAYER_COLLISION_RADIUS`（`constants.js:54`）由 `weaponRingRadius + weaponRingThickness` 推导，改环半径会改碰撞体积。
+3. 玩家外观改 `entity-art.js:532 drawHexRingPlayer`（中心六边形已移除；第 4 参 `opts` 走环链+出场，链环 `chain:true` + 两趟绘制 + `chainRefScale()`）/ `:643 drawPlayer`（orbit 环绕分支也走 `renderWeaponBody`）+ `systems/constants.js:61 PLAYER_LEAN` / `:64 WEAPON_RING_CHAIN`（含 `refZoom`）；注意 `PLAYER_COLLISION_RADIUS`（`constants.js:58`）由 `weaponRingRadius + weaponRingThickness` 推导，改环半径会改碰撞体积。
 4. 墙/木箱/传送门形状分别在 `entity-art.js:451 drawWallShape` / `:41 drawCrate` / `:68 drawPortalShape`。
 5. 若改成贴图渲染：贴图键与路径进 `systems/constants.js`，在 `game-scene.js:53-69` 预载，参考 `world-render.js:131 syncBarrelSprites` 写一个 `syncXxxSprites`（含 `uiCam.ignore` 与 `seen` 清理），并在 `draw()` 里调用；同时把原 Graphics 绘制删掉，避免图形与精灵重影。
+
+### F. 新增一个售货机商品 / 老虎机种类（改表 → 导表 → 放美术，**无需改代码**）
+
+1. **加/改商品**：编辑 `策划文档/server/消耗品.xlsx`（页签 `innerItemInfo`：编号/备注/描述/购买花费/美术方案类型（图标）/美术方案名称（图标）/是否即时生效/是否进老虎机/局内栏位）或 `武器.xlsx`（页签 `weapon`，行需「是否加入局内临时=1」才进售货机，读「临时价格」「临时时长」）。
+2. **加/改老虎机种类**：编辑 `策划文档/server/老虎机.xlsx`（页签 `main`，`描述` 列经 `LOTTERY_KEY_MAP` 映射为 key：武器/护盾/金币/垃圾；`直接出货权重` 为数值才算数据行）。
+3. 运行 `node tools/export-tables.mjs`（可 `TABLES_DIR=<dir>` 指定表格目录）→ 重写 `data/inner-shop.json`。
+4. 把图标资产放进对应美术库（`动态资产`→`data/assets`、`轮廓`→`data/outlines`、`像素`→`data/pixels`），名称与表里「美术方案名称（图标）」**完全一致**（`vendor-shop-art.js:matchId` 精确匹配）。武器卡不用放图标：复用局外商城做法（`WEAPON_BG_ASSET` 背景 + `getWeaponDef(id).appearance`）。
+5. **新增美术资源后**：确认「美术方案类型（图标）」+「美术方案名称（图标）」在目标库中能**精确匹配**（type 选错库、名字差一字符都会让 `matchId` 落空 → 图标位空）；纯白款（所有可见颜色每通道 ≥ 0.85）在白卡上会被 `shopIconVariant` **自动改用黑色款**，无需额外处理。
+6. 商品数固定 4（`SHOP_ITEM_COUNT`），从池里**不重复**随机 4 个；老虎机每实体独立、不限次数。**以上全部无需改代码**。
+
+> 流水线文件（详见 economy-numbers skill）：导表 `tools/export-tables.mjs`（265 行，导出 `parseConsumables`/`parseWeapons`/`parseLottery`/`loadWeaponNameIndex`/`buildInnerShop`）、生成物 `data/inner-shop.json`（109 行，`consumables[4]` / `weapons[3]`（带 `weaponId`）/ `lottery{drawCost:15,goldPrize:15,kinds[4]}`）、纯逻辑 `src/systems/economy/inner-shop.js`（153 行）。`server.js` 的 `GET /api/inner-shop` **动态** `import('./tools/export-tables.mjs')` 现解析，失败回退 `data/inner-shop.json`（打包态无 `策划文档` 目录时只读 JSON，见第 7 章坑 23）。
+
+### G. 新增一页全屏弹窗页
+沿用 A 节 / 既有 **B 节** 套路（`drawXxx` + `menuScreen` 分支 + `drawUI` 隐藏清单 + 入口 + `buttons.push` + `onUIPointer` 分支）；蒙层淡入淡出经 `openMenuScreen` 自动内置，无需另写。
+
+### H. 新增一个局内消耗品 HUD 元素（例：药水槽旁再加一个「时效小角标」）
+
+1. 纯几何写进 `src/systems/ui/battle-items-art.js`（无 `this`，几何常量放文件顶部、按 `×6` 换算），照 `drawPotionQueueDots`/`drawBattleStatusIcons` 写法。
+2. 挂到调用点：UI 层元素放 `battle-items.js:drawBattleItems(g)`（画到 `uiG`）；**世界层**元素放 `drawBattleStatusIcons(g, player)`（`world-render.js` 在 `drawShieldArc` 后调用，随相机缩放）。
+3. 数据一律从 `RunItemsMixin`（`getRunPotions`/`getFrontPotion`/`getTempWeapon`/`getRunEffects`）**只读**，不要在 UI 层改写 `runItems`/`runEffects`（数据层职责，见 economy-numbers）。
+4. 若引入独立 Phaser `Text`（如轮盘药水名 `potionWheelTexts`），其显隐必须纳入「屏蔽分支 / `hideHudOverlay`（经 `hidePotionWheelTexts()`）/ `level-flow.js:restart`」三处，否则离态残留；**alpha 需要跟随自身动画的文本不要放进 `setHudAlpha`**（它跑在 `drawHud` 之后，会把动画 alpha 冲成 `hudAlpha`，见第 7 章坑 28/42）。改用 `drawXxx` 每帧自带 alpha。
+5. 配色统一「黑底 + 纯白图标」用 `whiteVariant`（**不要 `invertDesign`**）；背景盘（`WEAPON_BG_ASSET`）若要用则保持原色、单独画（**局内武器槽两态（含使用中）都画它，见坑 38**）。想让设计稿元素动起来，绘制调用传 `t`（秒）作第 6 参驱动 `rotSpeed`（传 0 = 静止，见坑 37/38/39）。
 
 ## 7. 坑与约束
 
@@ -379,14 +521,50 @@ Map 缓存的原因：Phaser 精灵创建/销毁成本高且贴图是异步的�
 17. **结算页进度球不亮 → 先查 `ctx.state.levelId` 是否被 `restart()` 改写**：`drawSettlement` 用 `state.levelId` 解析 `Level{N}-Scene{M}` 章节（`screens.js:448`），但 `level-flow.js:181` 的「未解锁回退」会用旧 `levels.unlocked`（扁平 `level-1`）覆盖它（`levels.unlocked` 从不含章节 id，因选关解锁在 `screens.js:176` 是 completed 驱动）。覆盖后 `settleVictory` 记成 `level-1`、结算页解析不出 `Level1-Scene1` → `pass()` 全 false → **一颗球都不亮**。已加 `!isSceneId` 守卫（`level-flow.js:184`）。若进度仍不亮，确认 `completed` 里存的确实是 `Level{N}-Scene{M}` 而非 `level-1`；再查 `this.saveSource()?.levels?.completed` 与 `settleVictory` 写入的是不是同一个 player（preview/trial/formal 三源，见 gameplay-systems）。
 18. **`closeMenuScreen`/`closeSettingsOverlay` 现已异步（先蒙层淡出再真正关页）**：调用后 `menuScreen`/`settingsMode` 不会立即清空，而是等 `drawUI` 里 `drawPageFadeOverlay()` 的 'out' 走完（`PAGE_FADE_MS`）由 `finishCloseMenuScreen`/`finishCloseSettings` 收尾并恢复 `state`。因此：① 需要**立即**关页并跳过淡出的程序化路径要直接清 `settingsMode`/`settingsPrev`/`pageFade`（参考 `retryBattle`），别依赖 `closeSettingsOverlay()`；② 淡出期间 `onUIPointer` 被 `pageFade.phase==='out'` 拦截，不响应点击；③ `openMenuScreen` 已识别编辑态/已有页，淡出未完成前再次打开会被拒，符合预期。
 19. **Phaser 4 没有 `Camera.getWorldBoundingRectangle()`**（运行期 `is not a function`，且 `vite build` 不报）。取相机可视区（世界坐标）统一用场景方法 `this.viewRect()`（`EnemyAiMixin`，`enemy-ai.js:31`，返回 `{x,y,w,h}`，装配后全场景 mixin 共享）与 `this.isInView(e)`。`updateGuideArrows` 首版误用该 API 导致进入游戏即崩（update 抛异常整帧卡死），已改。
+20. **摇奖结算不能只挂在渲染里**（真实踩过）。现象：抽奖页关闭后 `vendor.slot.rolling` 永久卡住——抽奖价已扣、奖励未发、后再也无法抽。根因：`drawVendorShop` 内的定格结算属**页面私有**时机，页面关闭后不再被 `drawUI` 调用。正确做法：`game-scene.js:819` 每帧 `updateVendorSlot()` 独立推进；且 `rollVendorSlot()` 对「已过 `settleAt` 的 rolling」先自愈结算；`settleVendorRoll()` **幂等**（`rolling` 已 false 直接 return）。三条路径任一先到都安全。
+21. **vendor 页私有 Graphics 不会被 `ui-runtime.drawUI` 清理**。现象：关页后老虎机窗口滚动图标残留。根因：`vendorCardContentG` 属售货机页私有，`drawUI` 头部隐藏清单不含它（`drawUI` 只清 `shopCardContentG`/`workshopCardContentG`）。正确做法：懒建时挂一次性 `this.events.on('preupdate', () => { if (this.menuScreen !== 'vendor' && this.vendorCardContentG) this.vendorCardContentG.clear(); })` 兜底（`screens.js:111`）。新增「页面私有持久 Graphics」都照此兜底。
+22. **局内字段必须挂 scene，不能挂 `state.player`**。`state.player` 就是存档源（`progression.js:47 persistSave` → `ctx.onPlayerSave`），直接加字段会被写进存档文件。故 `runItems`/`runTimedWeapons`/`vendorActive` 挂 scene，随 `level-flow.restart`（`level-flow.js:147-149`）清零（`vendorBought` 旧字段已删）。
+23. **打包态没有 `策划文档` 目录且 `exceljs` 是 devDependency**。`server.js` 必须用**动态** `import('./tools/export-tables.mjs')`（`server.js:179`）并回退 `data/inner-shop.json`，否则打包后启动崩。另：`~$武器.xlsx` 是 Excel 临时锁文件，导表按文件名精确读取（不扫目录）故天然忽略，若改为目录扫描须显式跳过 `~$` 前缀。
+24. **表格武器「编号」≠ 项目武器 id，UI 侧一律读 `item.weaponId || item.id`**。武器表「编号」是 `101/102/103`，项目武器 id 是 `yellow`/`green`/`weapon-1788012926999`；直接 `getWeaponDef('101')` 必为 `undefined`，商品卡只剩背景盘、没有武器本体。**正确路径**：导表 `loadWeaponNameIndex()` 读 `data/weapons/*.json` 按 `name` 建「名 → id」，`buildInnerShop` 给每条 `weapons[]` 补 `weaponId`（命中按名字、未命中 `""`）；运行期 `inner-shop.js` 的 `resolveWeaponId`（显式 `weaponId` 优先，否则 `weaponCatalog()` + `getWeaponDef(id).name === name` 反查）只是**兜底**；UI 取外观统一 `getWeaponDef(item.weaponId || item.id)?.appearance`，`addRunTimedWeapon` 入列 `id = String(item.weaponId || item.id)`。
+25. **三库资源的坐标原点不保证是视觉中心**。`drawDesignCentered` 的**位置锚点是 design 原点**（`renderAsset` 里 `cx0 = x + design.center.x * scale`），而缩放按**包围盒**——原点不在包围盒中心时图标会偏出框外。**正确做法**：`vendor-shop-art.js:recenter(d)` 把 `d.center` 设为**负的包围盒中心**（`-(minX+maxX)/2, -(minY+maxY)/2`，用 `designBounds(d,0)`），三种 artType（动态资产/轮廓/像素）统一走它。遗留：归位是 t=0 静态定值，`rotSpeed≠0` 的元素运行期包围盒中心会随 t 轻微漂移（缩放仍按实时包围盒，不会超框）。
+26. **纯白美术在白卡上不可见 → 用 `shopIconVariant`**。有的图标（如「速度加成图标」）`color`/`fill` 都是 `#ffffff`，在白商品卡上完全看不见。**正确做法**：白卡（未购买）统一经 `screens.js` 内局部 `shopIcon(d, false)` = `shopIconVariant(d, false)` → `isNearWhite(d) ? blackVariant(d) : d`（缓存 `vv.variantCache`）。**已购黑卡已不走向量反色**：改用 `vv.whiteCache` 缓存 `whiteVariant`（`wh(d)`）把图标统一成纯白（`shopIconVariant` 的黑卡 `invertDesign` 分支保留导出但不再被卡片调用）。**语义注意**：这不是「所有图标按背景自动反色」，只有纯白款改黑款。详见坑 37。
+
+27. **`this.drawItemShields(...)` 有调用无定义（会运行期崩，`vite build` 抓不到）**。现象：进战即 `this.drawItemShields is not a function` 抛异常、整帧卡死。根因：`drawItemShields` 是 `entity-art.js` 的**独立导出函数**、不是 mixin 方法（照 `drawShieldArc` 风格）。正确做法：`world-render.js` 顶部 `import { drawItemShields } from './entity-art.js'` 后**直接调用** `drawItemShields(g, this.player)`。本项目已因这类「有调用无定义」崩过多次，构建不报。
+28. **`potionWheelTexts`（数组，最多 4 个）是独立 Phaser `Text`，`uiG.clear()` 清不掉**。现象：离开战斗态 / 重开关卡后轮盘药水名残留在屏幕上。根因：它们不属 `uiG` 图形。正确做法：用 mixin 方法 `hidePotionWheelTexts()`（遍历全部 `setVisible(false)`），在**三处**调用 —— ① `battle-items.js:updateBattleItemsInput` 的屏蔽分支；② `hud.js:hideHudOverlay()`（`this.hidePotionWheelTexts?.()`）；③ `level-flow.js:restart`（`this.hidePotionWheelTexts?.()`）。**不要**把它们放进 `setHudAlpha`（见坑 42）。旧版那个「单个文本字段 + 手动 `setVisible`」的写法已废弃（现改成数组 + `hidePotionWheelTexts()`）。
+29. **`drawDesignCentered(g, design, cx, cy, boxSize, t)` 没有 alpha 参数**（alpha 只在 `renderAsset(g,design,x,y,t,scale,motion,alpha)`）。现象：轮盘 300ms 淡化期间，蒙层/圆底/分隔线随 alpha 淡化，但**矢量图标本身不淡化**（略提前「实显」）；药水掉落物同理不随房间渐显淡化。根因：`drawDesignCentered` 未透传 alpha。需要严格同步时改调 `renderAsset`。
+30. **临时武器使用中会改 `player.weaponType` 但不改 `player.weapons`/`weaponIndex`**。现象：右下角武器轮盘 `hud-art.js:drawWeaponWheel` 按 `weaponType` 定位扇区，高亮可能偏差（**已知观感问题，不崩**）。已由 `editor-camera.js:onWheel` 里切武器前加守卫 `if (this.isTempWeaponActive?.()) return;` 拦住滚轮切武器。
+31. **药水满 4 瓶后从售货机购买仍扣金币但拿不到**。根因：`addRunItem` 对满队列走用户确认的「丢弃新获得的」规则，扣费在购买侧、入队被拒。属既定行为，非 bug。
+32. **`whiteVariant`/`blackVariant` 每帧 `structuredClone` 变体**。现象：HUD 侧（药水槽/轮盘/状态图标；**武器槽已改用原色、不再走变体**）每帧各图标克隆一次，成本可接受、**未做缓存**；售货机商品卡的 `whiteVariant` 已按 design 缓存在 `vv.whiteCache`（`wh()`）。若要进一步优化可在 data 层缓存（`vendor-shop-art.js` 的 `designCache` 同思路）。
+33. **已修**：`entity-art.js:170` 的 `INTRO_RING_COUNT = 12` 已在 `INTRO_RING_*` 常量组正式定义（与 `state.js` 归一化默认值一致），未定义引用已消除。`??` 左侧 `fx.introRingCount` 被 `state.js` 归一化为恒有限数字，故右侧兜底平时不生效。
+34. **改槽位 y 必须连带重算队列小点间距**。槽底对齐 `VIEW_H-16`(1064) 后，小点若仍留 12px 间距会落到屏幕最底边（1076+4=1080）被裁掉 → `POTION_DOT_GAP` 收到 8（点范围 1068~1076）。时间条在槽顶上方 `TEMP_TIME_BAR_GAP+TEMP_TIME_BAR_H`、**按中心点算**，槽位移动会自动跟随；但小点间距是独立常量，必须手动改。
+35. **槽位/轮盘坐标一律「×6 换算 + 中心点语义」**：设计稿背景框 `836,588,320×180` 对应 1920×1080；槽底对齐基准线 = `VIEW_H-16 = 1064`（`POTION_SLOT_POS/TEMP_SLOT_POS` 中心 y = 1019 = 1064−45）。加/挪槽位时先算槽底再回推中心点。
+36. **径向渐变不能用少量分段**：3 段同心扇环会有肉眼可见的分层跳变；必须用足够多的层（当前 `WHEEL_HOVER_RINGS`=24）+ 环中点半径做线性插值。且「出现」要有**独立渐显系数**（`hoverFade`），不能只跟随轮盘整体 alpha——轮盘 alpha 在 `'in'` 相位 300ms 就已完成，蒙层若只跟它会在进入扇区时瞬亮。
+37. **`invertDesign` ≠ `whiteVariant`**：前者逐通道取反（彩色 → 补色，如黄 → 蓝紫），后者把所有非空颜色直接置 `#ffffff`。要「黑底上图标统一白色」**必须用 `whiteVariant`**；改配色前先想清楚要的是「反色」还是「统一白」。
+38. **武器槽两态（含使用中）都渲染圆形黑底盘（`WEAPON_BG_ASSET`）** —— 此前「槽内不绘制底盘」的旧结论**已作废**。`drawTempWeaponSlot` 重新叠加：`const bg = getDesign(WEAPON_BG_ASSET); if (bg) drawDesignCentered(g, bg, x, y, size * 0.82, t);`，**两态（含使用中）都渲染**（用户原话：「临时武器槽位的圆形黑色底盘背景即使在已使用状态，也需要渲染」）；`WEAPON_BG_ASSET`（`systems/constants.js`）与 `getDesign`（`systems/art/design-store.js`）的 import **已恢复**，该文件依赖回到 4 个。事实保留：
+   - **`WEAPON_BG_ASSET` 的 `bgColor: "#ffffff"` 是纯装饰性字段、运行期完全不渲染** —— 全仓 `bgColor` 只被三处画板编辑器当画布底色（`editor/artboard.js` / `editor/draw-board.js` / `editor/pixel-board.js`）与 `ui-library.js` 卡片底色用；`art/asset-render.js:110` 只在 `normalizeDesign` 里把它存下来，`renderAsset`/`drawDesignCentered` **不读它**。所以**别指望改 `bgColor` 能把盘改白**；想改盘的颜色只能改它 3 个元素的 `color`/`fill`（或对它用 `whiteVariant`/`invertDesign`）。它的 3 个元素颜色全是 `#000000`（一个 `closed:true` + `fill:'#000000'` 的实心 24 边形（半径 100，即**黑盘**）+ 两条 `radius:125 / lineWidth:12 / rotSpeed:0.5` 的**黑色弧**）→ **实际盘 = 黑盘 + 两条旋转黑弧**：画在**黑底槽位上完全不可见**、画在**白底槽位上显为黑盘**。
+   - **正是这个「黑底上不可见 / 白底上可见」的特性，让「使用中 = 白底 + 黑底盘」形成视觉对比**，两态都画、无需分态。
+   - **通用规则仍成立**：槽位底色在黑/白之间切换时图标颜色要跟着选（黑底 → `whiteVariant`，白底 → `blackVariant`）；**武器槽是特例 —— 两态都用原色**（用户明确要求，不再用 `whiteVariant`）。
+39. **设计稿美术的「动态」靠 `t` 参数**：`drawDesignCentered(g, design, cx, cy, boxSize, t = 0)` 的第 6 参驱动元素 `rotSpeed`；HUD 侧最初传 0 导致武器图标静止，**传 0 就是静止**。售货机页一直传 `tSec`，可作对照。（`battle-items.js:drawBattleItems` 里 `t` 已被 `getTempWeapon()` 返回值占用，时间用 `tSec`；药水槽/轮盘/状态图标仍传 0=静态，未要求改。）
+40. **`PAGE_FADE_MS` 是全屏菜单页共用常量**（`ui-runtime.js`），改它同时影响售货机、武器商店、工坊、选关、存档选择等**所有**页面；只想改售货机的入场展开动画要动 `screens.js:drawVendorShop` 的 `flipAt(delay)`（`/200` + delay `0/30/180/60+i*30`）。
+41. **轮盘 `drawPotionWheel` 的 `hoverFade` 默认值 1**：纯绘制函数不持有时间，渐显系数必须由 `battle-items.js` 按 `hoverT0` 算好传进来（保持 `battle-items-art.js`「无 this、无时间」的纯函数约定）。
+42. **`setHudAlpha` 在 `drawHud()` 之后执行**（`ui-runtime.js:394` 调 `drawHud`，`:399` 才调 `setHudAlpha`）→ **任何「alpha 需要跟随自身动画」的独立文本/对象都不能放进 `setHudAlpha`**，否则动画 alpha 会被冲成 `hudAlpha`（表现为轮盘渐隐期间文字亮度不变、和圆盘脱节）。药水轮盘名称文本正是因此从 `setHudAlpha` 里**移除**（`hud.js:361` 留注释），改由 `drawBattleItems` 每帧 `setAlpha(alpha)` 设置。安全前提：轮盘只可能在 `state === 'playing'`（即 `hudAlpha ≡ 1`）时可见，所以不需要参与 HUD 入场淡入。
+43. **轮盘图标位置只有一份实现**：`wheelIconPos(i, scale)`（`battle-items-art.js`，在 `wheelHoverIndex` 之后）。`drawPotionWheel` 的 4 个图标坐标与 `wheelNamePos` 都调用它，**不要再在别处内联 `-90 + i*90` 的角度公式**，否则改半径/起始角会漏改（名称文本会与图标错位）。
+44. **老虎机窗口图标尺寸**：窗口白卡是 `120×120`，图标尺寸必须小于它（当前 `screens.js:drawVendorShop` 局部常量 `REEL_ICON_SIZE = 88`，四周各留 16px）；原来直接写 `120` 会顶格（零内边距）。改窗口白卡尺寸时要连带改这个常量，未就绪白圆占位半径用 `REEL_ICON_SIZE * 0.34`。
+45. **Phaser Text 不要每帧改字号**：`setFontSize` 会重排整张文字纹理。轮盘缩放动画期间只按 `scale` 挪位置、字号固定 `WHEEL_NAME_FONT`（24px），**不要**让字号随 `scale` 变。
+46. **死亡运镜期间必须 gate 输入 + 隐藏 HUD，且 `menuScreen` 分支优先于结算分支（`playerDeathFlow`）**。`stopCutscene` 会**先置 `cinematicActive=false` 再回调 `onComplete`**，`phase:'hold'`（黑幕保持 `blackHoldMs`、`state` 仍 `playing`）期间 `cinematicInputLocked()` 与 `deathSim` 均为 false → **若不把 `playerDeathFlow` 单独纳入输入锁，玩家在黑幕里按 F/4/5/ESC 会打开菜单页、把结算页顶掉**（`drawUI` 的 `menuScreen` 分支优先于 `end/fail` 结算分支）。正确做法（`game-scene.js:171`）：`inputLocked = deathSim || !!this.playerDeathFlow || (this.cinematicInputLocked?.() ?? false)`，并 gate 掉开火/护盾/各 `updateXxxInteract`/`checkAsyncTriggerEvents`；`drawUI` 侧 `ui-runtime.js:374` 加 `else if (this.playerDeathFlow) hideHudOverlay();`（**放在结算分支之前**），`activeGraph` 计算也排除它。详见 level-design §4⑨ 与 engine-editor 坑 49-50。
+
+47. **玩家武器环链三坑（z 序 / 样板 / 厚度判据）**（本轮）：① **z 序** —— `drawHexRingPlayer` 与 `weapon-body.js:renderWeaponBody` 都改成「原有元素先、链环后」两趟绘制，否则链环（外径最小）被不透明的同形状父元素（散射中心黑三角 / 激光实心 20 边形）整块盖住；出场计时仍按外径升序的 `index`（`drawHexRingPlayer` 里为 `item.revealIndex`），只改 z 序。② **样板** —— `innermostElement` 优先取「描边型（`fill` 为空）」元素（`asset-render.js:normalizeElement` 把 `lineWidth:0` 强改成 4，会让「最内侧元素」落到黑色实心三角/实心 20 边形）。③ **链环标记** —— `drawHexRingPlayer` 的链环必须用**显式 `chain:true`**，不能用半径判断（武器球半径比内环还小）。④ **厚度判据**用固定 `chainRefScale()`（= `WEAPON_RING_CHAIN.refZoom`）而非当帧 zoom，否则放大途中环逐个冒出来。详见 engine-editor §7 坑 53-56。
+
+> **其余 5 条坑见其他分类 skill**：老虎机 Excel 表头行「描述」列值为 `Desc`（须用「直接出货权重是否为数值」跳表头）、消耗品「描述」列可能为空（回退「逻辑语言描述（程序不读该字段）」列）、`state.player` 三套来源（player/trialPlayer/previewPlayer）→ **economy-numbers skill**；vendor 实体是每次 `restart` 生成的副本、勿把状态写回 `ctx.state.level.vendors` → **level-design skill**；编辑器属性面板 vendors 分支字段 → **engine-editor skill**。
 
 ## 8. 验证方式
 
 ```bash
-npx vite build       # 构建，验证 ESM 导入/语法（无 lint，构建通过即基本安全）
+npx vite build       # 构建，验证 ESM 导入/语法（无 lint，构建通过即基本安全）；基线 90 modules（接线前 86）
 node server.js       # 起本地服务（package.json 的 dev 脚本），浏览器打开进编辑器/试玩
-node --test test/    # 基线 16 pass / 5 fail，5 个 fail 均为 fetch failed（需要 server 在跑），属正常
+node --test test/    # 基线 20 tests / 19 pass / 1 fail（唯一 fail 为 test/player-api.test.js 旧 schema mods 字段被 normalize 丢弃，属既有不一致）
 ```
+模块数 +4 = 新增 `run-items-runtime.js`/`battle-items.js` 两个模块，+ 因接线才进依赖图的 `run-items.js`/`battle-items-art.js`。mixin 同名自检：**方法数 285 / 冲突 2**（较上一轮 +8；冲突仅 `if`/`for` 假阳性，来自 `combat/boss25t5.js`、`ui/minimap.js`）。装配 mixin 由 23 → **25** 个（`RunItemsMixin`、`BattleItemsMixin` 紧随 `InnerShopMixin`）。
 
 改动后按面貌选关卡自测（`data/levels/` 下 16 个关卡）：
 
@@ -399,4 +577,31 @@ node --test test/    # 基线 16 pass / 5 fail，5 个 fail 均为 fetch failed�
 | 任意含宝箱/传送门/神像/售货机的关卡 | 世界层：宝箱十字星、传送门「撤离」tips、神像三选一祝福卡入场动画、售货机局内商店 |
 
 自测重点（对应第 7 章坑）：切页面来回切 3 次以上看有无**文本残留**；缩放浏览器窗口（触发 contain 黑边）看点击是否还准；暂停态点按钮看是否立即响应；观察是否有对象出现两份（ignore 漏配）。
+
+**售货机页冒烟清单**（对应第 7 章坑 20-26）：
+
+1. 关内放一台售货机 → 走近按 **F** → 打开弹窗页（黑幕 alpha 0.85），确认右 2×2 四张商品卡 + 左上金币数正确。
+2. 点某商品卡购买按钮 → 卡片**翻面**成黑底白边「已购买」+ 图标**纯白**（`whiteVariant`，背景盘保持原色）、金币扣除、该卡不再响应点击；**再点无效**（限购 1 次）。同一售货机关页再打开，**商品与已购态不变**；换另一台售货机打开，商品互相独立。
+3. 点抽奖按钮 → 金币扣 `drawCost` → 3 窗口滚动 **2.5s** → 依次定格（错开 140ms）→ 三窗同款才出中奖卡（滑入 300ms、展示 1800ms）；对照权重 武器 5% / 护盾 10% / 金币 15% / 垃圾 15%。
+4. 金币不足时点抽奖 / 购买应无反应（不扣钱）。
+5. **抽奖过程中按 ESC 关页 → 等 2.5s → 重新打开**：摇奖应已结算（金币奖已到账 / 奖励已入 `runItems`/`runTimedWeapons`），且能再次抽（验证坑 20 自愈结算）。
+6. **关页后确认无残留图形**：老虎机窗口滚动图标不应残留（验证坑 21 `preupdate` 兜底）。
+7. 退出关卡重进 → `runItems`/`runTimedWeapons` 与各 vendor 的 `stock`/`bought`/`slot` 全部清零（验证坑 22）。
+8. 武器商品卡显示**武器本体外观**（背景盘之上叠 `getWeaponDef(item.weaponId || item.id).appearance`），不只是背景盘——编号 `101/102/103` 的商品应显示 `yellow`/`green`/`weapon-1788012926999` 的真身外观（验证坑 24）。
+9. 护盾 / 速度 / 攻击力 等消耗品图标位于方框**正中**（包围盒中心落在图标中心，验证坑 25 `recenter`）。
+10. 「速度药水」图标在白卡上**可见**（纯白款自动改黑色款，验证坑 26）。
+11. 老虎机**上下两块面板左右外沿对齐**（白卡 `204..798` 与底板白色外沿 `204..798`，验证 `PANEL_CX=501`）。
+
+**局内消耗品 / 限时武器冒烟清单**（对应第 7 章坑 27-31）：
+
+1. `node server.js` → 进 `Level1-Scene1.json`，在关卡里放一台售货机 + 一个带 `potion` 掉落规则的敌人。
+2. 靠近售货机按 **F** 购买药水 → HUD 左下药水槽出现**黑底白框 + 纯白图标**（`whiteVariant`）+ 槽下队列小点（间距 8、不越屏幕底边）→ **短按数字键 4** 用掉（队列点从后往前减）。
+3. **长按数字键 4 ≥ 160ms** → 出轮盘（全屏蒙层 + 4 扇区，300ms 渐显）：鼠标**悬停扇区平滑高亮**（灰蒙层由内到外**连续变淡**、无分层跳变）、悬停圆心死区显示叉号且**不选中**、松开即用该扇区；打开期间**游戏不暂停**（能移动/开火）。**候选药水图标为黑底实心圆 + 白色图标、无任何边框**（中心死区圆仍有白边+白叉）；**4 项药水名各自显示在自己图标的正下方**（`wheelNamePos`），字号 **24px**（`WHEEL_NAME_FONT`，比旧值再小 4px），文本与轮盘**同进同出**（alpha 跟随动画）。
+4. 用药后玩家左下角出现**白色状态图标**（列优先 2 列×4 行，最多 8 个），到期自动消失；`heal`（立刻回血）/`shield`（生成护盾）/`sec===0`（本局永久）三者**不显示**状态图标。
+5. 购买临时武器 → HUD 右侧临时武器槽出现**黑底 + 白框 + 原色武器图案 + 圆形黑底盘**（`WEAPON_BG_ASSET`，黑底上不可见）→ **按数字键 5** 使用 → 槽位变**白底 + 武器色（`ringColor`）亮框 + 同款圆形黑底盘（白底上显出）** + 顶部同色时间条随剩余比例缩短 + 武器图案（保持**原色**）**持续自转** → **再按 5** 取消 → 回到**黑底白框**（同样**原色**图案 + 黑底盘）、时间条消失，并还原 `player.weaponType`。
+6. 击杀带 `potion` 掉落的敌人 → 掉落物显示**药水图标**（尺寸 30；图标未加载时先白点、随后补拉）；走近拾取入队。
+7. 离开战斗态 / 重开关卡 → 轮盘药水名**不残留**（验证坑 28）；轮盘打开期间**滚轮不能切武器**（验证坑 30）。
+8. **第二轮手感新增冒烟①**：长按 4 呼出轮盘，鼠标在扇区间移动 → 灰色蒙层应**平滑渐显**且由内到外**连续变淡**（无分层跳变）；**松开后高亮随轮盘一起渐隐（不再跳扇区）**（验证坑 36 / 41）。**候选图标无边框**（仅黑底圆 + 白图标）；**4 项名称文本各自在自己图标正下方**、字号 **24px**（比上一轮再小 4px）（验证坑 43 / 45）。
+9. **第二轮手感新增冒烟②**：按 5 使用临时武器 → 槽位应为**白底 + 武器色亮框 + 原色武器图案 + 圆形黑底盘（白底上显出）+ 顶部时间条**，且武器图案**持续自转（动态）**；再按 5 取消 → 回到**黑底白框**（同样**原色**图案 + 黑底盘，黑底上不可见）、时间条消失（验证坑 38 / 39）。
+10. **第三轮手感新增冒烟③**：① 临时武器槽**使用中**应能看到**圆形黑底盘**（白底上显出黑盘）——验证「两态都渲染底盘」（坑 38）；② 轮盘 4 项名称分别显示在**自己图标正下方**、字号更小（24px，坑 43/45）；③ 老虎机 3 个窗口内图标四周有**明显内边距**（白卡 120×120 / 图标 88、四周各 16px，坑 44）。
 

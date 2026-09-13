@@ -1,13 +1,15 @@
 // ============================================================
 // 世界内实体绘制：木箱、传送门、虫洞圆环与开场动画、敌人形状、墙体、玩家本体与护盾。
 // 分类：UI / 美术绘制（世界层）
-// 主要导出：color, fillRotatedRect, fillRotatedRoundedRect, drawCrate, drawCrateDebris, drawPortalShape, drawRing, wormhole*, intro*, drawWormhole, getHexagonPoints, drawHexagonBody, drawDefaultPlayer, drawDiamond, drawSquare(s), drawX, drawAdvanced2, drawEnemyShape, drawDropDiamond, drawParallelogram, drawWallShape, strokeDiamond, getWeaponOrbPosition, updatePlayerMoveLean, drawHexRingPlayer, drawShieldArc, drawPlayer
+// 主要导出：color, fillRotatedRect, fillRotatedRoundedRect, drawCrate, drawCrateDebris, drawPortalShape, drawRing, wormhole*, intro*, drawWormhole, drawDefaultPlayer, drawDiamond, drawSquare(s), drawX, drawAdvanced2, drawEnemyShape, drawDropDiamond, drawParallelogram, drawWallShape, strokeDiamond, getWeaponOrbPosition, updatePlayerMoveLean, drawHexRingPlayer, drawShieldArc, drawItemShields, drawPlayer
 // ============================================================
 
 import Phaser from 'phaser';
-import { VIEW_W, VIEW_H, CRATE_SIZE, CRATE_BORDER_THICKNESS, CRATE_INSET, CRATE_DEBRIS_TTL, PORTAL_COLOR, PORTAL_ALPHA, PLAYER_ART, PLAYER_LEAN, SHIELD, ENEMY_RED, ENEMY_BEHAVIOR } from '../constants.js';
+import { VIEW_W, VIEW_H, CRATE_SIZE, CRATE_BORDER_THICKNESS, CRATE_INSET, CRATE_DEBRIS_TTL, PORTAL_COLOR, PORTAL_ALPHA, PLAYER_ART, PLAYER_LEAN, SHIELD, ENEMY_RED, ENEMY_BEHAVIOR, WEAPON_RING_CHAIN } from '../constants.js';
 import { wallRotationRad, wallCorners } from '../combat/geometry.js';
 import { renderAsset } from '../art/asset-render.js';
+import { renderWeaponBody } from '../art/weapon-body.js';
+import { buildRingChain, revealAlphaAt, ringChainActive, chainRefScale } from '../art/weapon-ring-chain.js';
 import { buildOrbitInstance } from '../art/weapon-runtime.js';
 import { getDesign, ensureDesign } from '../art/design-store.js';
 import { isKnownWeapon } from '../../player-data.js';
@@ -165,6 +167,7 @@ export const INTRO_SLOW = 1;           // 极慢放大时长
 export const INTRO_SLOW_RATE = 0.25;   // 极慢放大速率（倍数/秒）
 export const INTRO_GROW_ACCEL = 32;    // 指数增长率：原环与新环共用
 export const INTRO_RING_DELAY = 0.05;  // 加速开始后快速生成首个新环
+export const INTRO_RING_COUNT = 12;             // 新环数量兜底（fx.introRingCount 缺失时使用，与 state.js 归一化默认值一致）
 export const INTRO_RING_INTERVAL = 0.24;       // 首个间隔
 export const INTRO_RING_INTERVAL_MIN = 0.08;   // 加速后的最小间隔
 export const INTRO_RING_INTERVAL_ACCEL = 0.055; // 每次生成后缩短的间隔
@@ -305,36 +308,7 @@ export function drawWormhole(g, fx, t, intro) {
   drawIntroRings(g, intro, fx, introCenterX, introCenterY, t);
 }
 
-// ── 六边形与玩家 / 敌人形状 ──
-export function getHexagonPoints(centerX, centerY, radius) {
-  return Array.from({ length: 6 }, (_, index) => {
-    const angle = -Math.PI / 2 + index * Math.PI / 3;
-    return {
-      x: centerX + Math.cos(angle) * radius,
-      y: centerY + Math.sin(angle) * radius
-    };
-  });
-}
-
-export function drawHexagonBody(graphics, centerX, centerY, radius = PLAYER_ART.hexagonRadius, offsetX = 0, offsetY = 0, lineThickness = PLAYER_ART.yLineThickness) {
-  const points = getHexagonPoints(centerX + offsetX, centerY + offsetY, radius);
-
-  graphics.fillStyle(0xffffff);
-  graphics.beginPath();
-  graphics.moveTo(points[0].x, points[0].y);
-  points.slice(1).forEach(point => graphics.lineTo(point.x, point.y));
-  graphics.closePath();
-  graphics.fillPath();
-
-  graphics.lineStyle(lineThickness, 0x000000, 1);
-  [1, 3, 5].forEach(index => {
-    graphics.beginPath();
-    graphics.moveTo(centerX + offsetX, centerY + offsetY);
-    graphics.lineTo(points[index].x, points[index].y);
-    graphics.strokePath();
-  });
-}
-
+// ── 玩家 / 敌人形状 ──
 export function drawDefaultPlayer(graphics, centerX, centerY) {
   graphics.fillStyle(0x51b9ff);
   graphics.fillCircle(centerX, centerY, 13);
@@ -545,9 +519,7 @@ export function updatePlayerMoveLean(player, dx, dy, dt) {
       player.moveLeanX *= scale;
       player.moveLeanY *= scale;
     }
-    player.moveHexRadius = Math.max(PLAYER_LEAN.minHexRadius, player.moveHexRadius - step);
   } else {
-    player.moveHexRadius = Math.min(PLAYER_ART.hexagonRadius, player.moveHexRadius + step);
     const len = Math.hypot(player.moveLeanX, player.moveLeanY) || 1;
     const decay = Math.min(step, len);
     player.moveLeanX -= player.moveLeanX / len * decay;
@@ -555,26 +527,70 @@ export function updatePlayerMoveLean(player, dx, dy, dt) {
   }
 }
 
-export function drawHexRingPlayer(graphics, player, scale = 1) {
+// 玩家本体环组：5 环 + 武器球。opts 传 { screenScale, elapsedMs } 时走「内圈环链 + 出场渐显」路径（局内）；
+// opts 为 null（HUD / 工坊卡片等 UI）时维持原观感（无六边形、无环链、alpha 全 1）。
+export function drawHexRingPlayer(graphics, player, scale = 1, opts = null) {
   const centerX = player.x;
   const centerY = player.y;
   const weaponColor = player.weapon?.ringColor || '#ffa914';
   const leanX = (player.moveLeanX || 0) * scale, leanY = (player.moveLeanY || 0) * scale;
-  const hexRadius = (player.moveHexRadius ?? PLAYER_ART.hexagonRadius) * scale;
   const innerK = PLAYER_LEAN.inner / PLAYER_LEAN.hex;
   const middleK = PLAYER_LEAN.middle / PLAYER_LEAN.hex;
   const outerK = PLAYER_LEAN.outer / PLAYER_LEAN.hex;
 
-  drawHexagonBody(graphics, centerX, centerY, hexRadius, leanX, leanY, PLAYER_ART.yLineThickness * scale);
-  drawRing(graphics, centerX + leanX * innerK, centerY + leanY * innerK, PLAYER_ART.innerRingRadius * scale, PLAYER_ART.innerRingThickness * scale, weaponColor);
-  drawRing(graphics, centerX + leanX * middleK, centerY + leanY * middleK, PLAYER_ART.outerRingRadius * scale, PLAYER_ART.outerRingThickness * scale, weaponColor);
-  drawRing(graphics, centerX + leanX * outerK, centerY + leanY * outerK, PLAYER_ART.outer2RingRadius * scale, PLAYER_ART.outer2RingThickness * scale, weaponColor);
-  drawRing(graphics, centerX, centerY, PLAYER_ART.bodyRingRadius * scale, PLAYER_ART.bodyRingThickness * scale, '#ffffff');
-  drawRing(graphics, centerX, centerY, PLAYER_ART.weaponRingRadius * scale, PLAYER_ART.weaponRingThickness * scale, weaponColor);
+  // 元素表（设计单位；渲染时统一乘 scale）：5 环 + 武器球
+  const items = [
+    { radius: PLAYER_ART.innerRingRadius, lineWidth: PLAYER_ART.innerRingThickness, color: weaponColor, leanK: innerK, kind: 'ring' },
+    { radius: PLAYER_ART.outerRingRadius, lineWidth: PLAYER_ART.outerRingThickness, color: weaponColor, leanK: middleK, kind: 'ring' },
+    { radius: PLAYER_ART.outer2RingRadius, lineWidth: PLAYER_ART.outer2RingThickness, color: weaponColor, leanK: outerK, kind: 'ring' },
+    { radius: PLAYER_ART.bodyRingRadius, lineWidth: PLAYER_ART.bodyRingThickness, color: '#ffffff', leanK: 0, kind: 'ring' },
+    { radius: PLAYER_ART.weaponRingRadius, lineWidth: PLAYER_ART.weaponRingThickness, color: weaponColor, leanK: 0, kind: 'ring' },
+    // 武器球骑在武器环上，出场次序紧随武器环之后（sortKey 用「环半径 + 球半径」，否则球半径最小会最先出现）
+    { radius: PLAYER_ART.weaponOrbRadius * 1.25 * 1.5, lineWidth: 0, color: '#ffffff', leanK: 0, kind: 'orb', sortKey: PLAYER_ART.weaponRingRadius + PLAYER_ART.weaponOrbRadius * 1.25 * 1.5 }
+  ];
 
-  const orb = getWeaponOrbPosition(player, scale);
-  graphics.fillStyle(0xffffff);
-  graphics.fillCircle(orb.x, orb.y, PLAYER_ART.weaponOrbRadius * 1.25 * 1.5 * scale);
+  // 单项渲染：环用 lineStyle+strokeCircle（带 alpha），球用 fillStyle+fillCircle
+  const drawItem = (item, alpha) => {
+    if (alpha <= 0) return;
+    if (item.kind === 'orb') {
+      const orb = getWeaponOrbPosition(player, scale);
+      graphics.fillStyle(color(item.color), alpha);
+      graphics.fillCircle(orb.x, orb.y, item.radius * scale);
+    } else {
+      graphics.lineStyle(item.lineWidth * scale, color(item.color), alpha);
+      graphics.strokeCircle(centerX + leanX * item.leanK, centerY + leanY * item.leanK, item.radius * scale);
+    }
+  };
+
+  // UI 场景（未显式传 screenScale）：不画环链、无出场动画，全部 alpha=1
+  if (!opts || !Number.isFinite(Number(opts.screenScale))) {
+    for (const item of items) drawItem(item, 1);
+    return;
+  }
+
+  // 局内：以最内侧圆环为样板向内生成环链，链环先按屏幕绝对厚度剔除（被剔除者不占出场时间片），
+  // 再与全部原有元素按「有效外径」升序排序并连续编号。
+  const screenScale = Number(opts.screenScale);
+  const elapsedMs = opts.elapsedMs;
+  const baseSample = { radius: PLAYER_ART.innerRingRadius, lineWidth: PLAYER_ART.innerRingThickness, color: weaponColor, leanK: innerK, kind: 'ring' };
+  // 只有相机放大到 minZoom 以上才生成环链（战斗 zoom≈1 时完全不生成，观感不变）
+  const chain = ringChainActive(screenScale) ? buildRingChain(baseSample, WEAPON_RING_CHAIN.count, WEAPON_RING_CHAIN.ratio) : [];
+  // 厚度判据用固定参考缩放 chainRefScale(=minZoom)，与设计武器路径一致 → 可见集合不随当帧 zoom 变化
+  const pxFactor = scale * chainRefScale(); // designScale = 1（设计单位即世界单位）
+  const combined = [];
+  for (const c of chain) {
+    if (Math.abs(c.el.lineWidth) * pxFactor < WEAPON_RING_CHAIN.minPx) continue;
+    combined.push({ ...c.el, chain: true });
+  }
+  for (const item of items) combined.push(item);
+  combined.sort((a, b) => (a.sortKey ?? (a.radius + a.lineWidth / 2)) - (b.sortKey ?? (b.radius + b.lineWidth / 2)));
+
+  // 绘制顺序：原有元素先、链环后（与设计武器路径一致），避免内圈链环被填充体盖住；
+  // 出场计时用 index（外径升序，链环在最前）→ 只改 z 序，出场动画时序不变。
+  combined.forEach((item, index) => { item.revealIndex = index; });
+  const alphaOf = (item) => revealAlphaAt(elapsedMs, item.revealIndex, WEAPON_RING_CHAIN.stepMs, WEAPON_RING_CHAIN.fadeMs);
+  for (const item of combined) if (!item.chain) drawItem(item, alphaOf(item));
+  for (const item of combined) if (item.chain) drawItem(item, alphaOf(item));
 }
 
 export function drawShieldArc(graphics, player) {
@@ -588,6 +604,23 @@ export function drawShieldArc(graphics, player) {
   graphics.beginPath();
   graphics.arc(player.x, player.y, radius, angle - half, angle + half, false);
   graphics.strokePath();
+}
+
+// 即时护盾（itemShields）：围绕玩家的整圈（360°）护盾弧，alpha 随剩余护盾比例变化
+export function drawItemShields(graphics, player) {
+  const shields = Array.isArray(player.itemShields) ? player.itemShields : [];
+  if (!shields.length) return;
+  const baseRadius = PLAYER_ART.weaponRingRadius + SHIELD.gap;
+  const thickness = PLAYER_ART.weaponRingThickness * 1.25;
+  shields.forEach((sh, i) => {
+    const ratio = (sh && sh.maxHp > 0) ? Phaser.Math.Clamp((sh.hp ?? 0) / sh.maxHp, 0, 1) : 0;
+    const alpha = 0.35 + 0.6 * ratio;
+    const radius = baseRadius + i * 6;   // 多盾按索引轻微外扩，避免完全重叠
+    graphics.lineStyle(thickness, color(SHIELD.color), alpha);
+    graphics.beginPath();
+    graphics.arc(player.x, player.y, radius, 0, Math.PI * 2, false);
+    graphics.strokePath();
+  });
 }
 
 // 环绕六边形航迹：按每颗的历史位置画渐隐尾迹（最新段最亮，旧段渐隐）
@@ -607,15 +640,17 @@ function drawOrbitTrail(g, trails, count, colorInt, fade, width = 2) {
   }
 }
 
-export function drawPlayer(graphics, player, t = 0) {
+export function drawPlayer(graphics, player, t = 0, opts = null) {
   // 美术方案按「当前武器类型」绑定：设了对应武器的设计稿 → 用它画玩家本体；否则回退默认/旧 art
   const wt = player.weaponType;
   const aid = (player.arts && wt && player.arts[wt]) || player.art;
   const design = aid ? getDesign(aid) : null;
   // 仅当 aid 不是武器 id 时才当作美术资产加载，避免把武器 id 发到 /api/assets 造成 404
   if (aid && !design && !isKnownWeapon(aid)) ensureDesign(aid);
+  // 出场计时：weaponIntroAt（ms，与 this.time.now 同基）缺失时视为早已出场（alpha 全 1）
+  const elapsedMs = t * 1000 - (Number.isFinite(player.weaponIntroAt) ? player.weaponIntroAt : -1e9);
   if (design) {
-    renderAsset(graphics, design, player.x, player.y, t, player.artScale || 1);
+    renderWeaponBody(graphics, design, player.x, player.y, t, player.artScale || 1, { screenScale: opts?.screenScale ?? 1, elapsedMs });
     // 特殊机制武器（鼠标准心/蓄力）把发射媒介/瞄准线/红弧叠画在画板本体之上
     const mc = player.weapon?.mechanic;
     if (mc && (mc.aim === 'mouse' || mc.charge?.enabled)) drawWeaponMedium(graphics, player, player.weapon?.medium, t);
@@ -634,19 +669,20 @@ export function drawPlayer(graphics, player, t = 0) {
       const baseR = (wArt.elements?.[orbit.orbitIndexes?.[0]]?.orbitRadius) || 30;
       const phase = player.orbit || { radius: baseR, speedMult: 1, sizeMult: 1, attacking: false, hexTrails: [] };
       const dyn = buildOrbitInstance(wArt, orbit, { radius: phase.radius, speedMult: phase.speedMult, sizeMult: phase.sizeMult });
-      renderAsset(graphics, dyn, player.x, player.y, t, player.artScale || 1, motion);
+      // 环绕机制同样走环链路径（禅灭等）：dyn 由 buildOrbitInstance 克隆外形并注入轨道半径，结构与 design 一致
+      renderWeaponBody(graphics, dyn, player.x, player.y, t, player.artScale || 1, { motion, screenScale: opts?.screenScale ?? 1, elapsedMs });
       if (phase.attacking && phase.hexTrails) {
         drawOrbitTrail(graphics, phase.hexTrails, orbit.hexCount, color(orbit.trailColor || '#ffa914'), orbit.trailFade, orbit.trailWidth);
       }
     } else {
-      renderAsset(graphics, wArt, player.x, player.y, t, player.artScale || 1, motion);
+      renderWeaponBody(graphics, wArt, player.x, player.y, t, player.artScale || 1, { motion, screenScale: opts?.screenScale ?? 1, elapsedMs });
       drawWeaponMedium(graphics, player, med, t);
     }
     return;
   }
 
   if (player.scheme === 'hex-ring' || player.scheme === 'yellow' || player.scheme === 'green') {
-    drawHexRingPlayer(graphics, player);
+    drawHexRingPlayer(graphics, player, 1, { screenScale: opts?.screenScale ?? 1, elapsedMs });
     return;
   }
 

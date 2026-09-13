@@ -6,7 +6,8 @@
  */
 import Phaser from 'phaser';
 import { VIEW_W, VIEW_H, FONT_TECH_SC, SETTLE_SUCCESS_COLOR, SETTLE_FAIL_COLOR, SETTLE_BALL_R, WEAPON_BG_ASSET } from '../constants.js';
-import { VENDOR_BUFFS } from '../economy/buffs.js';
+import { getInnerShopData } from '../economy/inner-shop.js';
+import { getArtRef, resolveArtRef, whiteVariant, drawShopIcon, shopIconVariant } from './vendor-shop-art.js';
 import { drawWeaponGlyph, drawLock } from '../../ui-layer.js';
 import { WEAPONS } from '../combat/weapons.js';
 import { WEAPON_LABELS, ITEM_DEFS, MOD_DEFS } from '../../state.js';
@@ -20,67 +21,286 @@ import { drawEnemyShape } from './entity-art.js';
 export const ScreensMixin = {
     drawVendorShop() {
       const g = this.uiG;
+      const now = this.time.now;
+      const tSec = now / 1000;
+
       this.vendorShopTexts = this.vendorShopTexts || new Map();
-      const ensure = (id, size, color) => {
+      for (const t of this.vendorShopTexts.values()) t.setVisible(false);
+      const ensure = (id, size, colorStr = '#ffffff') => {
         let t = this.vendorShopTexts.get(id);
         if (!t) {
-          t = this.add.text(0, 0, '', { fontFamily: FONT_TECH_SC, fontSize: size, color }).setDepth(1001);
+          t = this.add.text(0, 0, '', { fontFamily: FONT_TECH_SC, fontSize: size, color: colorStr }).setDepth(1002);
           this.cameras.main.ignore(t);
           this.vendorShopTexts.set(id, t);
         }
-        t.setVisible(true);
+        t.setFontSize(size).setColor(colorStr).setVisible(true);
         return t;
       };
 
+      const stock = this.getVendorStock ? this.getVendorStock() : null;
+      if (!stock) {
+        ensure('vendorLoading', '40px', '#ffffff').setOrigin(0.5, 0.5).setPosition(VIEW_W / 2, VIEW_H / 2).setText('加载中…');
+        return;
+      }
+
+      const vendor = this.vendorActive || null;
+      const slot = (vendor && vendor.slot) || null;
+      const lottery = getInnerShopData()?.lottery || null;
+      const kinds = Array.isArray(lottery?.kinds) ? lottery.kinds : [];
+      const kindByKey = new Map();
+      for (const k of kinds) if (k && k.key != null) kindByKey.set(k.key, k);
+
+      this.vendorView = this.vendorView || {};
+      const vv = this.vendorView;
+      if (vv.vendor !== vendor) {
+        vv.vendor = vendor;
+        vv.t0 = now;
+        vv.hover = {};
+        vv.flip = {};
+        vv.bought = {};
+        vv.deco = null;
+      }
+      if (vv.t0 === undefined) vv.t0 = now;
+      vv.hover = vv.hover || {};
+      vv.flip = vv.flip || {};
+      vv.bought = vv.bought || {};
+
+      const pickKey = () => (kinds.length ? (kinds[Math.floor(Math.random() * kinds.length)]?.key ?? null) : null);
+      if (!vv.deco || vv.deco.length !== 3) vv.deco = [0, 1, 2].map(() => [pickKey(), pickKey(), pickKey()]);
+
+      // 摇奖动画到点：定格并结算（本方法唯一调用的结算时机）
+      if (slot && slot.rolling && now >= slot.settleAt && this.settleVendorRoll) this.settleVendorRoll();
+
       const gold = this.player?.gold ?? 0;
+      const up = this.uiPointer();
+      const drawDiamond = (cx, cy, r, colorN, alpha = 1) => {
+        g.fillStyle(colorN, alpha);
+        g.beginPath();
+        g.moveTo(cx, cy - r); g.lineTo(cx + r, cy); g.lineTo(cx, cy + r); g.lineTo(cx - r, cy);
+        g.closePath(); g.fillPath();
+      };
+      const hoverOf = (id, hit) => {
+        const cur = vv.hover[id] || 0;
+        vv.hover[id] = cur + ((hit ? 1 : 0) - cur) * 0.18;
+        return vv.hover[id];
+      };
+      const flipAt = delay => Phaser.Math.Clamp((now - vv.t0 - delay) / 200, 0, 1);
+      // 黑底卡片（已购买）上的图标统一反转为纯白；按 design 缓存变体
+      vv.whiteCache = vv.whiteCache || new Map();
+      const wh = d => {
+        if (!d) return d;
+        let r = vv.whiteCache.get(d);
+        if (!r) { r = whiteVariant(d); vv.whiteCache.set(d, r); }
+        return r;
+      };
+      // 按 (design, darkCard) 维度缓存 shopIconVariant 结果（白卡/黑卡两套变体不可混用）
+      vv.variantCache = vv.variantCache || new Map();
+      const shopIcon = (d, darkCard) => {
+        if (!d) return d;
+        let m = vv.variantCache.get(d);
+        if (!m) { m = new Map(); vv.variantCache.set(d, m); }
+        const k = !!darkCard;
+        if (!m.has(k)) m.set(k, shopIconVariant(d, k));
+        return m.get(k);
+      };
+      // 老虎机 3 个窗口内的图标直径（窗口白卡 120×120 → 四周各留 16px 内边距）
+      const REEL_ICON_SIZE = 88;
+      const drawReelIcon = (g2, kd, cx, cy) => {
+        if (!kd) { g2.fillStyle(0xffffff, 1); g2.fillCircle(cx, cy, REEL_ICON_SIZE * 0.34); return; }
+        const d = getArtRef(kd.artType, kd.artName);
+        if (!d) { resolveArtRef(kd.artType, kd.artName); g2.fillStyle(0xffffff, 1); g2.fillCircle(cx, cy, REEL_ICON_SIZE * 0.34); return; }
+        drawShopIcon(g2, shopIcon(d, false), cx, cy, REEL_ICON_SIZE, tSec);
+      };
 
-      // 左侧：老虎机（占位）
-      const slotX = 150, slotY = 150, slotW = 700, slotH = 780;
-      g.fillStyle(0x0d1b2d, 1);
-      g.fillRoundedRect(slotX, slotY, slotW, slotH, 12);
-      g.lineStyle(2, 0x6fd3ff, 1);
-      g.strokeRoundedRect(slotX, slotY, slotW, slotH, 12);
-      ensure('slotTitle', '30px', '#6fd3ff').setOrigin(0.5, 0).setPosition(slotX + slotW / 2, slotY + 24).setText('老虎机');
-      // 占位转轮窗口
-      g.lineStyle(2, 0x31547a, 1);
-      g.strokeRoundedRect(slotX + 60, slotY + 120, slotW - 120, 300, 10);
-      ensure('slotPlaceholder', '26px', '#89a6c6').setOrigin(0.5).setPosition(slotX + slotW / 2, slotY + 270).setText('敬请期待');
-      ensure('slotHint', '18px', '#54708c').setOrigin(0.5).setPosition(slotX + slotW / 2, slotY + 600).setText('（功能开发中）');
+      // 老虎机窗口裁剪层（懒建）：滚动图标遮罩到 3 个窗口图标卡内
+      if (!this.vendorCardContentG) {
+        this.vendorCardMaskG = this.add.graphics().setDepth(999);
+        this.vendorCardMask = new Phaser.Display.Masks.GeometryMask(this, this.vendorCardMaskG);
+        this.vendorCardContentG = this.add.graphics().setDepth(1001);
+        this.vendorCardContentG.setMask(this.vendorCardMask);
+        this.cameras.main.ignore(this.vendorCardMaskG);
+        this.cameras.main.ignore(this.vendorCardContentG);
+        // 关页后 drawUI 不会清理本层（属售货机页私有），用 preupdate 兜底清空避免残留
+        this.events.on('preupdate', () => {
+          if (this.menuScreen !== 'vendor' && this.vendorCardContentG) this.vendorCardContentG.clear();
+        });
+      }
+      const scg = this.vendorCardContentG;
+      scg.clear();
+      this.vendorCardMaskG.clear();
+      this.vendorCardMaskG.fillStyle(0xffffff, 0);
 
-      // 右侧：局内商店
-      const shopX = 930, shopY = 150, shopW = 820, shopH = 780;
-      g.fillStyle(0x0d1b2d, 1);
-      g.fillRoundedRect(shopX, shopY, shopW, shopH, 12);
-      g.lineStyle(2, 0x6fd3ff, 1);
-      g.strokeRoundedRect(shopX, shopY, shopW, shopH, 12);
-      ensure('shopTitle', '30px', '#ffffff').setOrigin(0.5, 0).setPosition(shopX + shopW / 2, shopY + 24).setText('局内商店');
-      ensure('shopGold', '22px', '#ffd54f').setOrigin(1, 0.5).setPosition(shopX + shopW - 24, shopY + 52).setText(`金币 ${gold}`);
-      ensure('shopNote', '16px', '#54708c').setOrigin(0, 0.5).setPosition(shopX + 24, shopY + 52).setText('仅当局生效');
-
-      let rowY = shopY + 110;
-      for (const item of VENDOR_BUFFS) {
-        const bx = shopX + 24, by = rowY, bw = shopW - 48, bh = 96;
-        const bought = this.vendorBought?.has(item.id);
-        g.fillStyle(bought ? 0x16324a : 0x13253c, 1);
-        g.fillRoundedRect(bx, by, bw, bh, 8);
-        g.lineStyle(1, 0x31547a, 1);
-        g.strokeRoundedRect(bx, by, bw, bh, 8);
-
-        ensure(`it_${item.id}_name`, '24px', '#ffffff').setOrigin(0, 0.5).setPosition(bx + 24, by + 32).setText(item.name);
-        ensure(`it_${item.id}_desc`, '18px', '#89a6c6').setOrigin(0, 0.5).setPosition(bx + 24, by + 68).setText(item.desc);
-
-        if (bought) {
-          ensure(`it_${item.id}_state`, '22px', '#4fc3f7').setOrigin(1, 0.5).setPosition(bx + bw - 24, by + bh / 2).setText('已生效');
-        } else {
-          const bbw = 160, bbh = 48;
-          const bbx = bx + bw - 24 - bbw, bby = by + bh / 2 - bbh / 2;
-          const canBuy = gold >= item.price;
-          g.fillStyle(canBuy ? 0xffffff : 0x444444, 1);
-          g.fillRoundedRect(bbx, bby, bbw, bbh, 6);
-          ensure(`it_${item.id}_price`, '20px', canBuy ? '#000000' : '#999999').setOrigin(0.5, 0.5).setPosition(bbx + bbw / 2, bby + bbh / 2).setText(`购买 ${item.price}`);
-          this.buttons.push({ id: `buyBuff_${item.id}`, x: bbx, y: bby, w: bbw, h: bbh });
+      // ── 左：老虎机 ──
+      const WC_CX = 501;
+      const wCx = [330, 501, 675.18];
+      const sA = flipAt(0);
+      g.fillStyle(0xffffff, 1);
+      g.fillRect(WC_CX - 594 * sA / 2, 228, 594 * sA, 330);
+      g.fillStyle(0xffff00, 1);
+      g.fillRect(WC_CX + (798 - WC_CX) * sA, 285, 78 * sA, 210);
+      ensure('vendorJackpot', '72px', '#ffffff').setOrigin(0.5, 0.5)
+        .setPosition(WC_CX + (366 - WC_CX) * sA, 156).setText('JACKPOT');
+      for (let i = 0; i < 3; i++) {
+        const cx = WC_CX + (wCx[i] - WC_CX) * sA;
+        g.fillStyle(0x000000, 1);
+        g.fillRect(cx - 72 * sA, 318, 144 * sA, 144);
+        g.fillStyle(0xffffff, 1);
+        g.fillRect(cx - 60 * sA, 330, 120 * sA, 120);
+        this.vendorCardMaskG.fillRect(cx - 60 * sA, 330, 120 * sA, 120);
+      }
+      // 窗口内图标：纵向滚动 / 依次定格
+      if (sA >= 1) {
+        for (let i = 0; i < 3; i++) {
+          const cx = wCx[i];
+          const settled = slot && slot.icons && now >= (slot.settleAt + i * 140);
+          if (settled) {
+            drawReelIcon(scg, kindByKey.get(slot.icons[i]), cx, 390);
+          } else {
+            const pitch = 130;
+            const speed = slot ? 1.2 : 0.35;
+            const baseT = slot ? (slot.rollAt || 0) : 0;
+            const offset = (((now - baseT) * speed) + i * 37) % pitch;
+            const keys = slot ? kinds.map(k => k.key) : vv.deco[i];
+            const n = keys.length || 1;
+            for (let k = -1; k <= 1; k++) {
+              drawReelIcon(scg, kindByKey.get(keys[((k % n) + n) % n]), cx, 390 - offset + k * pitch);
+            }
+          }
         }
-        rowY += 116;
+      }
+
+      // 底板（黑底 + 白边）+ 抽奖按钮 + 中奖弹出卡
+      // 底板描边居中于路径：用 PANEL_CX=501 使白色外沿落在 204..798，与上半白卡（WC_CX=501/宽594）对齐；
+      // PL_CX=502.2 仍用于按钮/价格文本/中奖卡（保持既有坐标不动）。
+      const PL_CX = 502.2;
+      const PANEL_CX = 501;
+      const sB = flipAt(30);
+      g.fillStyle(0x000000, 1);
+      g.fillRect(PANEL_CX - 570 * sB / 2, 540, 570 * sB, 390);
+      g.lineStyle(24, 0xffffff, 1);
+      g.strokeRect(PANEL_CX - 570 * sB / 2, 540, 570 * sB, 390);
+
+      const rolling = !!(slot && slot.rolling);
+      const rollHit = up.x >= 344.7 && up.x <= 344.7 + 315 && up.y >= 564 && up.y <= 564 + 90;
+      const rollScale = (1 + 0.1 * (rolling ? 0 : hoverOf('vendorRoll', rollHit))) * this.pressScale('vendorRoll');
+      const rw = 315 * sB * rollScale, rh = 90 * rollScale;
+      g.fillStyle(0x000000, 1);
+      g.fillRoundedRect(PL_CX - rw / 2, 609 - rh / 2, rw, rh, 8);
+      g.lineStyle(6, 0xffffff, 1);
+      g.strokeRoundedRect(PL_CX - rw / 2, 609 - rh / 2, rw, rh, 8);
+      drawDiamond(PL_CX + (468 - PL_CX) * sB, 609, 18, 0xffff00);
+      ensure('vendorRollPrice', '48px', '#ffffff').setOrigin(0.5, 0.5)
+        .setPosition(PL_CX + (522 - PL_CX) * sB, 615).setText(`${lottery?.drawCost ?? 0}`);
+      if (!rolling) this.buttons.push({ id: 'vendorRoll', x: 344.7, y: 564, w: 315, h: 90 });
+
+      if (slot && !slot.rolling && slot.prizeAt > 0) {
+        const pp = Phaser.Math.Clamp((now - slot.prizeAt) / 300, 0, 1);
+        const py = 703.5 - 40 * (1 - pp);
+        const pCx = PL_CX + (501 - PL_CX) * sB;
+        g.fillStyle(0xffffff, pp);
+        g.fillRoundedRect(pCx - 271.2 * sB / 2, py, 271.2 * sB, 153, 12);
+        const prize = slot.prize;
+        const kind = prize?.kind;
+        let label = '未中奖';
+        if ((kind === 'weapon' || kind === 'consumable') && prize.item) label = prize.item.name || '';
+        else if (kind === 'gold') label = `金币 +${prize.amount ?? 0}`;
+        if ((kind === 'weapon' || kind === 'consumable') && prize.item) {
+          const icx = pCx, icy = py + 58;
+          if (kind === 'weapon') {
+            if (!getDesign(WEAPON_BG_ASSET)) ensureDesign(WEAPON_BG_ASSET);
+            const bgD = getDesign(WEAPON_BG_ASSET);
+            if (bgD) drawDesignCentered(g, bgD, icx, icy, 88 * 0.72, tSec);
+            const app = getWeaponDef(prize.item.weaponId || prize.item.id)?.appearance;
+            if (app) drawDesignCentered(g, app, icx, icy, 88 * 0.5, tSec);
+          } else {
+            const d = getArtRef(prize.item.artType, prize.item.artName);
+            if (!d) resolveArtRef(prize.item.artType, prize.item.artName);
+            else drawShopIcon(g, shopIcon(d, false), icx, icy, 88 * 0.5, tSec);
+          }
+        } else if (kind === 'gold') {
+          drawDiamond(pCx, py + 58, 20, 0xffff00, pp);
+        }
+        ensure('vendorPrize', '30px', '#000000').setOrigin(0.5, 0.5)
+          .setPosition(pCx, py + 120).setText(label).setAlpha(pp);
+        if (now - slot.prizeAt > 1800) slot.prizeAt = 0;
+      }
+
+      // ── 右：商店 ──
+      ensure('vendorBuyTitle', '72px', '#ffffff').setOrigin(0.5, 0.5).setPosition(1116, 156).setText('购买');
+
+      const GB_CX = 1488;
+      const sG = flipAt(180);
+      g.fillStyle(0x000000, 1);
+      g.fillRoundedRect(GB_CX - 324 * sG / 2, 30, 324 * sG, 72, 36);
+      g.lineStyle(6, 0xffffff, 1);
+      g.strokeRoundedRect(GB_CX - 324 * sG / 2, 30, 324 * sG, 72, 36);
+      drawDiamond(GB_CX + (1359 - GB_CX) * sG, 64, 18, 0xffff00);
+      ensure('vendorGoldValue', '36px', '#ffffff').setOrigin(0.5, 0.5)
+        .setPosition(GB_CX + (1602 - GB_CX) * sG, 69).setText(`${gold}`);
+
+      const cardX = [1050, 1410, 1050, 1410];
+      const cardY = [228, 228, 618, 618];
+      for (let i = 0; i < 4; i++) {
+        const x0 = cardX[i], y0 = cardY[i], ccx = x0 + 142.5;
+        const bCx = x0 + 141;
+        const item = stock[i] || null;
+        const bought = !!(this.isVendorBought && this.isVendorBought(i));
+        if (vv.bought[i] === undefined) vv.bought[i] = bought;
+        else if (!vv.bought[i] && bought) vv.flip[i] = { t0: now };
+        vv.bought[i] = bought;
+        let s = flipAt(60 + i * 30);
+        let showBought = bought;
+        const fl = vv.flip[i];
+        if (fl) {
+          const fp = Phaser.Math.Clamp((now - fl.t0) / 300, 0, 1);
+          s *= Math.abs(1 - 2 * fp);
+          showBought = fp >= 0.5;
+          if (fp >= 1) { delete vv.flip[i]; s = flipAt(60 + i * 30); showBought = bought; }
+        }
+        g.fillStyle(showBought ? 0x000000 : 0xffffff, 1);
+        g.fillRect(ccx - 285 * s / 2, y0, 285 * s, 324);
+        if (showBought) {
+          g.lineStyle(6, 0xffffff, 1);
+          g.strokeRect(ccx - 285 * s / 2, y0, 285 * s, 324);
+        }
+        const iconCx = ccx + (x0 + 141 - ccx) * s;
+        const iconCy = y0 + 129;
+        const box = 150 * s;
+        if (item && box > 1) {
+          if (item.kind === 'weapon') {
+            if (!getDesign(WEAPON_BG_ASSET)) ensureDesign(WEAPON_BG_ASSET);
+            const bgD = getDesign(WEAPON_BG_ASSET);
+            if (bgD) drawDesignCentered(g, bgD, iconCx, iconCy, box * 0.72, tSec);
+            const app = getWeaponDef(item.weaponId || item.id)?.appearance;
+            if (app) drawDesignCentered(g, showBought ? wh(app) : app, iconCx, iconCy, box * 0.5, tSec);
+          } else {
+            const d = getArtRef(item.artType, item.artName);
+            if (d) drawDesignCentered(g, showBought ? wh(d) : shopIcon(d, false), iconCx, iconCy, box * 0.5, tSec);
+            else {
+              resolveArtRef(item.artType, item.artName);
+              g.fillStyle(0xffffff, 1);
+              g.fillCircle(iconCx, iconCy, box * 0.25);
+            }
+          }
+        }
+        const hit = up.x >= x0 + 30 && up.x <= x0 + 252 && up.y >= y0 + 252 && up.y <= y0 + 312;
+        const insufficient = !item || gold < item.cost;
+        const bId = `buyVendor_${i}`;
+        const bScale = showBought ? 1 : (1 + 0.1 * hoverOf(bId, hit)) * this.pressScale(bId);
+        const bw = 222 * s * bScale, bh = 60 * bScale;
+        g.fillStyle(0x000000, 1);
+        g.fillRoundedRect(bCx - bw / 2, y0 + 282 - bh / 2, bw, bh, 8);
+        g.lineStyle(6, showBought ? 0xcfcfcf : (insufficient ? 0x666666 : 0xffffff), 1);
+        g.strokeRoundedRect(bCx - bw / 2, y0 + 282 - bh / 2, bw, bh, 8);
+        if (showBought) {
+          ensure(`vendorItem_${i}_state`, '30px', '#ffffff').setOrigin(0.5, 0.5)
+            .setPosition(bCx, y0 + 282).setScale(s, 1).setText('已购买');
+        } else {
+          drawDiamond(bCx - 27 * s, y0 + 282, 12 * s, 0xffff00);
+          ensure(`vendorItem_${i}_price`, '30px', insufficient ? '#666666' : '#ffffff').setOrigin(0.5, 0.5)
+            .setPosition(bCx + 15 * s, y0 + 285).setScale(s, 1).setText(`${item ? item.cost : 0}`);
+          this.buttons.push({ id: bId, x: x0 + 30, y: y0 + 252, w: 222, h: 60 });
+        }
       }
     },
 

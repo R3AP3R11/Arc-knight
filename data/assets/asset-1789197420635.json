@@ -1,0 +1,100 @@
+{
+  "id": "asset-1789197420635",
+  "name": "黑色叉号",
+  "bgColor": "#ffffff",
+  "center": {
+    "x": 0,
+    "y": 0
+  },
+  "scale": 1,
+  "elements": [
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 20,
+      "sides": 6,
+      "cols": 12,
+      "rows": 12,
+      "cellSize": 8,
+      "gridColor": "",
+      "cells": [],
+      "lineWidth": 24,
+      "color": "#000000",
+      "fill": null,
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "pattern": "plain",
+      "tickShortLen": 6,
+      "tickLongLen": 12,
+      "tickDensity": 12,
+      "tickRatio": 1,
+      "tickDir": "in",
+      "handLongRadius": 20,
+      "handShortRadius": 20,
+      "handLongColor": "#000000",
+      "handShortColor": "#000000",
+      "points": [
+        {
+          "x": -75,
+          "y": -75
+        },
+        {
+          "x": 75,
+          "y": 75
+        }
+      ],
+      "closed": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 20,
+      "sides": 6,
+      "cols": 12,
+      "rows": 12,
+      "cellSize": 8,
+      "gridColor": "",
+      "cells": [],
+      "lineWidth": 24,
+      "color": "#000000",
+      "fill": null,
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "pattern": "plain",
+      "tickShortLen": 6,
+      "tickLongLen": 12,
+      "tickDensity": 12,
+      "tickRatio": 1,
+      "tickDir": "in",
+      "handLongRadius": 20,
+      "handShortRadius": 20,
+      "handLongColor": "#000000",
+      "handShortColor": "#000000",
+      "points": [
+        {
+          "x": 75,
+          "y": -75
+        },
+        {
+          "x": -75,
+          "y": 75
+        }
+      ],
+      "closed": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    }
+  ]
+}

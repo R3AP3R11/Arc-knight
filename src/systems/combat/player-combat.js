@@ -5,7 +5,7 @@
  * 以及受击时覆盖全屏的红色闪屏绘制。
  *
  * 方法清单：
- *   damagePlayer     —— 扣血（含减伤、新手关血量下限、失败判定）
+ *   damagePlayer     —— 扣血（含即时护盾吸收、减伤、新手关血量下限、失败判定）
  *   blockWithShield  —— 扇形护盾角度 + 距离判定，命中则扣盾并抖屏
  *   hitShield        —— 近身敌人撞盾：先结算击杀再走格挡
  *   switchWeapon     —— 按方向切换武器轮当前槽位
@@ -30,15 +30,31 @@ export const PlayerCombatMixin = {
       const floor = this.isNewbeeLevel() ? NEWBEE_MIN_HP : 0;
       const actual = playerIncomingDamage(this, dmg);
       if (actual <= 0) return;
-      this.player.hp = Math.max(floor, (this.player.hp ?? 100) - actual);
+      // 即时护盾吸收：先按数组顺序逐个扣盾，remaining 归零则免掉本次 HP 损失
+      let remaining = actual;
+      const shields = Array.isArray(this.player.itemShields) ? this.player.itemShields : [];
+      for (let i = 0; i < shields.length && remaining > 0; i++) {
+        const sh = shields[i];
+        if (!sh || typeof sh !== 'object') continue;
+        const absorbed = Math.min(sh.hp || 0, remaining);
+        sh.hp = (sh.hp || 0) - absorbed;
+        remaining -= absorbed;
+        if (sh.hp <= 0) {
+          shields.splice(i, 1);
+          i--;   // 移除后后续元素前移，回退索引以维持「按数组顺序」处理
+          this.hitEffects.push({ x: this.player.x, y: this.player.y, ttl: HIT_FX_TTL, color: SHIELD_HIT_COLOR });
+          this.cameras.main.shake(SHIELD_SHAKE_MS, SHIELD_SHAKE_INTENSITY);
+        }
+      }
+      if (remaining <= 0) return;
+      this.player.hp = Math.max(floor, (this.player.hp ?? 100) - remaining);
       this.player.hitFlash = {
         alpha: 1,
         total: Phaser.Math.Clamp(dmg * 40, 200, 1200),
         t: 0
       };
       if (this.player.hp <= 0) {
-        this.state = 'fail';
-        this.syncUIState();
+        this.triggerPlayerDefeat();
       }
     },
 
@@ -83,6 +99,7 @@ export const PlayerCombatMixin = {
       this.player.weapon = weapon;
       this.player.scheme = weapon.scheme;
       this.player.weaponArt = (weapon && weapon.appearance && Array.isArray(weapon.appearance.elements) && weapon.appearance.elements.length) ? weapon.appearance : null;
+      this.player.weaponIntroAt = this.time?.now || 0;   // 出武器：重播本体出场动画
       this.wheelAnim = { from, to, t: 0, dur: 500 };
       this.syncUIState();
     },

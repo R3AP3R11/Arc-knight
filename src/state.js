@@ -33,7 +33,8 @@ export const ENEMY_TYPES = {
 
 export const DEFAULT_DROPS = { gold: 1, exp: 1, diamond: 0 };
 
-export const DROP_ITEMS = { gold: '金币', exp: '经验', charge: '充能球', diamond: '钻石' };
+// 掉落物种类（下拉/归一白名单）；potion 需配合 potionId 指定具体药水（空=随机药水）
+export const DROP_ITEMS = { gold: '金币', exp: '经验', charge: '充能球', potion: '药水', diamond: '钻石' };
 
 // 展示顺序基础列表（仅 radial 硬编码；yellow/green 与设计稿武器启动后并入 isKnownWeapon）
 export const WEAPON_TYPES = ['radial'];
@@ -126,7 +127,8 @@ export function normalizeDropRules(value) {
       item: DROP_ITEMS[r?.item] ? r.item : 'gold',
       count: Math.max(0, Math.floor(Number(r?.count) || 0)),
       chance: Math.min(100, Math.max(0, Number(r?.chance) ?? 100)),
-      weapon: r?.item === 'charge' && isKnownWeapon(r?.weapon) ? r.weapon : ''
+      weapon: r?.item === 'charge' && isKnownWeapon(r?.weapon) ? r.weapon : '',
+      potionId: r?.item === 'potion' ? String(r?.potionId ?? '').trim() : ''
     }));
     if (entries.length) rules[type] = entries;
   }
@@ -176,14 +178,15 @@ export function normalizeBarrel(barrel, index) {
   };
 }
 
-// 通用掉落条目列表（宝箱等）：item + count + chance
+// 通用掉落条目列表（宝箱等）：item + count + chance（potion 时附 potionId）
 export function normalizeRewardList(value) {
   if (!Array.isArray(value)) return [];
   return value
     .map(r => ({
       item: DROP_ITEMS[r?.item] ? r.item : 'gold',
       count: Math.max(0, Math.floor(Number(r?.count) || 0)),
-      chance: Math.min(100, Math.max(0, Number(r?.chance) ?? 100))
+      chance: Math.min(100, Math.max(0, Number(r?.chance) ?? 100)),
+      potionId: r?.item === 'potion' ? String(r?.potionId ?? '').trim() : ''
     }))
     .filter(r => r.count > 0);
 }
@@ -376,10 +379,28 @@ export function normalizeTrigger(trigger, index) {
   return base;
 }
 
+// 0~1 归一：非法/缺失 → fallback（默认 0）
+function clampUnit(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : fallback;
+}
+
+// 颜色归一：接受 #rgb / #rrggbb，规整为 #rrggbb 小写；非法/缺失回退 fallback
+function normalizeHexColor(value, fallback) {
+  if (typeof value !== 'string') return fallback;
+  let hex = value.trim().replace(/^#/, '');
+  if (/^[0-9a-fA-F]{3}$/.test(hex)) hex = hex.split('').map(c => c + c).join('');
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) return fallback;
+  return `#${hex.toLowerCase()}`;
+}
+
 // 运镜动画（过场运镜特效）定义归一：补默认字段、过滤非法 id/keyframes、按 t 升序
 function normalizeCinematic(value, index) {
   if (!value || typeof value !== 'object' || !value.id) return null;
   const durationMs = Math.max(0, Number(value.durationMs) || 0);
+  // timeScale 需先于关键帧算出，作为关键帧 timeScale 的缺省值
+  const rawTimeScale = Number(value.timeScale);
+  const timeScale = Number.isFinite(rawTimeScale) ? Math.min(1, Math.max(0.05, rawTimeScale)) : 1;
   const rawKeyframes = Array.isArray(value.keyframes) ? value.keyframes : [];
   const keyframes = rawKeyframes
     .map(k => {
@@ -393,18 +414,28 @@ function normalizeCinematic(value, index) {
         panY: Number.isFinite(Number(k.panY)) ? Number(k.panY) : 0,
         rotation: Number.isFinite(Number(k.rotation)) ? Number(k.rotation) : 0,
         alpha: Number.isFinite(Number(k.alpha)) ? Number(k.alpha) : 0,
-        ease: k.ease == null ? 'linear' : String(k.ease)
+        ease: k.ease == null ? 'linear' : String(k.ease),
+        timeScale: Number.isFinite(Number(k.timeScale)) ? Math.min(1, Math.max(0.05, Number(k.timeScale))) : timeScale,
+        vignette: clampUnit(k.vignette),
+        letterbox: clampUnit(k.letterbox),
+        tint: clampUnit(k.tint),
+        tintColor: normalizeHexColor(k.tintColor, '#1a0a0a'),
+        flash: clampUnit(k.flash),
+        flashColor: normalizeHexColor(k.flashColor, '#ffffff'),
+        desat: clampUnit(k.desat)
       };
     })
     .filter(Boolean)
     .sort((a, b) => a.t - b.t);
-  const rawTimeScale = Number(value.timeScale);
-  const timeScale = Number.isFinite(rawTimeScale) ? Math.min(1, Math.max(0.05, rawTimeScale)) : 1;
+  const rawBlackHoldMs = Number(value.blackHoldMs);
+  const blackHoldMs = Number.isFinite(rawBlackHoldMs) ? Math.min(3000, Math.max(0, Math.round(rawBlackHoldMs))) : 0;
   return {
     id: String(value.id),
     name: value.name == null ? '' : String(value.name),
     durationMs,
     timeScale,
+    focus: ['none', 'player', 'boss'].includes(value.focus) ? value.focus : 'none',
+    blackHoldMs,
     keyframes
   };
 }
@@ -416,6 +447,22 @@ export const SCHEME_WEAPONS = {
   'hex-ring': 'radial',
   yellow: 'yellow',
   green: 'green'
+};
+
+// 默认「玩家被击败运镜」：所有关卡共用（关卡自带同 id 的运镜时以关卡数据为准；自定义 deathCinematic 的关卡不注入）。
+// 数据来源：data/levels/Level1-Scene1.json 的 cine-1789288387998，逐字搬运。
+export const DEFAULT_DEATH_CINEMATIC = {
+  id: 'cine-1789288387998',
+  name: '玩家被击败运镜',
+  durationMs: 4450,
+  timeScale: 0.2,
+  focus: 'none',
+  blackHoldMs: 0,
+  keyframes: [
+    { t: 0, zoom: 1, panX: 0, panY: 0, rotation: 0, alpha: 0, ease: 'linear', timeScale: 0.2, vignette: 0, letterbox: 0, tint: 0, tintColor: '#1a0a0a', flash: 0, flashColor: '#ffffff', desat: 0 },
+    { t: 2000, zoom: 5, panX: 40, panY: 40, rotation: -16, alpha: 0, ease: 'linear', timeScale: 0.2, vignette: 0, letterbox: 0, tint: 0, tintColor: '#1a0a0a', flash: 0, flashColor: '#ffffff', desat: 0 },
+    { t: 4450, zoom: 1000, panX: 0, panY: 0, rotation: 0, alpha: 1, ease: 'linear', timeScale: 0.2, vignette: 0, letterbox: 0, tint: 0, tintColor: '#1a0a0a', flash: 0, flashColor: '#ffffff', desat: 0 }
+  ]
 };
 
 export const DEFAULT_LEVEL = {
@@ -435,6 +482,7 @@ export const DEFAULT_LEVEL = {
   dropRules: {},
   triggers: [],
   cinematics: [],
+  deathCinematic: DEFAULT_DEATH_CINEMATIC.id,
   crates: [],
   barrels: [],
   chests: [],
@@ -537,6 +585,8 @@ function normalizeSpawnZone(value, index) {
 
 export function normalizeLevel(value) {
   const data = value || {};
+  // 死亡运镜 id：关卡未配置（空串/缺字段）时回落到默认死亡运镜
+  const deathId = (typeof data.deathCinematic === 'string' && data.deathCinematic) || DEFAULT_DEATH_CINEMATIC.id;
 
   return {
     ...clone(DEFAULT_LEVEL),
@@ -564,8 +614,16 @@ export function normalizeLevel(value) {
     })),
     enemies: (Array.isArray(data.enemies) ? data.enemies : clone(DEFAULT_LEVEL.enemies)).map(normalizeEnemy),
     triggers: (Array.isArray(data.triggers) ? data.triggers : []).map(normalizeTrigger),
-    cinematics: (Array.isArray(data.cinematics) ? data.cinematics : clone(DEFAULT_LEVEL.cinematics)).map(normalizeCinematic).filter(Boolean),
-    crates: (Array.isArray(data.crates) ? data.crates : []).map(normalizeCrate),
+    cinematics: (() => {
+      const list = (Array.isArray(data.cinematics) ? data.cinematics : clone(DEFAULT_LEVEL.cinematics)).map(normalizeCinematic).filter(Boolean);
+      // 所有关卡默认共用「玩家被击败运镜」：关卡自带同 id 的运镜时以关卡数据为准；自定义 deathCinematic 的关卡不注入。
+      if (deathId === DEFAULT_DEATH_CINEMATIC.id && !list.some(c => c.id === deathId)) {
+        const preset = normalizeCinematic(clone(DEFAULT_DEATH_CINEMATIC));
+        if (preset) list.push(preset);
+      }
+      return list;
+    })(),
+    deathCinematic: deathId,    crates: (Array.isArray(data.crates) ? data.crates : []).map(normalizeCrate),
     barrels: (Array.isArray(data.barrels) ? data.barrels : []).map(normalizeBarrel),
     chests: (Array.isArray(data.chests) ? data.chests : []).map(normalizeChest),
     portals: (Array.isArray(data.portals) ? data.portals : []).map(normalizePortal),

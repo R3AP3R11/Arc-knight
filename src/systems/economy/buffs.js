@@ -1,11 +1,11 @@
 // ============================================================
-// 局内增益池：神像祝福与售货机商品（仅当局生效，直接作用于 scene.player.combat）。
+// 局内增益池：神像祝福（仅当局生效，直接作用于 scene.player.combat）。
 // 分类：经济与数值相关
-// 主要导出：IDOL_BUFFS, VENDOR_BUFFS
+// 主要导出：IDOL_BUFFS, IDOL_OFFER_COUNT, setIdolBuffs
 // ============================================================
 
 
-// ── 神像祝福 / 售货机商品 ──
+// ── 神像祝福 ──
 // 神像祝福池：从配置（data/ui/idol-buffs.json）加载，运行时由 setIdolBuffs 注入；
 //             IDOL_BUFFS / IDOL_OFFER_COUNT 为 live binding，随配置更新。仅当局生效。
 // 每条祝福 = { id, name, desc, icon(画板资产 id), stats }，stats 为声明式加成：
@@ -50,10 +50,3 @@ function makeApply(stats) {
     }
   };
 }
-
-// 局内商店（售货机）商品：仅当局生效的属性加成，后续在此补充
-export const VENDOR_BUFFS = [
-  { id: 'atk', name: '火力强化', desc: '攻击力 +20%', price: 30, apply: scene => { const c = scene.player.combat; c.attackPower = (c.attackPower ?? 1) * 1.2; } },
-  { id: 'speed', name: '轻量化', desc: '移动速度 +15%', price: 20, apply: scene => { const c = scene.player.combat; c.moveSpeed = (c.moveSpeed ?? 1) * 1.15; } },
-  { id: 'hp', name: '强化装甲', desc: '生命上限 +30', price: 40, apply: scene => { const c = scene.player.combat; c.maxHp = (c.maxHp ?? 100) + 30; scene.player.maxHp = c.maxHp; } }
-];
