@@ -37,15 +37,17 @@ export function playerIncomingDamage(scene, dmg) {
 // （改件定义 MOD_DEFS 见 state.js）
 // ============================================================
 export function activeMods(scene, weaponType) {
-  const slot = scene.player?.equipment?.weaponMods?.[weaponType];
-  if (!slot) return new Set();
+  const player = scene.player;
+  const slot = player?.equipment?.weaponMods?.[weaponType];
   const caps = getWeaponCaps(weaponType);
-  const generic = (Array.isArray(slot.generic) ? slot.generic : []).filter(id => {
+  const generic = (Array.isArray(slot?.generic) ? slot.generic : []).filter(id => {
     const def = MOD_DEFS[id];
     return def && (def.weapon === '' || def.weapon === weaponType);
   }).slice(0, caps.generic);
-  const dedRaw = Array.isArray(slot.dedicated) ? slot.dedicated : (slot.dedicated ? [slot.dedicated] : []);
-  const list = [...generic, ...dedRaw];
+  const dedRaw = Array.isArray(slot?.dedicated) ? slot.dedicated : (slot?.dedicated ? [slot.dedicated] : []);
+  // 火堆等写入的局内临时改件（仅当局，挂 player，不落存档）：一并计入生效集合
+  const tempRaw = Array.isArray(player?.tempMods?.[weaponType]) ? player.tempMods[weaponType] : [];
+  const list = [...generic, ...dedRaw, ...tempRaw];
   return new Set(
     list.filter(id => {
       const def = MOD_DEFS[id];

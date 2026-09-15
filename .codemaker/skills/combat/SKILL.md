@@ -1,6 +1,6 @@
 ---
 name: combat
-description: 改武器手感与弹道、敌人 AI 行为、伤害与命中判定、护盾格挡、限时加成、临时武器开火、即时护盾吸收（itemShields）、寻路、可破坏物（木箱/油桶）、玩家被击败（三个失败入口 damagePlayer / boss25t5KillPlayer / 母舰贴身秒杀）时读这份。覆盖 src/systems/combat/** 与 src/systems/economy/damage.js。触发词：武器 / 武器出场 / 弹道 / 子弹 / 敌人 / AI / 护盾 / 木箱 / 油桶 / 运镜 / 过场运镜 / 死亡运镜 / 玩家被击败 / 运镜预览。
+description: 改武器手感与弹道、敌人 AI 行为、伤害与命中判定、护盾格挡、限时加成、临时武器开火、即时护盾吸收（itemShields）、寻路、可破坏物（木箱/油桶）、玩家被击败（三个失败入口 damagePlayer / boss25t5KillPlayer / 母舰贴身秒杀）时读这份。覆盖 src/systems/combat/** 与 src/systems/economy/damage.js。触发词：武器 / 武器出场 / 弹道 / 子弹 / 敌人 / AI / 护盾 / 木箱 / 油桶 / 运镜 / 过场运镜 / 死亡运镜 / 玩家被击败 / 运镜预览 / 休息火堆 / 火堆 / 武器祝福 / 火堆阻挡子弹 / 重装机兵 / 激光敌人 / 敌人激光 / 瞄准线 / 瞄准收敛 / 头部朝向。
 ---
 
 # 战斗相关 开发指南
@@ -16,6 +16,7 @@ description: 改武器手感与弹道、敌人 AI 行为、伤害与命中判定
 - 3 种可用武器（基础环射 `radial` / 散射 `yellow` / 激光 `green`）+ 1 个内部保留武器（`basic`），滚轮或按键切换
 - 改件（Mods）改变弹道：多轨、三发、转速、反弹、分裂、穿透、扩容
 - 4 种敌人（basic1/basic2/advanced1/advanced2），各有接近—交战—环绕—冲锋/点射的行为机
+- **重装机兵（heavy-mech）**：远程激光单位——头（画板顶部的尖）追踪玩家、朝玩家缓慢逼近，每隔若干秒「两条蓝线收拢 → 单线锁定 → 停顿 → 激光（变粗→保持→变细）」
 - 敌人被墙阻挡时会 A* 绕路
 - 玩家护盾（扇形，有角度与距离判定，可被破盾）
 - **局内限时加成**（药水改 `player.combat`）与**即时护盾**（`player.itemShields`，先到先吸收、盾碎抖屏）
@@ -31,9 +32,10 @@ description: 改武器手感与弹道、敌人 AI 行为、伤害与命中判定
 |---|---|---|---|
 | `src/systems/combat/geometry.js` | 纯几何：网格吸附、墙体命中、圆体推出、射线求交、子弹反射 | `snap` `toCell` `wallRotationRad` `wallCorners` `pointInWall` `hitWall` `resolveCircleAgainstWalls` `hitTrigger` `rayRectIntersect` `rayRotatedRectDistance` `rayWallDistance` `rayCircleDistance` `rayToBounds` `reflectBulletAgainstWall` `pointSegmentDistance` | 288 |
 | `src/systems/combat/weapons.js` | 武器定义表 + 激光生成 + 被拦截弹（`b.blockedBoss`）强制红 + BOSS 施力弹（`b.forceTrail`）白弹体 + 彩色拖尾（内部 `drawForceTrailBullet`；颜色由 `forceTrail.color` 决定 —— 技能1 蓝 / 技能2 红 / 技能5 蓝） | `WEAPONS` `spawnLaser` | 160 |
-| `src/systems/combat/enemy-ai.js` | 敌人行为机、寻路、开火、死亡结算（含母舰/原型机-2-5T5 运镜与拦截弹/漩涡清理） | `EnemyAiMixin` | 484 |
+| `src/systems/combat/enemy-ai.js` | 敌人行为机、寻路、开火、死亡结算（含母舰/原型机-2-5T5 运镜与拦截弹/漩涡清理、**重装机兵激光与瞄准线状态机**、**卡墙自毁 `updateEnemyStuck`**）；**`initEnemy` 是敌人数值的唯一入口：读 `e.wave` 经 `resolveEnemyStats` 做三层回落（波次 > 关卡 `level.enemyDefaults[type]` > 全局），并把尺寸倍率同时作用到 `r` 与 `artScale`（见 §3.2 / §7 坑 60）** | `EnemyAiMixin` | 707 |
+| `src/systems/combat/heavy-mech.js` | **重装机兵**专属数据契约：默认值 / 归一化（纯数据，**不 import Phaser / geometry.js** → 可被 `state.js` 安全引用）+ 激光与瞄准线表现常量（`spreadDeg`/`width`/`grow·hold·fadeMs`/`muzzleOffset`/`sightStart`/`color`）+ **瞄准线运行时契约**（`e.sightLines` 端点由战斗侧每帧算，渲染端只画） | `HEAVY_MECH_ART` `HEAVY_MECH_DEFAULTS` `HEAVY_MECH_LASER` `normalizeHeavyMechConfig` | 57 |
 | `src/systems/combat/boss25t5.js` | 原型机-2-5T5 专属：数据契约（默认值/归一化）+ 行为状态机 + 技能区域生命周期（**扇形方向释放时固定、可被走出躲避** + 命中像素级容差）+ 阻挡护盾拦截 + 技能5 场景级漩涡（捕获环绕 / 释放停驻）+ 已转化子弹对区域施力（**一次性固定速度+固定距离**；**不 import Phaser，可被 state.js 安全引用**） | `BOSS25T5_ART` `BOSS25T5_DESIGN` `BOSS25T5_DEFAULTS` `boss25t5Defaults` `normalizeBoss25T5Config` `Boss25T5Mixin`（**27 方法（实测）**：`stepBoss25T5` + 26 个 `boss25t5*`；本轮重写 `boss25t5ZoneBulletForce`（改为一次性固定速度+固定距离）；`boss25t5ZonesTick` 的扇形方向改为释放瞬间写死、**不再跟随玩家**，仅保留像素级命中容差） | 1383 |
-| `src/systems/combat/player-combat.js` | 玩家受伤（含**即时护盾吸收** `player.itemShields`）、护盾格挡、武器切换、受击闪屏 | `PlayerCombatMixin`（6 方法） | 130 |
+| `src/systems/combat/player-combat.js` | 玩家受伤（含**即时护盾吸收** `player.itemShields`）、护盾格挡、武器切换、受击闪屏 | `PlayerCombatMixin`（7 方法）：`switchWeapon`（**只算目标槽位 + 委托**）、`equipWeaponByType`（**唯一执行体**：全部守卫 + `leave`/`enter` 成对 + 出场动画 + 轮盘动画） | 148 |
 | `src/systems/combat/destructibles.js` | 木箱碎片、油桶爆炸 | `DestructiblesMixin`（2 方法） | 77 |
 | `src/systems/combat/pet-runtime.js` | 玩家宠物：环绕玩家、索敌开火、受击结算 | `PetMixin`（5 方法）+ 依赖 `pet-store.getPetDef` | 144 |
 | `src/systems/economy/damage.js` | 伤害公式与改件生效集合（归数值_经济，但战斗必经） | `playerDamage` `playerIncomingDamage` `activeMods` | 56 |
@@ -41,7 +43,7 @@ description: 改武器手感与弹道、敌人 AI 行为、伤害与命中判定
 | `src/systems/economy/run-items-runtime.js` | **限时加成 / 临时武器 / 即时护盾**运行时（倒计时、替换还原、护盾入列）；归 `economy-numbers` 但战斗必经 | `RunItemsMixin`（14 方法：`addRunItem` / `addRunTimedWeapon` / `usePotionAt` / `toggleTempWeapon` / `useTempWeapon` / `cancelTempWeapon` / `updateRunItems` …） | 210 |
 | `src/systems/constants.js` | 战斗相关常量（护盾、命中特效、敌人行为参数、`ENEMY_BEHAVIOR['boss-2-5t5']`、`WEAPON_RING_CHAIN` 武器内圈环链/出场动画） | `SHIELD` `SHIELD_MAX` `HIT_FX_TTL` `HIT_FX_RADIUS` `BULLET_DAMAGE` `ENEMY_BEHAVIOR` `BARREL_DAMAGE` `WEAPON_RING_CHAIN` 等 | 112 |
 | `src/pathfinding.js` | 网格构建与 A* | `buildGrid` `findPath` `nearestWalkable` | 105 |
-| `src/game-scene.js` | `update` 主循环：开火节流、子弹推进、命中判定、敌人更新与 `boss25t5ZonesTick`/`boss25t5VorticesTick` 的调度点、`updateRunItems`/`updateBattleItemsInput` 调度、装配 `RunItemsMixin`/`BattleItemsMixin`；构造函数注入 `this.playerDamage`；**玩家被击败失败流程**：`create()` 初始化 `this.playerDeathFlow`，`update()` 里 `deathSim`/`inputLocked`（见 §4.3 / level-design §4⑨）；子弹 filter 的新顺序见 §6.2 | `createGameScene` | 922 |
+| `src/game-scene.js` | `update` 主循环：开火节流、子弹推进、命中判定、敌人更新与 `boss25t5ZonesTick`/`boss25t5VorticesTick` 的调度点、`updateRunItems`/`updateBattleItemsInput` 调度、装配 `RunItemsMixin`/`BattleItemsMixin`；构造函数注入 `this.playerDamage`；**玩家被击败失败流程**：`create()` 初始化 `this.playerDeathFlow`，`update()` 里 `deathSim`/`inputLocked`（见 §4.3 / level-design §4⑨）；子弹 filter 的新顺序见 §6.2；`update()` 与 `updateIdolInteract` 同级调 `updateCampfireInteract(dt)`（`if (!inputLocked)` 守卫，`campfireWalls()` 提供火堆矩形碰撞体）；**子弹 filter 的障碍集含 `chestLockWalls()`（宝箱上锁红环，玩家弹与敌弹两处 + ricochet 查找链）** | `createGameScene` | 933 |
 
 ### 改 X 该动哪里
 
@@ -55,13 +57,18 @@ description: 改武器手感与弹道、敌人 AI 行为、伤害与命中判定
 | 改敌人速度/攻击距离/环绕参数 | `constants.js:ENEMY_BEHAVIOR` 对应条目 |
 | 改敌人血量/伤害基数 | `src/state.js:ENEMY_TYPES` |
 | 改敌人行为逻辑（何时冲锋、何时点射） | `enemy-ai.js:stepEnemy` / `stepAdvanced2` |
+| 改**重装机兵**（激光节拍 / 头部追踪 / 瞄准线夹角 / 激光粗细） | 数值与表现常量全部在 `combat/heavy-mech.js`（`HEAVY_MECH_DEFAULTS` 编辑器可配 / `HEAVY_MECH_LASER` 代码常量）；状态机 `enemy-ai.js:stepHeavyMech` + `heavyMechFireLaser` + `updateEnemyLasers`；渲染 `ui/heavy-mech-art.js` + `ui/entity-art.js:drawEnemyShape` 分支 + `world-render.js` 的 `drawHeavyMechBeams`（详见 §6.2） |
 | 改敌人绕路策略 | `enemy-ai.js:stepToward` / `findEnemyPath` + `pathfinding.js` |
 | 改护盾角度/耐久/破盾 | `constants.js:SHIELD` / `SHIELD_MAX` + `player-combat.js:blockWithShield` |
 | 改**即时护盾**（药水护盾）吸收顺序 / 吸收量 | `player-combat.js:damagePlayer` 的 `player.itemShields` 循环（先到先吸）+ `run-items-runtime.js:addRunItem` 的 `shield` 入列 |
 | 改**限时加成**（药水改 `player.combat`）生效 / 到期回退 | `economy/run-items.js:applyStatEffect` + `run-items-runtime.js:updateRunItems`（数值/时长见 `economy-numbers`） |
-| 改**临时武器**使用 / 取消 / 倒计时 | `run-items-runtime.js:useTempWeapon` / `cancelTempWeapon` / `updateRunItems`；开火仍复用 `WEAPONS[id].fire`（详见 `economy-numbers`）。**`useTempWeapon`/`cancelTempWeapon` 与 `player-combat.js:switchWeapon`、`level-flow.js:restart` 都会写 `player.weaponIntroAt = this.time?.now || 0`** 以重播武器本体出场动画（局内态、不落存档） |
+| 改**临时武器**使用 / 取消 / 倒计时 | `run-items-runtime.js:useTempWeapon` / `cancelTempWeapon` / `updateRunItems`；开火仍复用 `WEAPONS[id].fire`（详见 `economy-numbers`）。**`useTempWeapon`/`cancelTempWeapon` 与 `player-combat.js:equipWeaponByType`、`level-flow.js:restart` 都会写 `player.weaponIntroAt = this.time?.now || 0`** 以重播武器本体出场动画（局内态、不落存档） |
+| 改**滚轮/按键切武器**（武器轮） | `player-combat.js:switchWeapon`（**只算槽位 + 委托**：`const to = (weaponIndex + dir + n) % n; this.equipWeaponByType(weapons[to])`；保留 `n <= 1` 早退） |
+| 改**按武器类型直接切换**（火堆选卡等，非滚轮） | `player-combat.js:equipWeaponByType` —— **武器轮切换的唯一执行体 + 全部守卫**（`leave`/`enter` 成对 + 出场动画 + 轮盘动画 + `syncUIState`）；调用方 `interactables.js:campfirePickUpgrade`（详见 §6.8） |
 | 改免伤/闪避/暴击公式 | `economy/damage.js`（同时看 `economy-numbers` skill） |
 | 改墙体形状支持（矩形/圆/弧） | `geometry.js:pointInWall` + `resolveCircleAgainstWalls` |
+| 改**休息火堆**矩形碰撞体 / 靠近提示 / 阻挡子弹 | `interactables.js:campfireWalls()`（`visible!==false` 映射成 `{x,y,w,h,shape:'rect',rotation:0}`）+ `updateCampfireInteract(dt)`（F 键，`game-scene.js:update` 与 `updateIdolInteract` 同级调度）；子弹侧接入见 §6.7 |
+| 改**宝箱上锁红环**的碰撞体 / 阻挡范围 | `interactables.js:chestLockWalls()`（圆形墙 `{x,y,w:r*2,thickness:8,shape:'circle'}`，`r = state.js:chestLockRadius`）+ `resolveMovementCollision` + 子弹四消费点见 §6.7 ②b；上锁/解锁由触发器事件驱动，契约见 level-design §3.14 |
 | 改油桶爆炸范围/伤害 | `constants.js:BARREL_DAMAGE` + `destructibles.js:explodeBarrel` |
 | 改宠物行为/数值（环绕半径/角速度/开火频率/伤害/生命） | 数值在 `data/pets/*.json`（`pet-design.js:normalizePetDesign` 归一化 + `pet-store.js` 存取 + `pet-board.js` 编辑器）；行为在 `pet-runtime.js`；受击判定在 `game-scene.js:update` 敌弹循环 |
 
@@ -88,7 +95,9 @@ description: 改武器手感与弹道、敌人 AI 行为、伤害与命中判定
 | `gold` | 局内金币（不落盘） | number | 拾取掉落 |
 | `itemShields` | **即时护盾数组**（先到先吸收、盾碎抖屏） | `[{ hp, maxHp }]` | `addRunItem` 的 `shield` 分支 push；`level-flow.restart` 置 `[]` |
 | `weapon` / `weaponType` / `weaponArt` / `scheme` / `charge` | **临时武器「使用中」会被替换** | 武器定义引用 / id / 方案 / 蓄力 | `useTempWeapon` 换、`cancelTempWeapon` 由 `scene.tempWeaponSaved` 还原 |
-| `weaponIntroAt` | 武器本体出场动画计时起点（ms，与 `this.time.now` 同基） | number | `player-combat.js:switchWeapon` / `run-items-runtime.js:useTempWeapon`·`cancelTempWeapon` / `level-flow.js:restart` 写入（即「出武器」重播本体出场动画，渲染侧 `entity-art.js:drawPlayer` 用 `t*1000 - weaponIntroAt` 算渐显进度）；**局内运行时字段、不落存档** |
+| `weaponIntroAt` | 武器本体出场动画计时起点（ms，与 `this.time.now` 同基） | number | `player-combat.js:equipWeaponByType` / `run-items-runtime.js:useTempWeapon`·`cancelTempWeapon` / `level-flow.js:restart` 写入（即「出武器」重播本体出场动画，渲染侧 `entity-art.js:drawPlayer` 用 `t*1000 - weaponIntroAt` 算渐显进度）；**局内运行时字段、不落存档** |
+| `weaponBuffs` | **火堆武器祝福累积**（仅当局，不落存档） | `{ [weaponType]: [{ stat, op:'mul'\|'add'\|'set', value }] }` | `economy/weapon-buffs.js:addWeaponBuffs` 展开条目写入；`level-flow.js:restart` 置 `{}` |
+| `buffedWeapon` | **当前已生效祝福的武器 id**（仅当局） | string \| null | `weapon-buffs.js:enterWeapon` 置为武器 id、`leaveWeapon` 清 null；是「同一武器不重复叠加」的判据 |
 
 `player.combat` 字段（**全部来自存档，改动请同步 `economy-numbers`**）：`maxHp` `maxShield` `attackPower`(倍率,默认1) `attackSpeed`(倍率) `critRate`(0..1) `dodgeRate`(0..1) `moveSpeed`(倍率) `damageReduction`(倍率,越小越抗)。
 
@@ -98,11 +107,12 @@ description: 改武器手感与弹道、敌人 AI 行为、伤害与命中判定
 
 | 字段 | 含义 | 说明 |
 |---|---|---|
-| `type` | 敌人类型 | `basic1`/`basic2`/`advanced1`/`advanced2` |
-| `r` | 碰撞半径 | `ENEMY_BEHAVIOR[type].size / 2` |
+| `type` | 敌人类型 | `basic1`/`basic2`/`advanced1`/`advanced2`/`mothership`/`boss-2-5t5`/`heavy-mech` |
+| `r` | 碰撞半径 | **`(ENEMY_BEHAVIOR[type].size / 2) × scale`**（`scale` = 尺寸倍率，来自波次 > 关卡 `enemyDefaults[type]` > 1；预置敌人恒 1）。**在 `initEnemy` 里一次性算好，运行期不再变** |
+| `hp` / `maxHp` | 血量 | `stats.hp ?? e.hp ?? ENEMY_TYPES[type].hp`（三层回落，见 §7 坑 60；预置敌人走 `normalizeEnemy` 落定的 `e.hp`） |
+| `damage` | 撞击/子弹伤害 | `stats.damage ?? e.damage ?? ENEMY_TYPES[type].damage`（同上；`damage: 0` 是合法的显式覆盖） |
 | `alive` | 存活标记 | `defeatEnemy` 置 false，不立即移出数组 |
-| `hp` / `maxHp` | 血量 | 默认取 `ENEMY_TYPES[type].hp` |
-| `damage` | 撞击/子弹伤害 | 默认 `ENEMY_TYPES[type].damage` |
+| `artScale` | 美术缩放 | `(def.artScale ?? e.artScale ?? 1) × scale`（渲染端只读它 → 尺寸倍率同时改美术与 `r`；见 §7 坑 60） |
 | `attackRange` | 开火距离 | advanced2 用（500） |
 | `phase` | 行为阶段 | `approach` / 环绕 / 冲锋等 |
 | `phaseTimer` | 阶段计时 | 秒 |
@@ -209,6 +219,33 @@ description: 改武器手感与弹道、敌人 AI 行为、伤害与命中判定
 - 渲染：`ui/boss25t5-art.js:drawBoss25T5Vortices`（6 槽位蓝色同心弧「旋转 + 向心收缩 + 末段渐隐 + 原位重生」+ 中心白色刻度星环 + 上方细血条 + 击杀淡出环）；`world-render.js:582` 调它，`world-render.js:585` 调 `drawBoss25T5Zones` → 图层「漩涡 < 技能区域/黑遮罩 < 玩家」。
 - 施力弹拖尾：`weapons.js:drawForceTrailBullet`（`radial.drawBullet` / `basic.drawBullet` 在 `b.blockedBoss` 分支**之后**接）与 `weapon-runtime.js:drawForceTrailBullet`（`drawBullet` 里 `b.forceTrail` 优先，跳过普通拖尾避免叠白线）——沿航向反向画彩色拖尾，长度/宽度只取 `b.forceTrail`、**不看 `b.dist`**；速度退化时沿用 `b.dirX/dirY`，仍无方向则只画白点。
 
+### 3.8 休息火堆（矩形碰撞体 + 武器祝福）
+
+| 结构 | 契约 | 说明 |
+|---|---|---|
+| `this.campfires` / `l.campfires` | 火堆数组（运行态 `this.campfires`，编辑态 `l.campfires`） | 元素 `{ x, y, w, h, visible, used, interactRadius }` |
+| `campfireWalls()` | `Array<{ x, y, w, h, shape:'rect', rotation:0 }>` | `interactables.js`。`visible !== false` 才计入，**矩形口径与 vendor 一致（不用圆形）**；供子弹命中（`game-scene.js` 的 `wallAll` / ricochet `hitW`）与玩家·敌人移动碰撞（`enemy-ai.js:resolveMovementCollision`）共用 |
+| `chestLockWalls()` | `Array<{ x, y, w:r*2, thickness:8, shape:'circle', rotation:0 }>` | `interactables.js`。**上锁宝箱的红色圆环**（`c.locked && c.spawned` 才计入；`r = state.js:chestLockRadius(c) = hypot(w,h)/2 + 4`）。圆形墙语义 = 实体永远被推到圆外，故玩家/敌人进不了环内。**碰撞只看 `locked` 布尔：事件一到即生效/失效；红环的渐显/渐隐（`chest.lockFx`/`lockAlpha`，`CHEST_LOCK_FADE_MS`）纯粹是显示，不参与碰撞**。五个消费点（移动 / `wallAll` / ricochet / 敌弹 / 激光）见 level-design §3.14 |
+| `updateCampfireInteract(dt)` | — | 靠近最近火堆显示提示，按 F → `openCampfireOffer`（回血 / 杰作升级二选一）；`editing` 或 `state!=='playing'` 早退 |
+| 武器祝福 `addWeaponBuffs` / `enterWeapon(scene, wt)` / `leaveWeapon(scene)` | `economy/weapon-buffs.js`（纯逻辑、**无 Phaser**，挂 `player` 不写存档） | 祝福按武器存 `player.weaponBuffs[wt]`；`enter` 生效、`leave` 用 `mul` 除 / `add` 减回退（与 §7 坑 44 同类互逆口径）；`op:'set'` 跳过；`stat==='maxHp'` 同步 `player.maxHp` 并夹紧 hp。**所有武器切换入口必须成对调用**，见 §7 坑 51 |
+
+### 3.9 重装机兵（`heavy-mech`）运行时字段与激光
+
+由 `enemy-ai.js:initEnemy` 的 `e.type === 'heavy-mech'` 分支初始化，数值来自 `e.mechCfg = normalizeHeavyMechConfig(e.mech)`（5 键补全）。
+
+| 字段 | 含义 | 取值/来源 |
+|---|---|---|
+| `e.mechCfg` | 配置对象（`{ moveSpeed, rotateSpeed, aimSpeed, fireDelay, fireInterval }`） | `combat/heavy-mech.js:HEAVY_MECH_DEFAULTS` 补全 `e.mech` |
+| `e.headAngle` | **头部朝向（rad）**：朝向玩家 / 停顿期保持锁定角。设计稿顶部的尖 = 头（默认朝上 `-π/2`） | `initEnemy` 置 `null` → 首帧按「玩家方向」初始化（= 生成时头朝玩家） |
+| `e.firePhase` | 射击状态机：`'wait'`（冷却，移动）→ `'aim'`（瞄准线收拢，**原地不动**）→ `'align'`（方向已锁定 + 停顿，**原地不动**） | `initEnemy` 置 `'wait'` |
+| `e.fireTimer` | 当前相位剩余毫秒：`wait` 用 `fireInterval`、`align` 用 `fireDelay` | `initEnemy` 置 `null` → 首帧取 `cfg.fireInterval` |
+| `e.aimSpreadDeg` | 两条瞄准线的夹角（deg）：进入 `aim` 时 = `HEAVY_MECH_LASER.spreadDeg`(25)，以 `aimSpeed` °/s 收到 0 | — |
+| `e.sightLines` | **两条瞄准线的端点**：`[{ x0, y0, x1, y1 }, { ... }]`（起点 = 蓝色多边形边缘 `sightStart×artScale`，逐条沿 `head ± spread/2` 算）。**线无限长：只被 `walls + bulletGateWalls()` 与关卡世界边界截断，没有长度上限** | `initEnemy` 置 `null`；`heavyMechUpdateSight(e)` 在 `aim`/`align` 相位每帧重算（`wait` 相位不重算，渲染端按 `firePhase` 门控不画）；渲染端零几何计算，只 `lineBetween` |
+| `e.aimAngle` | **锁定后的激光方向（rad）**：夹角收到 0 的瞬间写 `e.headAngle`，`align` 期与激光发射都用它 | — |
+| `scene.enemyLasers` | 激光光束数组（场景级，**不挂敌人**）：`{ ownerId, x0, y0, x1, y1, t, width, maxWidth, color }`。起止点在发射瞬间定死（起点 = 头顶尖前方 `muzzleOffset×artScale`，终点按墙 + 世界边界裁剪） | `heavyMechFireLaser` push；`updateEnemyLasers` 推进宽度与存活；`level-flow.js:restart` 置 `[]`；`defeatEnemy` 清该 owner 的光束 |
+
+**相位时序（实测，默认值）**：`wait` 4000ms →（**进视野才计时**）→ `aim` 1000ms（夹角 25° 以 `aimSpeed`=25°/s 收拢）→ `align` 600ms → 发射（光束 180+300+320=800ms 后消失）→ 回到 `wait`。
+
 ## 4. 关键流程
 
 ### 4.1 玩家开火 → 命中
@@ -231,26 +268,38 @@ game-scene.js:update
   ├ ⑥ boss25t5TryBlock 护盾拦截（停驻变红 + blockedBoss/blockedBy）      :504
   ├ WEAPONS[type].stepBullet?.(b, dt, this)          yellow 蛇形在此
   ├ 蓄力武器表盘红弧穿环（航向角 + 「上帧→本帧」跨越弧圆）              :513
-  ├ ricochet 分支：hitWall 命中 → reflectBulletAgainstWall  geometry.js（仍为单点判定）
-  ├ 墙体命中：l.walls + this.activeGateWalls() 用「上一帧→当前帧」线段 rayWallDistance 连续碰撞判定（防高速子弹隧穿；命中时子弹回退到墙面）
+  ├ ricochet 分支：hitWall 命中 → reflectBulletAgainstWall  geometry.js（仍为单点判定；`hitW` 查找四来源 `l.walls || bulletGateWalls() || campfireWalls() || chestLockWalls()`，见 §7 坑 52）
+  ├ 墙体命中：`const wallAll = [...l.walls, ...this.bulletGateWalls(), ...this.campfireWalls(), ...this.chestLockWalls()]` 用「上一帧→当前帧」线段 rayWallDistance 连续碰撞判定（**火堆矩形 / 上锁红环沿用 gate 同一份 wallAll、无新分支**，排在 gate 之后；防高速子弹隧穿；命中时子弹回退到墙面）
   ├ crate/barrel：crate 用 rayWallDistance 线段、barrel 用 pointSegmentDistance 点到线段判定
   └ 敌人命中：循环前 `const converted = b.blockedBy != null;` + `if (converted) break;`（已转化弹不伤敌人）→ pointSegmentDistance(e, 线段) < e.r → playerDamage() 扣血 → hitEffects.push → defeatEnemy
 
-filter 之后（同一帧）：boss25t5UpdateBlocked(dt)  :676 → boss25t5VorticesTick(dt)  :680 → 敌人循环（stepEnemy + boss25t5ZonesTick  :687）
+filter 之后（同一帧）：boss25t5UpdateBlocked(dt)  :676 → boss25t5VorticesTick(dt)  :680 → 敌人循环（stepEnemy + boss25t5ZonesTick  :687）；每帧交互调度（同帧、`if (!inputLocked)`）：`updateIdolInteract(dt)` :841 → `updateCampfireInteract(dt)` :842（火堆靠近/F 键）
 ```
 
 ### 4.2 敌人决策 → 位移
 ```
 game-scene.js:update → 遍历 this.enemies
   ├ isInView(e)                        enemy-ai.js（相机可视矩形 viewRect）
-  ├ stepEnemy(e, dt) / stepAdvanced2    enemy-ai.js（行为机主体）
+  ├ stepEnemy(e, dt) / stepAdvanced2    enemy-ai.js（行为机主体；顶部按 type 派发
+  │                                     mothership / boss-2-5t5 / heavy-mech）
   │   ├ hasLOS(x0,y0,x1,y1)            enemy-ai.js → geometry.js:rayWallDistance
   │   ├ 有视线 → moveToward（直线逼近，e.path 清空）
   │   └ 无视线 → stepToward（速度×2）→ findEnemyPath → pathfinding.js:findPath
   │        路点跟随：PATH_WAYPOINT_RADIUS = CELL*0.4，重算节流 PATH_REPATH_INTERVAL=0.25s
   ├ resolveEnemyCollision / resolveMovementCollision  enemy-ai.js
   │   └ geometry.js:resolveCircleAgainstWalls（圆体推出，含 circle/arc 特殊处理）
+  │   └ 末尾写 entity.pushBack = 本帧被推回的距离（>0 = 顶住障碍，供卡墙判定）
+  ├ updateEnemyStuck(e, dt)             enemy-ai.js（**卡墙自毁**：连续顶住障碍且窗口内净位移
+  │                                     < ENEMY_STUCK_WINDOW_MOVE_PX 满 ENEMY_STUCK_KILL_MS → defeatEnemy）
   └ 环绕/冲锋分支由 ENEMY_BEHAVIOR[type] 的 orbit / charge 驱动
+
+game-scene.js:update → stepEnemy → stepHeavyMech（重装机兵，不走通用行为机）
+  ├ headAngle 按 rotateSpeed(°/s) 追踪玩家方向（align 期锁定不动）
+  ├ wait：stepToward(cfg.moveSpeed) 逼近 + fireTimer 递减（不在视野内不递减）
+  ├ aim ：原地不动，aimSpreadDeg 以 aimSpeed °/s 收 → 0 时写 aimAngle = headAngle（锁定）
+  ├ align：原地不动，fireTimer = fireDelay → 到点 heavyMechFireLaser(e)
+  └ updateEnemyLasers(dt)（game-scene.js:486 附近每帧，与玩家 lasers 的 filter 同级）
+       └ 光束宽度：grow(180ms) → hold(300ms) → fade(320ms) → 移除（伤害已在发射瞬间单次结算）
 ```
 
 ### 4.3 敌人开火 → 玩家受伤
@@ -306,6 +355,29 @@ game-scene.js:update
 
 > `updateRunItems` 排在战斗处理**之后** → 本帧到期的加成晚一帧回退，可忽略。开火链路：临时武器「使用中」时 `player.weapon` 已是设计稿武器运行时条目，`WEAPONS[player.weaponType].fire/stepBullet/drawBullet` 照常走（`useTempWeapon` 会把主武器态存进 `scene.tempWeaponSaved`）。
 
+### 4.7 武器切换（滚轮 / 按键 / 火堆选卡）
+
+```
+滚轮/按键：editor-camera.js:onWheel（deltaY 符号）→ switchWeapon(dir)   player-combat.js:91
+火堆选卡：interactables.js:campfirePickUpgrade → equipWeaponByType(option.weaponType)   player-combat.js:103
+
+switchWeapon(dir)                        // 只算槽位 + 委托（不含任何守卫/状态写入）
+  ├ const n = player.weapons.length; if (n <= 1) return;
+  └ const to = (player.weaponIndex + dir + n) % n; this.equipWeaponByType(player.weapons[to]);
+
+equipWeaponByType(weaponType)            // 唯一执行体：全部守卫 + leave/enter + 动画
+  ├ 守卫（任一命中 → return false 且**不改任何状态**）：
+  │    !weaponType / weapons.indexOf(weaponType) < 0 / weaponType === player.weaponType / WEAPONS[weaponType] 缺定义
+  ├ leaveWeapon(this)                    → 回退旧武器火堆祝福（economy/weapon-buffs.js）
+  ├ 写 weaponIndex / weaponType / weapon / scheme / weaponArt
+  ├ enterWeapon(this, weaponType)        → 应用新武器火堆祝福
+  ├ weaponIntroAt = this.time?.now || 0  → 重播本体出场动画
+  ├ wheelAnim = { from, to, t:0, dur:500 }  → 轮盘动画
+  └ syncUIState() → 返回 true
+```
+
+> **唯一执行体**：武器轮内的类型切换（滚轮/按键/火堆）全部汇聚到 `equipWeaponByType`；`switchWeapon` 只剩「算槽位 + 委托」。临时武器入口（`useTempWeapon`/`cancelTempWeapon`）仍各自 `leave`/`enter`（见 §7 坑 51 / 54）。
+
 ## 5. 关键常量与数值
 
 | 常量 | 位置 | 当前值 | 含义 | 调它影响 |
@@ -339,8 +411,16 @@ game-scene.js:update
 | `ENEMY_BEHAVIOR.basic2` | `constants.js:73` | orbit `{period:2,duration:1,degPerSec:30}` spin4 | 环绕节奏 | — |
 | `ENEMY_BEHAVIOR.advanced1` | `constants.js:74` | engage160 charge `{pause:0.6,speed:200}` | 冲锋前摇与速度 | 最危险近战 |
 | `ENEMY_BEHAVIOR.advanced2` | `constants.js:75` | attackRange500 fireInterval400 burstInterval3000 burstCount3 speed30 | 三连点射节奏 | 远程压制 |
-| `ENEMY_BEHAVIOR.mothership` | `constants.js:83` | size260 speed30 spawnInterval5000 spawnRadius220 | 母舰慢速逼近+每5s投放 | 压迫感/投放节奏 |
+| `ENEMY_BEHAVIOR.mothership` | `constants.js:94` | size260 speed30 spawnInterval5000 spawnRadius220 | 母舰慢速逼近+每5s投放 | 压迫感/投放节奏 |
+| `ENEMY_TYPES['heavy-mech']` | `state.js:34` | name 重装机兵 / **hp200** / **damage20**（= 激光单次伤害） / art `asset-1789394201289`（画板「重装机兵」） | 远程激光单位 | 血量与激光伤害 |
+| `ENEMY_BEHAVIOR['heavy-mech']` | `constants.js:99` | **size100**（→ `e.r`=50）/ orbit·charge=null | 命中·碰撞半径；行为不走通用行为机（见 §6.2） | 命中判定范围 / 生成留白 |
+| `HEAVY_MECH_DEFAULTS` | `combat/heavy-mech.js` | **moveSpeed40**（px/s）/ **rotateSpeed120**（°/s 头部追踪）/ **aimSpeed25**（°/s 夹角收拢）/ **fireDelay600**（ms 停顿）/ **fireInterval4000**（ms 冷却） | 编辑器 `mech.*` 面板五项（**血量走顶层 `e.hp`**） | 整套激光节拍 |
+| `HEAVY_MECH_LASER` | `combat/heavy-mech.js` | **spreadDeg25** / **width26**（px，×artScale）/ **growMs180** / **holdMs300** / **fadeMs320** / **muzzleOffset60**（×artScale）/ **sightStart20** / **color`#5cf4ff`** | 瞄准线与激光表现（代码常量，不进面板）。**瞄准线无长度常量**——无限长、只被墙/关卡边界截断（端点见 `e.sightLines`） | 瞄准线宽窄与激光粗细/时长 |
 | `MOTHERSHIP_SPAWN_TABLE` | `constants.js:87` | basic1×5 / basic2×6 / advanced1×2 / advanced2×1 | 母舰投放表（每5s等概率随机一组） | 投放组成 |
+| `ENEMY_STUCK_KILL_MS` | `constants.js:110` | **5000**（ms） | 卡墙自毁：累计「顶住障碍且窗口内几乎没净位移」达到此值 → `defeatEnemy` | 残留怪阻塞波次的最长时长 |
+| `ENEMY_STUCK_WINDOW_MS` | `constants.js:111` | **1000**（ms） | 评估窗口（逐窗口看净位移，避开被顶住时的逐帧抖动） | 判定粒度 |
+| `ENEMY_STUCK_WINDOW_MOVE_PX` | `constants.js:112` | **15**（px / 窗口） | 窗口内净位移 < 此值算「没挪动」（= 平均 < 15px/s；正常敌人 ≥ 30px/s 一定重置） | 误杀阈值 |
+| `ENEMY_STUCK_PUSH_EPS` | `constants.js:113` | **0.1**（px） | 窗口内 `pushBack` 超过此值才算「顶住障碍」（排除原地待机怪） | 误杀阈值 |
 | `ENEMY_TYPES['boss-2-5t5']` | `state.js:31` | name 原型机-2-5T5 / hp1500 / dmg0 / art `asset-1788964413981` | 第二类特殊 BOSS（**血量看敌人顶层 `e.hp`**，`boss.hp` 仅占位） | 卡关级威胁 |
 | `ENEMY_BEHAVIOR['boss-2-5t5']` | `constants.js:85` | size160（→ `e.r`=80）/ orbit·charge=null | 命中·碰撞半径；行为不走通用行为机（见 §6.2） | 命中判定范围 |
 | `BOSS25T5_DEFAULTS` | `combat/boss25t5.js:185` | **82 键（实测）（删 2 加 2）**：name / hp1500 / moveSpeed30 / moveWaitPreMs·PostMs2000 / approachMin·MaxMs2000·4000 / spinFastDeg180·spinFastMs800 / spinSlowDeg10·spinSlowMs3000 / fleeMin·MaxMs2000·4000 / shieldRadius220 / shieldFadeMs400 / shieldRestoreDelayMs600 / arcRadius185 / arcSpanDeg45 / arc4SpinDeg30 / arc5SpinDeg57.3 / arcAlignDeg180 / innerRadius80 / arc2Radius65 / s1=s2=s3Range1500 / s1DragSpeed2000·s1DragDist500 / s2PushSpeed2000·s2PushDist500 / s4PushSpeed2000·s4PushDist800·s4Damage20 / mergeOverlapPct20 / parkMinDeg108 / skillWeightS1·S2·S3=40·40·20 / skillWeightS5=20 / s2Damage20 / blockedBulletDamage10 / shieldClearCost10 / s1·s2·s5BulletTrailWidth6·Length40·Color（s1 `#4fc3f7` 蓝 / s2 `#ff3b3b` 红 / s5 `#4fc3f7` 蓝）/ s5HpPct50 / s5CastMs3000 / s5SpawnDist600 / s5Radius150 / s5Hp500 / s5PullRadius900 / s5PullMin40 / s5PullMax160 / s5BulletPull900 / s5HitIntervalMs500 / s5HitDamage15 / s5CaptureMax16 / s5CaptureOrbitRatio0.25 / s5CaptureSpinDeg90 / cutsceneId'' + **本轮改动**：删 `zoneAimTrackDeg`（旧口径「成型期扇形跟随玩家瞄准 °/s」——**已废弃**：跟随会让扇形一直罩住玩家、玩家无法走出躲避）+ 删 `s5PullAccel`（旧口径：单一吸力加速度，**已废弃**）→ 加 `s5PullMin40`（**吸力半径边缘处**的吸力 px/s）+ `s5PullMax160`（**涡心处**的吸力 / 向量累加后的速度上限 px/s；**必须 < 玩家移速 180**），`s5PullRadius900` **保留**（吸力生效半径），净值仍 82 键；**上一轮新增 1 键**：`zoneHitPadPx30`（技能1/2 命中**像素级**容差 —— 判定区最多只超出绘制扇形斜线 30px，不再随距离放大；s3 不参与）；**上一轮删除 3 键**：`zoneHitPadDeg`（固定角度容差，已被 `zoneHitPadPx` 取代）、`s1BulletForce` / `s2BulletForce`（每帧加速度 → 技能1/2 施力改为**一次性固定速度+固定距离**：速度复用玩家的 `s1DragSpeed`/`s2PushSpeed`，距离 = 玩家的 `s1DragDist`/`s2PushDist` × 2）；**上一轮改名**：技能5 拖尾宽/长两个旧键（`…RedTrailWidth` / `…RedTrailLength` 形态）→ 统一为 `s5BulletTrailWidth` / `s5BulletTrailLength`（`normalizeBoss25T5Config` 只按 `BOSS25T5_DEFAULTS` 的键产出一份新对象，旧键被丢弃；`data/levels/Boss2-Test.json` 里的 4 / 250 已随改名保留） | BOSS 全部可配数值入口（编辑器 `boss.*` 面板写入 `e.boss`） | 技能节奏/范围/伤害/占比 |
@@ -373,6 +453,17 @@ game-scene.js:update
 4. 行为逻辑：简单变体直接吃 `ENEMY_BEHAVIOR` 参数即可；复杂的仿照 `stepAdvanced2` 新写一个 `stepXxx`，并在 `stepEnemy` 里按 `e.type` 分派。
 5. 外观：`src/systems/ui/entity-art.js:drawEnemyShape` 加分支（详见 `ui-interaction`）。
 6. 关卡里能配出来：`level-design` skill 的敌人字段。
+
+> **重装机兵（`heavy-mech`）是第三类特殊敌人**（不走母舰/BOSS 范式，也不走通用行为机）。自检 8 处接线：
+> ① `state.js:ENEMY_TYPES['heavy-mech']`（art 用 `HEAVY_MECH_ART`）+ `constants.js:ENEMY_BEHAVIOR['heavy-mech']`（size100 → `e.r`=50）
+> ② `state.js:normalizeEnemy` 的 `mech` 按 type 分派（`type === 'heavy-mech' ? normalizeHeavyMechConfig(enemy?.mech) : null`）——漏了则编辑器配的 5 项落盘→读回被静默丢弃
+> ③ `enemy-ai.js:initEnemy` 的 `heavy-mech` 分支显式初始化全部运行时字段（`mechCfg/headAngle/firePhase/fireTimer/aimSpreadDeg/aimAngle`，与 `stepHeavyMech` 的 `??=` 兜底一一对应）
+> ④ `enemy-ai.js:stepEnemy` 顶部派发 `stepHeavyMech(e, dt, sec)` + 四个方法 `stepHeavyMech`/`heavyMechUpdateSight`/`heavyMechFireLaser`/`updateEnemyLasers`（另有模块级私有 `rayDir`/`aimRay`：近零分量归零 + 射线到墙/边界求长，**瞄准线与激光共用这一份几何**）
+> ⑤ `game-scene.js:update` 每帧 `this.updateEnemyLasers(dt)`（与玩家 `this.lasers` 的 filter 同级，`:486` 附近）+ `restart` 里 `this.enemyLasers = []`
+> ⑥ 接触伤害排除：`e.type !== 'heavy-mech'`（远程单位，伤害由激光承担，与 advanced2 同口径）
+> ⑦ `defeatEnemy` 清理该敌残留光束（`this.enemyLasers.filter(bs => bs.ownerId !== e.id)`）
+> ⑧ 渲染：`ui/heavy-mech-art.js`（`drawHeavyMechSight` 只按 `e.sightLines` 画/`drawHeavyMechBody`/`drawHeavyMechBeams`）+ `entity-art.js:drawEnemyShape` 分支（`getDesign(e.art || HEAVY_MECH_ART)`，编辑器里 art 为空串也能出图）+ `world-render.js` 的 `drawHeavyMechBeams(g, this.enemyLasers)`（在玩家 lasers 之前）。**瞄准线不做长度上限**：端点每帧由战斗侧 `heavyMechUpdateSight` 算（只被墙/关卡边界截断），渲染端**不得**自己算几何或截断，否则会出现「线穿过墙」或「线在半空断掉」。
+> **编辑器可配 5 项**：`entity-properties.js` 敌人分支的 `mech.*` 面板（血量走顶层 `hp`，大小走顶层 `artScale`）。默认值集中在 `HEAVY_MECH_DEFAULTS`，无表格来源。
 
 > **母舰（`mothership`）是特殊敌人，不走通用行为机**，自检以下 7 处（默认值集中 `constants`/`state`，可被关卡预置条目覆盖）：
 > ① `ENEMY_TYPES.mothership`（`art`/`artScale` 进 `initEnemy`） ② `ENEMY_BEHAVIOR.mothership` + `MOTHERSHIP_SPAWN_TABLE`（`constants.js`）
@@ -429,6 +520,29 @@ game-scene.js:update
 - **`orbit`** 环绕六边形：**无子弹**，`appearance.elements[<orbitIndexes>]` 的复合体（如 禅灭 = elements[0]+[1] 的 6 颗六边形）绕玩家转圈撞击敌身。三段动态轨道在 `game-scene.js:update` 的 `mechanic.orbit` 分支维护运行时 `player.orbit`（按住左键→二段 radius 250/角速×2/体积×2，按住≥`phase3HoldMs`→三段 400/×4/×4；松开→`retractMs` 内平滑收拢回基础）。判伤按 `hitIntervalMs` 对同敌节流，伤害走 `playerDamage`（固定=`baseDamage`，不乘体积倍率）；命中可破坏物：箱子 `spawnCrateDebris`/油桶 `explodeBarrel`（一次触发、无节流）。**`fire()` 直接返回 `[]`**。航迹可配：`trailWidth/trailSamples/trailFade/trailColor`，转速整体缩放 `speedScale`（默认 0.8=转速-20%）。
 - 渲染：`entity-art.js:drawWeaponMedium` 在 `chg || mouseAim` 下画**中心瞄准线**（常显、长度近似无限、蓄满变红）+ 两条散射边界线（蓄力中，±当前散射角）+表盘红弧带（**半径=`arc.r`、厚度减半、角度=当前散射角随蓄力减小**）+发射小球改为圆弧（角度=当前散射）。**orbit 武器例外**：`entity-art.js:drawPlayer` 走 `buildOrbitInstance`（weapon-runtime）动态克隆外观渲染（不污染共享 `WEAPONS[id].appearance`）+ `drawOrbitTrail` 画每颗六边形航迹，**跳过 `drawWeaponMedium`**（去掉发射环/小球）。
 - 新机制字段要同步 `weapon-design.js:normalizeMechanic` + `weapon-board.js:scalarFields`（特殊机制/蓄力参数组）+ 命中/渲染分支。示例：`data/weapons/weapon-1788656554163.json`（冥狙）、`data/weapons/weapon-1788679714207.json`（禅灭，orbit）。
+
+### 6.7 新增一种矩形障碍 / 可交互实体（火堆范式）
+
+火堆 = 矩形碰撞体，同时参与**子弹命中**与**玩家/敌人移动碰撞**。新增同类实体按下面 3 处接线，**缺一处就会「子弹穿过去」或「人穿过去」**：
+
+| # | 落点 | 做什么 |
+|---|---|---|
+| ① | `game-scene.js:update` 子弹 filter（约 `:568`） | `const wallAll = [...l.walls, ...this.bulletGateWalls(), ...this.<xxx>Walls()]` —— 把新障碍矩形加进**连续碰撞**列表（沿用 `rayWallDistance`，别新写点判定） |
+| ② | `game-scene.js:update` ricochet 分支（约 `:555`） | `const hitW = l.walls.find(...) \|\| this.bulletGateWalls().find(...) \|\| this.<xxx>Walls().find(...)` —— **必须与 ① 同一份障碍集**，否则反弹子弹穿透（见 §7 坑 52） |
+| ②b（子弹/激光集不止 2 处） | 敌弹 filter（约 `:770`）、`weapons.js:spawnLaser`（约 `:134`）、`enemy-ai.js:heavyMechUpdateSight`/`heavyMechFireLaser` | 四处都各自拼 `[...l.walls, ...this.bulletGateWalls()]`。**「挡所有子弹」的需求必须四处同改**，否则出现「普通子弹被挡、敌弹/激光穿过」（宝箱上锁红环即按此四处接线，见 level-design §3.14） |
+| ③ | `enemy-ai.js:resolveMovementCollision`（约 `:449`） | 仿 vendorWalls：把新障碍映射成 `{ x, y, w, h, shape:'rect', rotation:0 }`（`visible!==false` 过滤；编辑态取 `l.<xxx>`、运行态取 `this.<xxx>`）后调 `resolveCircleAgainstWalls` —— **玩家与敌人移动共用此函数，一处覆盖** |
+| ④（可选） | `interactables.js` + `game-scene.js:update` | 若要 F 键交互：加 `<xxx>Walls()` 产出矩形 + `update<Xxx>Interact(dt)`，并在 `if (!inputLocked)` 交互调度链（`updateIdolInteract` / `updateCampfireInteract` 同级）补一行 |
+
+> 口径：**矩形**（与 vendor 一致，不用圆形）；只挡**玩家子弹**，**不处理敌方弹幕**（敌弹走另一条 filter）。
+
+### 6.8 按武器类型直接切换（非滚轮）
+
+需要在代码里把玩家切到某把**已装备**武器（如火堆选卡后自动切到被强化的武器），**不要手写 `player.weaponType`/`weapon`/`weaponIndex`**，一律调用 `this.equipWeaponByType(weaponType)`（`player-combat.js:103`）：
+
+- 传「`player.weapons` 中已登记」的武器 id；`!weaponType` / 未登记 / 已是当前武器 / `WEAPONS` 缺定义时**返回 `false` 且不改任何状态**（幂等、安全，可无脑调）。
+- 它负责全流程：守卫 → `leaveWeapon`（回退旧武器祝福）→ 写 5 个字段（`weaponIndex/weaponType/weapon/scheme/weaponArt`）→ `enterWeapon`（应用新武器祝福）→ 重播出场动画（`weaponIntroAt`）→ 轮盘动画（`wheelAnim`）→ `syncUIState()`；成功返回 `true`。
+- 示例：`interactables.js:campfirePickUpgrade` 在 `applyCampfireOption` 成功后调 `this.equipWeaponByType(option.weaponType)`。
+- 滚轮/按键仍走 `switchWeapon(dir)`（`player-combat.js:91`，只算 `(weaponIndex + dir + n) % n` 再委托本方法）。**别在别处重复实现切换步骤** —— 绕过 `leave`/`enter` 配对会导致火堆祝福残留/丢失（见 §7 坑 51 / 54）。
 
 ## 7. 坑与约束
 
@@ -494,11 +608,29 @@ game-scene.js:update
 49. `updateRunItems(dt)` 在 `game-scene.js:update()` 里排在战斗处理之后 → 本帧到期的加成晚一帧回退，可忽略。
 50. **`playCutscene` 覆盖正在播放的运镜时不回调旧 `onComplete`；BOSS 击破运镜必须让位给死亡运镜**。现象：母舰贴身秒杀 → `triggerPlayerDefeat` → `mothershipSelfDestruct → defeatEnemy` → BOSS 击破运镜顶掉死亡运镜 → `playerDeathFlow` 卡在 `cinematic`、结算页永不出现（`stopCutscene` 只 `cinematicTimer.remove()`，旧 `onComplete` 不触发）。**正确做法**：`enemy-ai.js:defeatEnemy` 里 `if (!this.playerDeathFlow) this.playCutscene(clip, …)` 抑制；同时「运镜已结束但流程未收尾」的窗口里 `cinematicInputLocked()` 返回 false，**身份类流程锁（`playerDeathFlow`）必须自己纳入 `inputLocked`**（`game-scene.js:171`），不能只依赖它（否则黑幕里按 F/4/5 能打开菜单页顶掉结算页）。完整链条见 level-design §4⑨ 与 engine-editor 坑 49-50。
 
+51. **按武器生效的属性强化（火堆祝福）必须在所有武器切换入口成对 `leaveWeapon`/`enterWeapon`**。现象：`player.weaponBuffs[wt]` 的加成直接乘/加在 `player.combat` 上（互逆口径同坑 44），切换武器不回退就会出现 ① 切走后旧武器加成仍挂着（**加成残留**、属性虚高）② 切到新武器没 `enterWeapon`（**加成丢失**）。**正确做法**：`player-combat.js:equipWeaponByType`（**武器轮切换的唯一执行体** —— 滚轮/按键经 `switchWeapon` 委托、火堆选卡直调都汇聚到此）、`run-items-runtime.js:useTempWeapon`、`cancelTempWeapon` **三处成对调用**（改 `weaponType` 之前 `leaveWeapon(this)`、写完 `weaponType/weapon/scheme/weaponArt` 之后 `enterWeapon(this, wt)`）；`switchWeapon` 的 `n<=1` 提前 `return`（此时不调 `equipWeaponByType`）不动（没切换就不动加成）。**漏任何一处 = 加成残留或丢失**（不成对/重复配对的净对数分析见坑 54）。
+
+52. **把障碍加进子弹 `wallAll` 时必须同时加进 ricochet 的 `hitW` 查找**。现象：`game-scene.js:update` 的墙体连续碰撞用 `wallAll = [...l.walls, ...bulletGateWalls(), ...campfireWalls()]`，而反弹改件分支用**另一处独立**的 `hitW` 查找（`l.walls \|\| bulletGateWalls() \|\| campfireWalls()`）。只加一处 → 普通子弹被挡、但 `ricochet` 子弹**穿透**该障碍（不反弹直接飞过）；漏另一处则反弹弹被弹回而普通子弹穿过。**正确做法**：新增矩形障碍时两处同改（见 §6.7 ①②）。
+
+53. **`equipWeaponByType` 把所有守卫前置 → 守卫失败不再留脏态（旧 `switchWeapon` 会）**。现象：旧 `switchWeapon` 在 `const weapon = WEAPONS[wt]; if (!weapon) return;` **之前**就写了 `player.weaponIndex = to`，当 `WEAPONS[wt]` 缺定义时留下 `weaponIndex`（已前进）与 `weaponType`（未变）**不一致的脏态** → 武器轮高亮与实际武器错位、下次切换基于错误索引。**本轮重构**：目标槽位计算（`switchWeapon`，只算不写）与状态写入（`equipWeaponByType`）分离，**全部守卫**（`!weaponType` / 不在 `player.weapons` / 已是当前武器 / `WEAPONS[weaponType]` 缺定义）都排在 `leaveWeapon` + 写字段**之前**，任一命中即 `return false` 且**不动任何状态**。改守卫顺序务必保持「**先判后写**」，别在守卫前写 `weaponIndex`。
+
+54. **`leaveWeapon`/`enterWeapon` 必须成对且不重复加配（火堆选卡后自动切换也满足净 1 对）**。`equipWeaponByType` 执行体固定 `leaveWeapon(this)` → 写字段 → `enterWeapon(this, wt)` 一次；`enterWeapon` 内部还有 `if (p.buffedWeapon === weaponType) return true;` 幂等守卫（重复 enter 不叠加，见 `economy/weapon-buffs.js:33`）。火堆选卡链（`campfirePickUpgrade` → `addWeaponBuffs` → `equipWeaponByType`）两种情形都**净 1 对**：① **目标 = 当前武器**：`addWeaponBuffs` 内 `wasCurrent = buffedWeapon===wt || weaponType===wt` 为真 → 自己 `leave` + 入列 + `enter`（1 对）；随后 `equipWeaponByType` 因「已是当前武器」直接 `return false` → **不重复**。② **目标 ≠ 当前武器**：`addWeaponBuffs` 的 `wasCurrent` 为假且 `p.weaponType !== weaponType` → **只入列、不 leave/enter**；由 `equipWeaponByType` 完成 `leave`(旧) + `enter`(新)（1 对）。所有早退守卫都在 `leaveWeapon` **之前** → **不存在「只 leave 不 enter」的孤儿回退**。以后若新增切换入口，别在守卫前/后额外补 leave/enter，否则破坏净对数（加成残留或重复叠加）。
+
+55. **`rayToBounds` 在近轴射线上会算出「负距离」→ 射线反向/退化**（重装机兵实现时实测踩到）。现象：敌人朝正左（`ang = π`）发射时，`sin(π) = -1.22e-16`（**负的极小值**），`rayToBounds` 的 `else if (dy < 0) t = Min(t, -y0/dy)` 分支因此算出 **t = -59**，`Math.min(墙距, t)` 取到负值 → 终点落在**反方向**（实测激光 `x1 = 138.7` 而起点 `x0 = 79.3`，光束朝背后画、且打不到玩家）。**正确做法**：求交前把近零分量归零 + 长度夹非负 —— 已抽成 `enemy-ai.js` 的**模块级私有 `rayDir(ang)` / `aimRay(scene, ox, oy, ang, walls)`**，重装机兵的**瞄准线与激光共用这一份**（`heavyMechUpdateSight` / `heavyMechFireLaser`）；新写任何「cos/sin 求方向 + rayToBounds/rayWallDistance 求终点」的代码都复用它（`weapons.js:spawnLaser` 仍是自算，属固有隐患）。
+
+56. **瞄准线必须是「无限长、只被墙截断」——端点只能在战斗侧算，渲染端不得自截**（用户口径）。现象（错误实现）：在 `ui/heavy-mech-art.js` 里用固定长度 `sightLen(420)` 画两条线 → 线在半空断掉，且穿墙（渲染侧拿不到墙体数据）。**正确做法**：战斗侧 `heavyMechUpdateSight(e)` 在 `aim`/`align` 相位每帧用 `aimRay` 求「起点→首个墙或关卡边界」的端点写进 `e.sightLines`（起点 = 蓝色多边形边缘 `sightStart×artScale`，两条分别沿 `head ± spread/2`）；渲染端 `drawHeavyMechSight` **只按坐标 `lineBetween`**，仅用 `firePhase` 做显示门控。**代价**：`aim`/`align` 期间每敌每帧 2 条射线（`walls + bulletGateWalls`），量级可忽略；`wait` 相位不重算（渲染端也不画）。`HEAVY_MECH_LASER` 已**删除 `sightLen`**，别再加回固定长度。
+
+57. **激光/技能方向必须在「瞄准收敛」瞬间锁定，而不是发射瞬间**（与坑 42 同一设计口径）。现象：若瞄准线一路跟随玩家、到发射当帧才定方向，那么「停顿」就毫无意义——玩家在停顿期无论怎么走都会被命中（本实现里 `align` 期 `headAngle = e.aimAngle` 冻结，`aimAngle` 在 `aim → align` 转换时写死）。**正确做法**：`aim` 阶段头部按 `rotateSpeed` 追踪玩家 + 夹角按 `aimSpeed` 收拢，夹角到 0 的那一刻写 `e.aimAngle = e.headAngle` 并进入 `align`；`align` 全程（含发射）只用 `aimAngle`。这既给出「单线瞄准 → 激光」的视觉，又把 `fireDelay` 变成真实的躲避窗口（实测横移即可躲开）。
+
+58. **瞄准/发射期间「原地不动」是显式设计，不要顺手改成边走边打**：`stepHeavyMech` 只在 `wait` 分支调 `stepToward`；`aim`/`align` 分支**直接 return**（不位移）。若要恢复边移动边瞄准，必须同时确认「瞄准线是否还跟得住玩家」——方向锁定依赖 BOSS/敌人静止，见坑 27（圆弧对齐只能在等待期做）。
+
+59. **波次不生成 ≠ 波次链坏了；先看 `waitForClear` 的判据算进了谁**（真实踩过：`Level1-Scene2` trigger-178「3/4 波不生成」）。`runTriggerWave` 的定时链本身很硬（只有 `restart` / `stopOnExit` 能掐 timer），所以「勾了等待清理的波次不出」必然是「判据永远不成立」。**旧实现**判据为**全场** `!this.enemies.some(e => e.alive)` → 关卡里手摆的待机敌人（`level-flow.js:293 restart` 会把 `l.enemies` 全部 `initEnemy` 进场且 `alive:true`，例如 `Level1-Scene2` 的 `boss-2-5t5`、`Level1-Scene1` 的 `mothership`，`triggerId` 为空）与别的触发器召唤的怪都会永久拦住它。**已修**：判据改为只算本触发器召唤的敌人（`triggers.js:195`：`!this.enemies.some(e => e.alive && e.triggerId === t.id)`，与 `checkAsyncTriggerEvents` 同规则）。**另两类会让「本触发器的怪」自己清不掉的东西**：① **卡墙/门外的怪**（`canSpawnAt` 只做视线判定、不做寻路判定；门不进寻路网格）→ 兜底自毁 `enemy-ai.js:updateEnemyStuck`：`resolveMovementCollision` 末尾写 `entity.pushBack`（本帧被推回距离），`game-scene.js` 敌人循环在本帧碰撞解算后调用，按 1s 窗口判「顶过障碍（`pushBack > ENEMY_STUCK_PUSH_EPS`）且窗口内净位移 < `ENEMY_STUCK_WINDOW_MOVE_PX`」，累计满 `ENEMY_STUCK_KILL_MS(5000)` → `defeatEnemy`（**母舰 / 原型机-2-5T5 除外**：手摆 BOSS，`defeatEnemy` 会触发击破运镜；也正因如此它们永远拦不住波次了）。实测：门外 basic1 顶住门后满 5s 判死；休眠 advanced2、沿墙滑动、被挤出墙的一次性推回都不误杀。② **远离玩家的 `inscreen` 波 + `advanced2`**：`attackRange:500` 决定 >500px 时只原地自转（`stepAdvanced2` 未激活分支直接 `return`）→ 永远不死，会拦住同触发器的后续波次；数据层把该波改 `surround`（或把 zone 移到玩家附近）、入口触发器首波补 `preDelay ≥ 500`。60. **敌人血量/伤害/尺寸的三层回落只在 `initEnemy` 里做一次，且尺寸必须同时改 `r` 与 `artScale`**（本次新增「触发器单波可覆盖敌人数值 + 关卡级兜底」时落地）。要点：① 回落链 = `resolveEnemyStats(level, type, wave)`（`state.js`，纯函数）→ 波次 `wave.hp/damage/scale` > `level.enemyDefaults[type]` > 全局；`initEnemy` 写法固定为 `stats?.hp ?? e.hp ?? def.hp`（用 `??` 不用 `||`，否则 `damage: 0` 会被当成未配置）。② **尺寸倍率必须同时乘碰撞半径与美术缩放**：`r = (b.size/2) × scale`、`artScale = (def.artScale ?? e.artScale ?? 1) × scale`——只在渲染端改 `artScale` 会「看起来变大、实际命中盒不变」（玩家打不中 / 怪穿墙）；只在 `r` 上改则视觉不变。③ **`wave` 只用于取数值，不留在运行时敌人对象上**：`initEnemy` 首行 `const { wave, ...spawn } = e;` 再 `...spawn`（原实现 `...e` 会把 `wave` 引用挂到每只敌人身上）。④ **生成点校验要同口径**：`spawning.js` 的 `canSpawnAt(x, y, type, minPlayerDist, scale)`（第 5 参，影响世界边界留白与整圆穿墙采样）、`findClearSpawnNearPlayer(type, scale)`、召唤阵顶点、锁定框 `size × scale` 四处都要传。⑤ **数值要传到「落地那一刻」**：`surround` 经 `spawnEffects[].wave`、`inscreen` 经 `lockEffects[].wave` 交给 `initEnemy`；新增生成模式记得同样挂 `wave`，否则该模式下覆盖静默失效。⑥ **关卡预置敌人（`l.enemies[]`）不带 `wave` → 不读 `enemyDefaults`**（它们的字段由 `normalizeEnemy` + 编辑器敌人面板落定），这是有意为之：`enemyDefaults` 只服务触发器/召唤阵生成。⑦ **别静态 import 战斗表**：`resolveEnemyStats` 在 `state.js`（被单测加载），不得反向依赖 Phaser（参见坑 30）。编辑器侧两处入口（每波三项输入 + 侧栏「敌人默认数值」面板）见 `level-design` §3.5.1。
+
 ## 8. 验证方式
 
 ```bash
 # 1) 构建必须过（能抓出 import 路径错、导出名错）
-npx vite build          # 基线：built 成功，90 modules（接线前 86）
+npx vite build          # 基线：built 成功，97 modules（重装机兵新增 combat/heavy-mech.js + ui/heavy-mech-art.js 两个模块）
 
 # 2) 单测必须与基线一致
 node --test test/       # 基线：20 tests / 19 pass / 1 fail
@@ -513,7 +645,7 @@ node -e "const c=require('fs').readFileSync('src/systems/combat/你改的文件.
 node server.js          # 然后浏览器打开，编辑器里选关卡 → 试玩
 ```
 
-mixin 同名自检（新增 mixin 方法前必做）：装配后方法数 **285 / 冲突 2**（仅 `if`/`for` 假阳性），有新增即需排查。
+mixin 同名自检（新增 mixin 方法前必做）：装配后方法数 **303 / 真实冲突 0**（本次 +2 = `InteractablesMixin.setChestsLocked`/`chestLockWalls`（宝箱上锁红环），属关卡设计分类；此前 301 = `EnemyAiMixin.updateEnemyStuck`；旧 `if`/`for` 假阳性为扫描脚本误报），有新增即需排查。
 
 手动冒烟对应关卡（`data/levels/`）：
 | 验什么 | 用哪个关卡 |
@@ -522,8 +654,11 @@ mixin 同名自检（新增 mixin 方法前必做）：装配后方法数 **285 
 | 武器切换 / 工坊装改件后的弹道 | `knight-home.json` 进工坊，再进战斗关 |
 | 敌人行为 / 寻路绕墙 / 波次 | `Level1-Scene1.json` |
 | advanced1 冲锋 / advanced2 点射 | `Level2-Scene1.json`、`Level3-Scene1.json` |
+| **重装机兵**：头朝玩家 / 缓慢逼近 / 两条**无限长**瞄准线（只被墙与关卡边界截断）收拢 → 单线锁定 → 停顿 → 激光（变粗→保持→变细）；**停顿期横移可躲开**；墙壁能挡住激光与瞄准线；激光打中只结算一次伤害；编辑器「敌人类型 → 重装机兵」5 项配置（血量/移动/旋转/瞄准/开枪延迟/射击间隔）+ 大小 | 用编辑器在任意战斗关放一只 `heavy-mech`（当前 `data/levels/*.json` 未预置）；也可直接在关卡 json 的 `enemies` 里写 `{"type":"heavy-mech","art":"","mech":{...}}` |
 | 油桶连锁 / 木箱破坏 | 任意含 `barrels`/`crates` 的关卡（用 `node -e` 搜 json） |
+| 休息火堆：靠近提示 / F 键回血或升级 / **矩形碰撞体挡玩家子弹与移动** / 切武器后祝福生效·回退 / **选属性卡后自动切到该武器**（`campfirePickUpgrade` → `equipWeaponByType`） | 任意含 `campfires` 的关卡（当前 `data/levels/*.json` 尚未配，需用编辑器放置火堆） |
 | 局内消耗品 / 限时加成 / 即时护盾 / 临时武器 | 任意有售货机的关卡：买药水看状态图标与倒计时、数字键 5 切临时武器（使用中才倒计时）、护盾吸收后盾碎抖屏 |
 | 原型机-2-5T5 全技能 / 阻挡护盾（停驻变红弹）/ 护盾主动撞红弹消除 / 技能5 蓝色漩涡 + 捕获环绕 / 技能区域 + 黑遮罩 / 紫区减速（**观察点**：护盾存在窗口是否明显变长、技能占比是否约 4:4:2（半血后 4:4:2:2）、**每个技能的区域是否都朝玩家（不空放）**、三种技能的同心弧风格是否一致、区域是否 s1 从外向内 / s2 从内向外**方向性消散**、被拦红弹是否至少 5px、**护盾主动撞红弹能否消除且扣盾不扣血**、**半血后是否出现蓝色漩涡**、**红弹被吸回是否变白带彩色拖尾**、**半血后漩涡是否把转化红弹吸成内层环绕环（贴内圈公转、不扎堆）**、**漩涡被击杀 / BOSS 死亡后环绕弹是否静止停驻原地（仍能被打到、仍能撞死玩家）**、**技能1/2 是否会把区域内的转化红弹吸/推走、且拖尾变蓝（s1）/ 变红（s2）**、**技能1/2 拖/推的转化子弹是否走完固定距离后停下（不再无限加速）**、**技能2 的角度边缘（贴合绘制扇形斜线、外扩 ≤ `zoneHitPadPx`=30px 内）是否仍能命中**、**判定是否只在绘制扇形内（最多多出 ≤30px）**、**扇形方向是否全程不变（能靠横走躲开）**、**进吸力半径即被吸、越靠近涡心吸力越强（min→max）**、**被漩涡捕获后释放的子弹是否静止原地（不再被技能带着跑）**、**漩涡被击杀是否消散**、**入涡是否每 0.5s 掉血**） | `Boss2-Test.json` |
+| **触发器召唤敌人的数值三层回落**：波次覆盖 > 关卡「敌人默认数值」> 全局；尺寸倍率**同时**放大美术与碰撞体（打得到的判定与外观一致） | `Level1-Scene2.json`（`trigger-178` 有 4 波）或任意战斗关编辑器加 1 波 | 给波次/关卡兜底填 `血量/伤害/尺寸倍率` → 试玩：怪的大小与受伤量按填值生效；清空后回落（先关卡兜底、再全局 `basic1` 30/10/×1）；重开关卡不残留。`initEnemy` 契约可用临时 loader 桩自检（见 `level-design` §8） |
 
 改完必看的现象：子弹拖尾是否正常、命中是否有特效、敌人是否会绕墙而不是贴墙抖动、护盾能否挡下正面来弹、击杀后是否掉落、**限时加成是否按时回退（属性复原且 HUD 图标消失）**、**即时护盾吸收后盾碎是否抖屏且玩家不掉血**、**临时武器使用中是否倒计时并到期自动还原主武器**。

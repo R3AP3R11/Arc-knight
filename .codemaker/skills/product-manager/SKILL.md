@@ -30,25 +30,25 @@ description: 收到任何新需求、迭代、改动、bug 修复请求时**先�
 **技术栈**：Phaser 4 + Vite，纯 ESM（`package.json` 里 `"type":"module"`），Electron 打包，`server.js` 提供开发期 JSON 读写 API。
 **形态**：游戏 + 关卡编辑器二合一，同一个 `EditorScene` 靠 `this.editing` / `ctx.state.mode`（`editor`/`play`/`trial`）分流。
 
-### 代码分布（`src/` 共 87 文件 / 26154 行，实测）
+### 代码分布（`src/` 共 92 文件 / 27115 行，实测）
 
 | 分类 | 目录 | 文件数 | 行数 | 对应 skill |
 |---|---|---|---|---|
-| 战斗相关 | `src/systems/combat/` | 7 | 2665 | `combat` |
-| 数值_经济 | `src/systems/economy/` + `player-data.js` | 9 | 1244 | `economy-numbers` |
-| 关卡设计 | `src/systems/level/` + `rooms.js` | 5 | 1636 | `level-design` |
-| 系统玩法 | `src/systems/gameplay/` | 3 | 1718 | `gameplay-systems` |
-| UI交互 | `src/systems/ui/` + `ui-layer/ui-bindings/ui-config/ui-preview/ui.js` | 17 | 6347 | `ui-interaction` |
-| 引擎(编辑器) | `src/systems/editor/` + `src/editor/` + `server.js` + `src/systems/art/` | 33 | 9287 | `engine-editor` |
-| 共享 | `game-scene.js`(922) `state.js`(638) `constants.js`(102) `pathfinding.js`(105) `api.js`(82) `main.js`(97) | 6 | 1946 | 见 §3.3 |
+| 战斗相关 | `src/systems/combat/` | 8 | 2914 | `combat` |
+| 数值_经济 | `src/systems/economy/` + `player-data.js` | 11 | 1640 | `economy-numbers` |
+| 关卡设计 | `src/systems/level/` + `rooms.js` | 5 | 1741 | `level-design` |
+| 系统玩法 | `src/systems/gameplay/` | 3 | 1717 | `gameplay-systems` |
+| UI交互 | `src/systems/ui/` + `ui-layer/ui-bindings/ui-config/ui-preview/ui.js` | 19 | 6773 | `ui-interaction` |
+| 引擎(编辑器) | `src/systems/editor/` + `src/editor/` + `server.js` + `src/systems/art/` | 35 | 9647 | `engine-editor` |
+| 共享 | `game-scene.js`(927) `state.js`(696) `constants.js`(116) `pathfinding.js`(105) `api.js`(82) `main.js`(97) | 6 | 2023 | 见 §3.3 |
 
-> 上表合计 80 文件 / 24843 行（「引擎」行含 1 个 `src/` 外的 `server.js`(523)），另有 7 个 `src/` 根目录 UI 文件未单列（`ui-editor`/`ui-interact`/`ui-library`/`ui-library-panel`/`ui-mxgraph`/`ui-page-profiles`/`ui-wireframe` = **1833 行**），`src/` 合计 **87 文件 / 26154 行**（含 1 个 1 行残留文件 `src/src/ui.js`；计入 `src/` 外的 `server.js` 为 88 文件 / 26677 行）。另有 `tools/export-tables.mjs`(272) 与生成物 `data/inner-shop.json`(129)。改动分类边界时**用 `node` 重测**，别沿用旧值。本次新增：`src/systems/editor/editor-camera.js`(359→**635**)、`src/editor/cinematics-board.js`(564→**793**)、`src/state.js`(608→**638**)、`src/systems/level/level-flow.js`(387→**421**)、`docs/cinematic-preview.html`(新，**653 行**，单文件离线运镜预览页)。
+> 上表合计 87 文件 / 26455 行（「引擎」行含 1 个 `src/` 外的 `server.js`(523)），另有 7 个 `src/` 根目录 UI 文件未单列（`ui-editor`/`ui-interact`/`ui-library`/`ui-library-panel`/`ui-mxgraph`/`ui-page-profiles`/`ui-wireframe` = **1833 行**），`src/` 合计 **94 文件 / 27766 行**（含 1 个 1 行残留文件 `src/src/ui.js`；计入 `src/` 外的 `server.js` 为 95 文件 / 28289 行）。另有 `tools/export-tables.mjs`(272) 与生成物 `data/inner-shop.json`(129)。改动分类边界时**用 `node` 重测**，别沿用旧值。新增模块（休息火堆）：`src/systems/economy/campfire.js`(162，火堆抽取/回血/升级选项纯逻辑 → 数值_经济)、`src/systems/economy/weapon-buffs.js`(88，按武器生效的基础属性强化 → 数值_经济)、`src/systems/ui/campfire-art.js`(171，火堆两层弹窗绘制 → UI交互)；新增模块（重装机兵敌人）：`src/systems/combat/heavy-mech.js`(57，配置契约 + 激光/瞄准线常量 + `e.sightLines` 契约，纯数据 → 战斗相关)、`src/systems/ui/heavy-mech-art.js`(50，本体旋转/瞄准线/激光束绘制 → UI交互)。
 
 ### 架构不变量（改任何分类都必须遵守）
 
 1. **mixin 装配顺序**（`src/game-scene.js:902`，共 **25** 个）：
    `EnemyAiMixin, Boss25T5Mixin, PlayerCombatMixin, DestructiblesMixin, PetMixin, SpawningMixin, TriggersMixin, InteractablesMixin, LevelFlowMixin, HudMixin, UiRuntimeMixin, ScreensMixin, SaveLoginMixin, NewbeeHubMixin, WorkshopMixin, DropsMixin, ProgressionMixin, InnerShopMixin, RunItemsMixin, BattleItemsMixin, EditorInputMixin, EditorCameraMixin, WorldRenderMixin, WorldOverlayMixin, MinimapMixin`
-   **后者覆盖前者同名方法**。新增方法前先扫全仓是否重名。`InnerShopMixin`（`economy/inner-shop-runtime.js`，售货机/老虎机）紧跟 `ProgressionMixin`，其 10 个方法全仓无重名（`addRunItem`/`addRunTimedWeapon` 已移入紧随其后的 `RunItemsMixin`，勿留两份）；`RunItemsMixin`（`economy/run-items-runtime.js`，局内消耗品/限时加成/限时武器，14 个方法）与 `BattleItemsMixin`（`ui/battle-items.js`，药水槽/轮盘/状态图标，3 个方法）紧随 `InnerShopMixin`。**装配后 mixin 方法总数 285 / 冲突 2**（见 §2 基线；`EditorCameraMixin` 本次 21 → 26 新增运镜叠层方法）。
+   **后者覆盖前者同名方法**。新增方法前先扫全仓是否重名。`InnerShopMixin`（`economy/inner-shop-runtime.js`，售货机/老虎机）紧跟 `ProgressionMixin`，其 10 个方法全仓无重名（`addRunItem`/`addRunTimedWeapon` 已移入紧随其后的 `RunItemsMixin`，勿留两份）；`RunItemsMixin`（`economy/run-items-runtime.js`，局内消耗品/限时加成/限时武器，14 个方法）与 `BattleItemsMixin`（`ui/battle-items.js`，药水槽/轮盘/状态图标，3 个方法）紧随 `InnerShopMixin`。**装配后 mixin 方法总数 303 / 冲突 2**（见 §2 基线；本次 +2 = 宝箱上锁 `InteractablesMixin.setChestsLocked`/`chestLockWalls`（`level/interactables.js`，触发器 `lockChest`/`unlockChest` 事件驱动，红环挡移动与子弹，详见 level-design §3.14）；此前 +1 = `EnemyAiMixin.updateEnemyStuck`（`combat/enemy-ai.js`，卡墙残留怪自毁 → 防 `waitForClear` 波次链死锁，`game-scene.js` 敌人循环在本帧碰撞解算后调用，详见 combat skill 坑 59）；再此前重装机兵 4 方法全在 `EnemyAiMixin`：`stepHeavyMech`/`heavyMechUpdateSight`/`heavyMechFireLaser`/`updateEnemyLasers`；再此前火堆 10：`InteractablesMixin` +8、`WorldOverlayMixin` +1 `drawCampfireUI`、`WorldRenderMixin` +1 `drawCampfires`；再此前 +1 = `PlayerCombatMixin.equipWeaponByType`）。
 2. **`const ctx = this.ctx;` 约定**：mixin 方法要访问注入对象 `ctx`（含 `ctx.state` 与 `ctx.onXxx` 回调）时，**必须在方法体首行声明**。漏写 → 运行时 ReferenceError，且 `vite build` 检测不到。
 3. **`game-scene.js` 只保留 `constructor` / `create` / `update` + 装配**。新逻辑一律写进对应分类的 mixin 模块，不要往 `game-scene.js` 堆。
 4. **不允许 `src/systems/**` 反向 import `game-scene.js`**（会成环）。
@@ -56,15 +56,22 @@ description: 收到任何新需求、迭代、改动、bug 修复请求时**先�
 6. **武器目录叶子模块**：新增 `src/systems/art/weapon-registry.js`（无依赖叶子）管理运行时武器目录（radial/yellow/green + 设计武器 id），供 `state.js`/`player-data.js` 查询，**避免 state↔player-data 循环依赖**。黄色/绿色武器由启动 `registerBuiltinWeapons()` 从设计稿注册驱动，**不再硬编码战斗逻辑**（`combat/weapons.js` 字面量仅剩 radial/basic，`WEAPON_TYPES=['radial']`）。目录查询用 `weaponCatalog()`/`isKnownWeapon()`。
 7. **局内态（仅当局的运行时数据）一律挂场景对象，不挂 `state.player`** —— `state.player` 就是存档源（`progression.js:persistSave` → `ctx.onPlayerSave`）；挂场景的字段随 `level/level-flow.js:restart` 重建自然清零。本次新增的局内态：`runItems`（药水队列 ≤4）、`runTimedWeapons`（限时武器 ≤1）、`runEffects`（限时加成，驱动 HUD 状态图标）、`tempWeaponActive`/`tempWeaponSaved`（临时武器使用中）、`potionWheel`/`potionKeyHold`/`potionWheelText`（药水轮盘）、`player.itemShields`（即时护盾血池）、`player.weaponIntroAt`（武器本体出场动画计时起点 ms，挂 `player` 上但属局内态、不落存档；`player-combat.js:switchWeapon` / `run-items-runtime.js` 临时武器启用与取消 / `level-flow.js:restart` 写入）。
 
+> **新增关卡级可交互实体通用范式**（休息火堆 / 售货机 / 神像 / 宝箱等）：`state.js:DEFAULT_LEVEL.<复数名>` + 单个 `normalize<Xxx>` + `normalizeLevel` 注入 → `level/level-flow.js:restart` 初始化局内态与寻路障碍 → `level/interactables.js` 加 `update<Xxx>Interact` + 二层菜单方法 → `game-scene.js:update` 调度（若需阻挡子弹则把矩形纳入 `<xxx>Walls()` 供 `wallAll`/`ricochet`）→ UI 绘制与按钮（`ui-interaction`）→ 编辑器 `index.html` 的 `data-tool` + `editor-input.js` 放置/擦除/缩放 + `editor-geometry.js:pickTopEntity` + `history.js` + `entity-properties.js` 面板。完整五分类拆解见 §3.4「新增一个可交互实体」。
+
 ### 基线（每次改完必须回到这个状态）
 
 ```bash
-npx vite build      # 成功，90 modules
+npx vite build      # 成功，98 modules（本轮 +1 = editor/enemy-defaults-panel.js；此前 97）
 node --test test/   # 20 tests / 19 pass / 1 fail
                     # 唯一 fail 为 test/player-api.test.js 的 round-trip 里旧 schema 的 `mods` 字段
                     # 被 normalizePlayer 有意丢弃（既有的 schema 迁移不一致，非本改件任务引入）
-                    # ④ mixin 同名自检：mixin 方法数 285 / 冲突 2
-                    # （较上一轮 276 → 285，`EditorCameraMixin` 21 → 26；冲突仅为 `if`/`for` 假阳性，来自 combat/boss25t5.js、ui/minimap.js）
+                    # ④ mixin 同名自检：mixin 方法数 303 / 冲突 2
+                    # （较上一轮 301 → 303；本轮 +2 = 宝箱上锁 `setChestsLocked`/`chestLockWalls`（`level/interactables.js`）；
+                    #  此前 +1 = 卡墙自毁 `updateEnemyStuck`（`combat/enemy-ai.js`）；
+                    #  再此前 +4 = 重装机兵 `stepHeavyMech` / `heavyMechUpdateSight` / `heavyMechFireLaser` /
+                    #  `updateEnemyLasers`；再此前火堆新增 10：`InteractablesMixin` +8、`WorldOverlayMixin` +1、
+                    #  `WorldRenderMixin` +1；冲突仅为 `if`/`for` 假阳性，来自 combat/boss25t5.js、ui/minimap.js，
+                    #  剔除后真实冲突 0）
 ```
 
 ---
@@ -108,9 +115,12 @@ node --test test/   # 20 tests / 19 pass / 1 fail
 | 护盾、格挡、破盾、受击 | 战斗相关 | `combat` |
 | 原型机 / 2-5T5 / BOSS技能 / 阻挡护盾 / 技能区域 | 战斗相关 | `combat` |
 | 木箱、油桶、爆炸、破坏 | 战斗相关 | `combat` |
+| 重装机兵、新敌人种类、敌人激光、瞄准线、瞄准收敛、头部朝向 | 战斗相关 | `combat` + 同步点：`ui-interaction`（`ui/heavy-mech-art.js` 绘制）、`engine-editor`（`entity-properties.js` 面板字段）、`level-design`（关卡 `enemies[]` 的 `mech` 配置） |
 | 关卡、场景、地图、房间生成 | 关卡设计 | `level-design` |
 | 触发器、事件、波次、刷怪、门/gate | 关卡设计 | `level-design` |
+| 触发器生成的敌人数值（血量/伤害/尺寸倍率）、关卡敌人默认数值、波次数值覆盖 | 关卡设计 | `level-design`（schema §3.5.1）+ 同步点：战斗相关 `combat`（`enemy-ai.js:initEnemy` 三层回落 + `scale` 同时改 `r`/`artScale`，坑 60）、引擎(编辑器) `engine-editor`（`trigger-panel.js` 每波三项 + 侧栏「敌人默认数值」面板 `enemy-defaults-panel.js`，§3.9/坑 62） |
 | 宝箱、传送门、售货机、神像、图标交互 | 关卡设计 | `level-design` |
+| 宝箱改尺寸、宝箱上锁/解锁、红色圆环锁定、击败敌人后解锁 | 引擎(编辑器) | `engine-editor`（`entity-properties.js` 宝箱分支 w/h + 四角手柄 + `eventTypeOptions` 增 `lockChest`/`unlockChest`；`trigger-panel.js` 目标宝箱多选）+ `level-design`（`state.js:normalizeChest` 的 w/h、`chestLockRadius`、`interactables.js:setChestsLocked`/`chestLockWalls`、`triggers.js:dispatchTriggerEvent` 两分支）+ 同步点：战斗相关 `combat`（移动碰撞 + 4 个子弹/激光墙集合）、UI交互 `ui-interaction`（贴图按 `max(w,h)` 等比缩放 + 8px 红环绘制）。数据契约与 4 消费点见 `level-design` §3.14 |
 | 通关、结算、关卡切换、过场 | 关卡设计 | `level-design` |
 | 工坊、背包、装备、装/卸改件、拖拽装备 | 系统玩法 | `gameplay-systems` |
 | 新手引导、教程、提示 | 系统玩法 | `gameplay-systems` |
@@ -123,6 +133,7 @@ node --test test/   # 20 tests / 19 pass / 1 fail
 | 售货机、局内商店、老虎机、抽奖、局内消耗品、限时武器、商品卡片翻面 | UI交互 | `ui-interaction` + 同步点：数值_经济 `economy-numbers`（商品/价格/权重/局内数据）、关卡设计 `level-design`（F 键入口 `updateVendorInteract` + `restart` 清零）、引擎(编辑器) `engine-editor`（导表 / `/api/inner-shop` / 打包） |
 | 局内消耗品、药水、药水槽、药水选择轮盘、数字键4、数字键5、临时武器槽、状态图标、药水掉落、局内限时武器、即时护盾 | UI交互 | `ui-interaction`（HUD 槽位/轮盘/状态图标/掉落物绘制）+ 同步点：数值_经济 `economy-numbers`（药水队列/效果语义/掉落规则/导表）、战斗相关 `combat`（限时加成回退、临时武器开火、`itemShields` 吸收）、关卡设计 `level-design`（`restart` 局内态清零 + 4/5 键调度）、引擎(编辑器) `engine-editor`（消耗品表新列 / `parseConsumables` / 两个编辑器掉落面板的药水下拉） |
 | 运镜 / 过场动画 / 玩家被击败 / 死亡运镜 / 运镜预览 | 引擎(编辑器) | `engine-editor`（运镜编辑器 `cinematics-board.js` + 播放器 `editor-camera.js` + 离线预览页 `docs/cinematic-preview.html`）+ 同步点：关卡设计 `level-design`（`state.js` 的 `CinematicDef` 契约 + 顶层 `deathCinematic` + `level-flow.js:triggerPlayerDefeat`）、战斗相关 `combat`（三个失败入口 `damagePlayer`/`boss25t5KillPlayer`/母舰贴身秒杀 + `enemy-ai.js:defeatEnemy` 抑制 BOSS 击破运镜）、UI交互 `ui-interaction`（`ui-runtime.js` 的 `playerDeathFlow` 隐藏 HUD 分支，在结算分支之前） |
+| 休息火堆、火堆、生命回复、杰作升级、火堆阻挡子弹、可抽基础属性强化 | UI交互 | `ui-interaction`（两层弹窗绘制 `ui/campfire-art.js:drawCampfireOffer` + F 提示/指引箭头 `ui/world-overlay.js:drawCampfireUI` + `ui-runtime.js` 按钮 `campfireCard_0/1`·`campfireUpgrade_N` 与空白点击层级回退）+ 同步点：数值_经济 `economy-numbers`（`economy/campfire.js` 抽取/回血/升级选项 + `economy/weapon-buffs.js` 按武器基础属性强化 + `damage.js:activeMods` 合并 `player.tempMods`）、关卡设计 `level-design`（`state.js:DEFAULT_LEVEL.campfires`/`normalizeCampfire`/`normalizeLevel` + `level-flow.js:restart` + `level/interactables.js` 8 方法）、战斗相关 `combat`（`game-scene.js:update` 调度 + 子弹 `wallAll`/`ricochet` 纳入 `campfireWalls()` + `enemy-ai.js:resolveMovementCollision` 火堆矩形 + `player-combat.js:switchWeapon` 成对 `leaveWeapon`/`enterWeapon`）、引擎(编辑器) `engine-editor`（`index.html` 工具按钮 `data-tool="campfire"` + `editor-input.js` 放置/擦除/选中/缩放 + `editor-geometry.js:pickTopEntity` + `history.js` + `entity-properties.js` 面板） |
 | 编辑器、拖拽实体、手柄、框选、吸附 | 引擎(编辑器) | `engine-editor` |
 | 属性面板、字段、下拉框 | 引擎(编辑器) | `engine-editor` |
 | 撤销、复制粘贴、快捷键 | 引擎(编辑器) | `engine-editor` |
@@ -138,7 +149,7 @@ node --test test/   # 20 tests / 19 pass / 1 fail
 
 | 文件 | 改什么 → 归哪类 |
 |---|---|
-| `src/state.js` | `ENEMY_TYPES` → 战斗；`ITEM_DEFS`/`MOD_DEFS`/`DROP_ITEMS` → 数值_经济；`normalizeLevel`/`normalizeCrate` 等/`EVENT_TYPES` → 关卡设计；`createState`/`state.ui` → 引擎 |
+| `src/state.js` | `ENEMY_TYPES` → 战斗；`ITEM_DEFS`/`MOD_DEFS`/`DROP_ITEMS` → 数值_经济；`normalizeLevel`/`normalizeCrate` 等/`EVENT_TYPES`/`normalizeEnemyDefaults`/`resolveEnemyStats` → 关卡设计（敌人数值三层回落）；`createState`/`state.ui` → 引擎 |
 | `src/systems/constants.js` | 按常量语义分（`SHIELD`/`ENEMY_BEHAVIOR` → 战斗；`CHEST_*`/`GATE_*` → 关卡；`VIEW_*`/`FONT_*`/`PLAYER_ART` → UI；`ROTATE_HANDLE_OFFSET` → 引擎） |
 | `src/game-scene.js` | 只有 `create`/`update` 的调度顺序会改 → 通知所有相关分类 |
 | `src/pathfinding.js` | → 战斗（寻路），但网格构建时机在 `level/level-flow.js:restart` → 同步通知关卡设计 |
@@ -153,6 +164,14 @@ node --test test/   # 20 tests / 19 pass / 1 fail
 
 大多数真实需求跨 2-4 个分类。**标准做法：定一个主分类负责主逻辑，其余作为「同步点」列清单**。
 
+**示例：「触发器单波可覆盖敌人血量/伤害/尺寸 + 关卡级兜底」**
+| 分类 | 落点 | 必要性 |
+|---|---|---|
+| 关卡设计（主） | `state.js`：`normalizeWave` 加可选 `hp`/`damage`/`scale`（私有 `optionalNum` 判空 + 只在有值时挂键）、`normalizeEnemyDefaults` + `DEFAULT_LEVEL.enemyDefaults` + `normalizeLevel` 映射 + **`resolveEnemyStats(level,type,wave)` 三层回落**（波次 > 关卡兜底 > 全局）；`spawning.js` 透传 `wave`（`spawnOffscreen(t, wave)` 签名已改）与 `waveScale`/`canSpawnAt(...,scale)` | 必须 |
+| 战斗相关 | `enemy-ai.js:initEnemy`：`const { wave, ...spawn } = e`（不把 `wave` 留在敌人对象上）→ `r = size/2 × scale`、`artScale = (def.artScale ?? e.artScale ?? 1) × scale`、`hp/damage = stats.x ?? e.x ?? def.x` | 必须 |
+| 引擎(编辑器) | `editor/trigger-panel.js` 每波三项输入 + `applyWaveStat`（留空 = `delete` 键，**`input` 与 `change` 两个分支都要接**）；新建 `editor/enemy-defaults-panel.js`（`renderEnemyDefaults`/`bindEnemyDefaults`）+ `index.html` + `src/ui.js` ids + `bindings.js` + `level-flow.js:sync`；`src/style.css` 两条 `.drop-rule > label` 规则 | 必须 |
+| 验证 | `npx vite build`（98 modules）；`node .tmp-verify/check.mjs` 式的 **Phaser 桩 harness 跑真 `initEnemy`**（9 条断言）后删除临时目录；见 `level-design` §8 | 必须 |
+
 **示例：「新增一种武器」**
 | 分类 | 落点 | 必要性 |
 |---|---|---|
@@ -162,6 +181,15 @@ node --test test/   # 20 tests / 19 pass / 1 fail
 | 数值_经济 | `data/ui/weapon.json` 加价格；`state.js` 的 `WEAPON_TYPES`/`WEAPON_LABELS` | 必须 |
 | UI交互 | `ui-layer.js:drawWeaponGlyph` 加武器图标分支 | 必须 |
 | 系统玩法 | 工坊页武器槽显示（`weaponCatalog()` 通常自动适配，需验证） | 验证 |
+
+**示例：「新增一种敌人（远程激光范式 · 重装机兵 `heavy-mech`）」**
+| 分类 | 落点 | 必要性 |
+|---|---|---|
+| 战斗相关（主） | 新模块 `combat/heavy-mech.js`：**纯数据契约**（`HEAVY_MECH_ART` + `HEAVY_MECH_DEFAULTS` 5 项 + `HEAVY_MECH_LASER` 激光常量 + `normalizeHeavyMechConfig`，**不 import Phaser / geometry.js** → 供 `state.js` 安全静态引用）+ 行为 `enemy-ai.js`（`stepHeavyMech` 状态机 / `heavyMechFireLaser` / `updateEnemyLasers`） | 必须 |
+| 战斗相关 | `state.js:ENEMY_TYPES['heavy-mech']` + `constants.js:ENEMY_BEHAVIOR['heavy-mech']`(size100) + `normalizeEnemy` 的 `mech` 分派 + `initEnemy` 分支（显式初始化 6 个运行时字段）+ `stepEnemy` 派发 + `game-scene.js` 每帧 `updateEnemyLasers(dt)` 与「接触伤害排除」+ `level-flow.js:restart` 清 `enemyLasers` + `defeatEnemy` 清残留光束 | 必须 |
+| UI交互 | `ui/heavy-mech-art.js`（本体按 `headAngle` 旋转 + **两条无限长瞄准线（只按战斗侧写好的 `e.sightLines` 画，只被墙/关卡边界截断）** + 激光束）+ `entity-art.js:drawEnemyShape` 分支（`getDesign(e.art \|\| HEAVY_MECH_ART)`）+ `world-render.js:drawHeavyMechBeams` 与 `requestArtDesigns` 的「按类型默认美术」兜底 | 必须 |
+| 引擎(编辑器) | `editor/entity-properties.js` 敌人分支按 `type === 'heavy-mech'` 追加 `artScale` + 5 个 `mech.*`；切类型时 `entity.mech = normalizeHeavyMechConfig(...)` 补默认值 | 必须 |
+| 关卡设计 | `state.js:DEFAULT_LEVEL.enemies` 无需改；关卡 `enemies[]` 写 `{"type":"heavy-mech"}` 即用默认值（`mech` 可省）；掉落规则面板自动出现该类型 | 按需 |
 
 **示例：「新增一种敌人」**
 | 分类 | 落点 |
@@ -215,6 +243,16 @@ node --test test/   # 20 tests / 19 pass / 1 fail
 | 引擎(编辑器) | `game-scene.js`（`playerDeathFlow` 初始化 + `update` 的 `inputLocked`/`deathSim`/输入 gate） + `src/ui.js`（3 个新 DOM id 同步 `ids` 数组） + `src/style.css`（`.cinema-kf` flex-wrap） | 必须 |
 | UI交互 | `ui-runtime.js:drawUI` 的 `else if (this.playerDeathFlow) hideHudOverlay()`（**放在 `end/fail` 结算分支之前**） + `activeGraph` 排除 | 必须 |
 
+**示例：「新增一个可交互实体（休息火堆范式 · 一次性二选一：回血 / 杰作升级两层弹窗）」**
+| 分类 | 落点 | 必要性 |
+|---|---|---|
+| UI交互（主） | `ui/campfire-art.js`（`drawCampfireOffer` 两层弹窗：第一层「回血 / 杰作升级」两卡、第二层杰作属性强化选项列表）、`ui/ui-runtime.js`（文本池隐藏 + `activeGraph` + `drawUI` 分支 + `onUIPointer` 命中 `campfireCard_0/1`·`campfireUpgrade_N` + 空白点击「层2→层1、层1→关闭」）、`ui/world-overlay.js`（`drawCampfireUI` F 提示 + 指引箭头列表）、`ui/world-render.js`（`drawCampfires` 按 `w/h × artScale` 适配） | 必须 |
+| 数值_经济 | `economy/campfire.js`（`rollCampfireUpgrades`/`applyCampfireOption`/`campfireHeal`/`remainingGenericSlots`/`genericModPool`，纯逻辑）、`economy/weapon-buffs.js`（`addWeaponBuffs`/`enterWeapon`/`leaveWeapon`，按武器生效的基础属性强化）、`combat/damage.js:activeMods` 合并 `player.tempMods[weaponType]`、`economy/run-items-runtime.js` 临时武器进出成对 `leave`/`enter` | 必须 |
+| 数值_经济 | 火堆抽取结果**本局固定**：`rollCampfireUpgrades` 的候选缓存到火堆实体实例 `cf.options`（挂实体、随 `restart` 重建；本局多次开合不重 roll，避免重复抽取） | 必须 |
+| 关卡设计 | `state.js`（`DEFAULT_LEVEL.campfires` + `normalizeCampfire` + `normalizeLevel`）、`level/level-flow.js:restart`（局内态初始化 + `obstacles` 寻路）、`level/interactables.js` 8 方法（`updateCampfireInteract`/`campfireWalls`/`openCampfireOffer`/`closeCampfireOffer`/`campfireChooseHeal`/`campfireChooseUpgrade`/`campfireBackToFirst`/`campfirePickUpgrade`） | 必须 |
+| 战斗相关 | `game-scene.js:update` 调度 `updateCampfireInteract`；子弹 `wallAll` + `ricochet` 纳入 `campfireWalls()`；`enemy-ai.js:resolveMovementCollision` 火堆矩形；`player-combat.js:switchWeapon`（`leaveWeapon`/`enterWeapon` 成对） | 必须 |
+| 引擎(编辑器) | `index.html` 工具按钮 `data-tool="campfire"`；`editor-input.js`（放置/擦除/选中/缩放）；`editor-geometry.js:pickTopEntity`；`history.js`（`entityKind` + `COPY_ID_PREFIX`）；`editor/entity-properties.js` 面板（`art`/`artScale`/`w`/`h`/`interactRadius`/`visible`/`statBuffs`(multiselect，来自 `IDOL_BUFFS`)/`guide` 组）。**美术**：第一层两图标走三库解析（像素「生命值回满图标」、动态资产「杰作升级图标」），第二层武器图标走 design-store | 必须 |
+
 ---
 
 ## 4. 标准工作流
@@ -255,7 +293,7 @@ node --test test/
 # ③ 未定义标识符自检 —— vite build 抓不到，本项目已因此崩过两次
 node -e "const fs=require('fs');const f='你改的文件路径';const c=fs.readFileSync(f,'utf8');const imp=new Set();for(const m of c.matchAll(/import\s*\{([^}]*)\}\s*from/g))m[1].split(',').forEach(s=>imp.add(s.trim().split(/\s+as\s+/).pop()));for(const m of c.matchAll(/import\s+([A-Za-z_$][\w$]*)\s*(?:,|from)/g))imp.add(m[1]);const decl=new Set([...c.matchAll(/(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/g)].map(m=>m[1]));const body=c.split('\n').filter(l=>!l.trimStart().startsWith('import')).join('\n');[...new Set(body.match(/\b[A-Z][A-Z0-9_]{2,}\b/g)||[])].forEach(n=>{if(!imp.has(n)&&!decl.has(n))console.log('可疑未导入:',n)})"
 
-# ④ mixin 同名冲突自检（基线：mixin 方法数 276 / 冲突 2，冲突仅为 `if`/`for` 假阳性）
+# ④ mixin 同名冲突自检（基线：mixin 方法数 303 / 冲突 2，冲突仅为 `if`/`for` 假阳性，剔除后真实冲突 0）
 node -e "const fs=require('fs'),p=require('path');const fl=[];(function w(d){for(const f of fs.readdirSync(d)){const q=p.join(d,f);fs.statSync(q).isDirectory()?w(q):q.endsWith('.js')&&fl.push(q.replace(/\\/g,'/'))}})('src/systems');const o=new Map();for(const f of fl){const c=fs.readFileSync(f,'utf8');const i=c.search(/export const \w+Mixin = \{/);if(i<0)continue;c.slice(i).split(/\r?\n/).forEach(l=>{const m=l.match(/^    ([A-Za-z_$][\w$]*)\s*\(/);if(m){if(!o.has(m[1]))o.set(m[1],[]);o.get(m[1]).push(f)}})}let d=0;for(const [n,v] of o)if(v.length>1){console.log('❌ 同名:',n,'->',v.join(' , '));d++}console.log('mixin 方法数',o.size,'冲突',d)"
 ```
 
@@ -320,9 +358,11 @@ node -e "const fs=require('fs');for(const d of fs.readdirSync('.codemaker/skills
 
 | 需求原话 | 主分类 | 涉及文件（起点） |
 |---|---|---|
+| 「打完前几波后，后面几波敌人不生成 / 某波一只怪都不出」 | 关卡设计 + 战斗相关 | 先分清两类：① **波次链真断了** → `level/triggers.js:runTriggerWave`（只有 `restart` / `stopOnExit` 能掐 timer）；② **勾了 `waitForClear` 的波次永不放行** → 判据（`triggers.js:195`，已修为「只算**本触发器召唤的**敌人」`e.triggerId === t.id`）不成立就永不生成。**头号肇事者**：关卡手摆的待机 BOSS（`level-flow.js:293 restart` 把 `l.enemies` 全部 `initEnemy` 进场且 `alive:true`，`triggerId` 为空）—— `Level1-Scene1`(mothership)/`Level1-Scene2`(boss-2-5t5) 全靠它踩过坑；其次是同触发器的「打不死的怪」（卡墙/门外 → `enemy-ai.js:updateEnemyStuck` 5s 自毁兜底；远离玩家 zone 的休眠 `advanced2` → 数据改 `surround`）。详见 `level-design` §7 与 `combat` 坑 59 |
 | 「敌人太难了，削弱一下」 | 数值_经济 | `state.js:ENEMY_TYPES`（血/伤）+ `constants.js:ENEMY_BEHAVIOR`（速度/距离） |
 | 「加一把霰弹枪」 | 战斗相关 | `combat/weapons.js` → 见 §3.4 |
 | 「敌人会绕后偷袭」 | 战斗相关 | `combat/enemy-ai.js:stepEnemy` + `ENEMY_BEHAVIOR` |
+| 「加一只新敌人 / 重装机兵 / 激光敌人」 | 战斗相关 | `state.js:ENEMY_TYPES` + `constants.js:ENEMY_BEHAVIOR` + 行为 `combat/enemy-ai.js`（专属 `stepXxx`）+ 渲染 `ui/<xxx>-art.js` + 面板 `editor/entity-properties.js`；完整五分类拆解见 §3.4「新增一种敌人（远程激光范式）」 |
 | 「BOSS 原型机-2-5T5 的数值/技能」 | 战斗相关 | `combat/boss25t5.js`（`BOSS25T5_DEFAULTS` 全部可配数值 + `Boss25T5Mixin` 状态机/区域/护盾）+ 编辑器属性面板 `editor/entity-properties.js` 的 `boss.*` 字段（跨文件接线见 §3.4「特殊 BOSS」示例）；技能种类落点 权重 `skillWeightS*` + `arcTargetsFor`，区域恒朝玩家（`boss25t5StartSkill`）+ 参战弧等待期对齐（`arcAlignDeg`，`stepBoss25T5`），护盾窗口落点 `moveWaitPreMs/PostMs`+`shieldRestoreDelayMs`；技能5 漩涡（半血后加入，场景级 `scene.boss25t5Vortices`）落点 `boss25t5CastSkill5`/`boss25t5VorticesTick`/`boss25t5VortexPull`/`boss25t5VortexAbsorb` + **捕获环绕 `boss25t5VortexCapture`/`boss25t5ReleaseCaptured`** + 渲染 `drawBoss25T5Vortices`；**技能1/2 对区域内已转化子弹施力 `boss25t5ZoneBulletForce`（一次性固定速度+固定距离：速度复用玩家 `s1DragSpeed`/`s2PushSpeed`，距离 = 玩家 `s1DragDist`/`s2PushDist` × 2（`BULLET_FORCE_DIST_MULT`）；`b.force`/`b.forceSrc`/`b.forceStepT`）+ 拖尾字段 `b.forceTrail`（配色 `s1/s2/s5BulletTrail*`）+ 命中**像素级**容差 `zoneHitPadPx`（仅 s1/s2）+ 扇形方向**释放瞬间写死、不跟随玩家**（可横向走出躲避）**；玩家吸力三键 `s5PullRadius` / `s5PullMin`(半径边缘) / `s5PullMax`(涡心处吸力+速度上限；**必须 < 玩家移速 180**)；护盾消红弹落点 `shieldClearCost` + `boss25t5UpdateBlocked`；面板字段 81 个 `boss.*`（+`artScale` 共 82 项，`entity-properties.js` 实测 667 行） |
 | 「子弹打墙要反弹」 | 战斗相关 | 已有 `ricochet` 改件；扩展看 `geometry.js:reflectBulletAgainstWall` |
 | 「做第 4 大关」 | 关卡设计 | 新建 `data/levels/Level4-Scene*.json` + `ui/screens.js:drawLevelSelect` 的关卡数 |
@@ -350,6 +390,9 @@ node -e "const fs=require('fs');for(const d of fs.readdirSync('.codemaker/skills
 | 「药水 HUD 槽位/轮盘/状态图标要怎么改」 | UI交互 | `ui/battle-items-art.js`（几何常量全在文件顶部；设计稿背景框 `836,588,320×180` = 1920×1080 的 1/6，一律 ×6）+ `ui/battle-items.js`（数字键 4 长按阈值 `POTION_HOLD_MS`=160ms、轮盘动画 `WHEEL_ANIM_MS`=600ms） |
 | 「临时武器（限时武器）行为要改」 | 战斗相关 + 数值_经济 | `economy/run-items-runtime.js` 的 `useTempWeapon`/`cancelTempWeapon`/`toggleTempWeapon`/`updateRunItems`（仅「使用中」倒计时）+ `ui/battle-items.js`（槽位表现 + 时间条） |
 | 「售货机图标找不到」 | UI交互 + 引擎(编辑器) | `ui/vendor-shop-art.js:resolveArtRef` 按「美术方案类型/名称」在三库匹配（动态资产 `/api/assets`、轮廓 `/api/outlines`、像素 `/api/pixels`）；检查表格的 `美术方案类型（图标）`/`美术方案名称（图标）` 与库中名称**逐字一致** |
+| 「加个休息火堆 / 火堆类可交互实体」 | UI交互 | 主绘制 `ui/campfire-art.js:drawCampfireOffer` + `ui/ui-runtime.js`（按钮 `campfireCard_*`/`campfireUpgrade_*` + 空白点击层级回退）+ `ui/world-overlay.js:drawCampfireUI`；同步：`state.js:DEFAULT_LEVEL.campfires`/`normalizeCampfire`、`level/interactables.js` 8 方法 + `level-flow.js:restart`、编辑器 `data-tool="campfire"` + `entity-properties.js` 面板；完整五分类拆解见 §3.4「新增一个可交互实体」 |
+| 「火堆要强化词条 / 数值（回血量、可抽基础属性强化池）」 | 数值_经济 + UI交互 | `economy/campfire.js`（`rollCampfireUpgrades`/`campfireHeal`/`genericModPool`/`remainingGenericSlots`）+ `economy/weapon-buffs.js`（`addWeaponBuffs`/`enterWeapon`/`leaveWeapon`）；强化池来源 `economy/buffs.js:IDOL_BUFFS`（神像祝福池，编辑器面板 `statBuffs` multiselect 同源）；绘制在 `ui/campfire-art.js` |
+| 「宝箱要能改大小 / 被上锁后显示红环挡住玩家与子弹 / 解锁才可开」 | 引擎(编辑器) + 关卡设计 | 尺寸：`state.js:normalizeChest` 的 `w`/`h` + `world-render.js:syncChestSprites`（按 `max(w,h)` 等比）+ 面板 w/h + 四角手柄（`editor-input.js:selectedChest`）。上锁：事件 `lockChest`/`unlockChest`（`state.js:EVENT_TYPES`+`normalizeTriggerEvent`、`triggers.js:dispatchTriggerEvent`、`trigger-panel.js` 宝箱多选、`entity-properties.js:eventTypeOptions`）+ `interactables.js:setChestsLocked`/`chestLockWalls` + `state.js:chestLockRadius`；**移动与子弹/激光共 5 个消费点**（`enemy-ai.js:resolveMovementCollision`、`game-scene.js` `wallAll`/ricochet/敌弹、`weapons.js:spawnLaser`、`enemy-ai.js:heavyMech*`）；**红环渐显/渐隐只影响显示**（`chest.lockFx`/`lockAlpha` + `CHEST_LOCK_FADE_MS`，推进点在 `interactables.js:updateChests`；碰撞随 `locked` 即时生效/失效）；契约见 `level-design` §3.14，坑见 `engine-editor` 坑 60/61 |
 
 ---
 
@@ -400,7 +443,7 @@ Rollup 不做未定义标识符检查。已发生过 3 起：`workshop.js` 缺 4
 - [ ] 需求已澄清，验收标准明确
 - [ ] 已宣告主分类 + 同步点，并读过对应 skill 的第 2/3/6/7 章
 - [ ] 代码改动遵守 §2 七条架构不变量
-- [ ] `npx vite build` 通过（90 modules）
+- [ ] `npx vite build` 通过（98 modules）
 - [ ] `node --test test/` 与基线一致（20 tests / 19 pass / 1 fail，唯一 fail 是旧 schema `mods` 字段的既有不一致）
 - [ ] 改了**表格驱动内容**（商品/价格/老虎机权重/消耗品效果列 `效果类型·效果数值·效果时长`/掉落表等）时，跑过一次 `node tools/export-tables.mjs`，确认 `data/inner-shop.json` 已更新
 - [ ] 未定义标识符自检通过（§4 步骤 5 ③）

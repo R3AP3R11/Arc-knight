@@ -1,6 +1,6 @@
 ---
 name: economy-numbers
-description: 改伤害公式 / 掉落规则 / 商店价格 / 加点成长 / 玩家存档字段 / 物品与改件数值 / 局内消耗品 / 药水 / 药水效果 / 药水掉落 / 限时武器 / 临时武器 / 即时护盾 / 局内商店 / 老虎机 / 老虎机权重 / 抽奖价格 / 商品价格 / 导表时读这份；覆盖 src/systems/economy/**（含 inner-shop / inner-shop-runtime / run-items / run-items-runtime / drops）、src/systems/ui/vendor-shop-art.js、src/player-data.js、state.js 的 ITEM_DEFS 与 MOD_DEFS。
+description: 改伤害公式 / 掉落规则 / 商店价格 / 加点成长 / 玩家存档字段 / 物品与改件数值 / 局内消耗品 / 药水 / 药水效果 / 药水掉落 / 限时武器 / 临时武器 / 即时护盾 / 局内商店 / 老虎机 / 老虎机权重 / 抽奖价格 / 商品价格 / 休息火堆 / 火堆 / 生命回复 / 杰作升级 / 武器祝福 / 导表时读这份；覆盖 src/systems/economy/**（含 inner-shop / inner-shop-runtime / run-items / run-items-runtime / drops / campfire / weapon-buffs）、src/systems/ui/vendor-shop-art.js、src/player-data.js、state.js 的 ITEM_DEFS 与 MOD_DEFS。
 ---
 
 # 数值_经济 开发指南
@@ -35,6 +35,7 @@ description: 改伤害公式 / 掉落规则 / 商店价格 / 加点成长 / 玩�
 - `ITEM_DEFS` 物品表 12 条（改件 7 / 圣物 3 / 宠物 2）—— `src/state.js:27`
 - `ENEMY_TYPES` 血量与伤害、`DEFAULT_DROPS` —— `src/state.js:7` / `src/state.js:14`
 - 关卡掉落规则 `level.dropRules`（编辑器面板可视化编辑，落 `data/levels/*.json`）
+- 敌人血/伤的**关卡级覆盖**：`level.enemyDefaults[类型] = { hp?, damage?, scale? }`（侧栏「敌人默认数值」面板）+ 触发器波次的 `hp`/`damage`/`scale`（每波覆盖）—— **属于关卡设计分类**（schema/回落链/尺寸倍率口径见 `level-design` §3.5.1、`combat` §7 坑 60）；本 skill 只管 `ENEMY_TYPES` 的**全局默认值**本身
 - 商店价格 `prices` / `modPrices` —— **数据文件** `data/ui/weapon.json`，不在代码里
 - 武器基础伤害 `baseDamage` —— `src/systems/combat/weapons.js`（详见 combat skill）
 
@@ -46,7 +47,9 @@ description: 改伤害公式 / 掉落规则 / 商店价格 / 加点成长 / 玩�
 | `src/systems/economy/buffs.js` | 神像祝福池（仅当局，直改 `player.combat`）。`IDOL_BUFFS`/`IDOL_OFFER_COUNT` 为 live binding，由 `setIdolBuffs` 从 **`data/ui/idol-buffs.json`** 注入；每条为声明式 `stats`（`apply` 经 `makeApply` 生成，改 `maxHp` 自动同步 `player.maxHp`）。**旧的 `VENDOR_BUFFS` 已删除** | `IDOL_BUFFS`、`IDOL_OFFER_COUNT`、`setIdolBuffs` | 53 |
 | `src/systems/economy/drops.js` | 掉落生成 / 飘散 / 吸附 / 拾取 / 武器补给；新增**药水掉落**（`item==='potion'` 分支 + `resolveDropPotionId`） | `DropsMixin`(6 方法)、`PICKUP_RADIUS`、`MAGNET_RADIUS` | 143 |
 | `src/systems/economy/run-items.js` | 局内消耗品 / 限时加成**纯逻辑**（**无 Phaser**，可在 node 直跑）：队列容量、属性乘子换算、效果归一化、限时加成互逆乘算回退 | `POTION_CAP`(4)、`statMul`、`normalizeEffect`、`potionQueueAdd`、`potionQueueTakeFront`、`applyStatEffect`（6 个） | 63 |
-| `src/systems/economy/run-items-runtime.js` | 局内消耗品 / 限时武器 / 即时护盾**运行时**（药水队列、使用、限时加成倒计时、临时武器替换与还原、美术预载） | `RunItemsMixin`(14 方法) | 210 |
+| `src/systems/economy/run-items-runtime.js` | 局内消耗品 / 限时武器 / 即时护盾**运行时**（药水队列、使用、限时加成倒计时、临时武器替换与还原、美术预载）；新增**切武器火堆祝福配对**（`useTempWeapon` 前 `leaveWeapon`、`cancelTempWeapon` 写回后 `enterWeapon`） | `RunItemsMixin`(14 方法) | 210 |
+| `src/systems/economy/campfire.js` | 休息火堆**纯逻辑**（**无 Phaser**）：三选一升级 `roll`（**3 条 option key 互不重复**，`statBuffs` 归一化 + 属性词条 `desc`/`stats` 生成）、生效（属性祝福 / 通用改件）、回血；改件上限走 `getWeaponCaps` | `CAMPFIRE_ART_DEFAULT`、`remainingGenericSlots`、`genericModPool`、`rollCampfireUpgrades`、`applyCampfireOption`、`campfireHeal`（6 个）；内部 `MAX_RETRY`(58) / `pickDistinctOption`(90) / `buildOption`(103) / `makeOption`(120) / `rebuildWithSameWeapon`(133) / `rebuildWithOtherWeapon`(153) / `optionKey`(166) / `makeModEntry`(173) / `rollStatEntries`(180) / `normalizeWeapons`(220) / `resolveBuffConfigs`(237) / `makeStatEntry`(259) / `formatDelta`(274) / `trimNum`(286) / `shuffle`(293)（**旧 `campfireStatPool` 已删除**） | 301 |
+| `src/systems/economy/weapon-buffs.js` | 火堆武器祝福**纯逻辑**（**无 Phaser**）：按武器累积、切武器成对生效 / 回退（`player.weaponBuffs` / `player.buffedWeapon`） | `addWeaponBuffs`、`enterWeapon`、`leaveWeapon`（3 个） | 88 |
 | `src/systems/economy/progression.js` | 工坊加点 / 存档源与落盘（**`buyBuff` 与 `VENDOR_BUFFS` import 已删除**） | `ProgressionMixin`(3 方法：`applyUpgrade`/`saveSource`/`persistSave`)、`UPGRADE_STATS` | 53 |
 | `src/systems/economy/inner-shop.js` | 局内商店 / 老虎机**纯逻辑**：取数与缓存、洗牌抽 4 件、按权重摇奖、**按名反查项目武器 id**（`reverseWeaponId`/`resolveWeaponId` 为模块内部函数，**未导出**）；新增**消耗品判定与效果/美术取值**（`isInstantItem`/`isPotionItem`/`getPotionList`/`findConsumable`/`getItemEffect`/`getItemArt`） | `SHOP_ITEM_COUNT`(4)、`LOTTERY_ROLL_MS`(2500)、`loadInnerShop`、`getInnerShopData`、`setInnerShopData`、`rollShopStock`、`rollLottery`、`isInstantItem`、`isPotionItem`、`getPotionList`、`findConsumable`、`getItemEffect`、`getItemArt`（导出 13 个） | 200 |
 | `src/systems/economy/inner-shop-runtime.js` | 售货机运行时：开页 / 刷新商品 / 购买 / 摇奖与结算（**`addRunItem`/`addRunTimedWeapon` 已迁出到 `RunItemsMixin`**；入列武器 `id = String(item.weaponId || item.id)`） | `InnerShopMixin`(10 方法) | 143 |
@@ -75,6 +78,9 @@ description: 改伤害公式 / 掉落规则 / 商店价格 / 加点成长 / 玩�
 | 改局内商店商品 / 价格 / 老虎机权重 | **策划表格** `策划文档/server/{消耗品,武器,老虎机}.xlsx` → `node tools/export-tables.mjs`（开发期 server 按 mtime 实时解析，免重启；详见 §6.3） |
 | 改售货机开页 / 刷新 / 购买 / 摇奖流程 | `economy/inner-shop-runtime.js:InnerShopMixin`（10 方法，见下） |
 | 改局内消耗品 / 限时武器 / 即时护盾的**获得与生效**（药水队列 / 使用 / 限时加成倒计时 / 临时武器替换还原 / 护盾叠加） | `economy/run-items-runtime.js:RunItemsMixin`（14 方法，见下） |
+| 改火堆三选一升级（含 **3 条去重**）/ 回血 / 属性祝福候选 / 通用改件抽取 | `economy/campfire.js`（`rollCampfireUpgrades` 内部去重 `pickDistinctOption` / `optionKey` / `MAX_RETRY`；`applyCampfireOption` / `campfireHeal` / `remainingGenericSlots` / `genericModPool`；见 §3.5、§6.6） |
+| 改火堆某座可抽祝福的**显示名 / 数值** | 编辑器实体属性面板 `editor/entity-properties.js:renderCampfireStatBuffs`（写实体 `statBuffs`）→ 归一化 `state.js:normalizeCampfire` / `campfire.js:resolveBuffConfigs` → 词条文本 `campfire.js:makeStatEntry` / `formatDelta`（见 §3.5、§6.6） |
+| 改火堆武器祝福生效 / 切武器回退 | `economy/weapon-buffs.js`（`addWeaponBuffs` / `enterWeapon` / `leaveWeapon`；`player.weaponBuffs` / `player.buffedWeapon`） |
 | 改药水队列容量 / 属性乘子 / 效果归一化 / 限时加成回退 | `economy/run-items.js`（`POTION_CAP`/`statMul`/`normalizeEffect`/`potionQueueAdd`/`potionQueueTakeFront`/`applyStatEffect`） |
 | 改商品抽取算法 / 老虎机出货判定 | `economy/inner-shop.js:rollShopStock`(72)、`rollLottery`(116) |
 | 改消耗品判定 / 取效果与图标（即时类 / 药水 / 局内表现美术） | `economy/inner-shop.js:isInstantItem`、`isPotionItem`、`getPotionList`、`findConsumable`、`getItemEffect`、`getItemArt` |
@@ -233,6 +239,73 @@ description: 改伤害公式 / 掉落规则 / 商店价格 / 加点成长 / 玩�
 
 > **占位待策划确认**：速度药水 `30s`（描述未写时长）、即时护盾护盾量 `50`（对齐 `SHIELD_MAX`）。
 > HUD 侧另有 `scene.potionWheel` / `scene.potionKeyHold` / `scene.potionWheelText`（药水轮盘与按键长按），**详见 `ui-interaction`**。
+
+### 3.5 火堆武器祝福 / 局内临时改件（仅当局，不落存档）
+
+休息火堆（实体字段 `state.js:normalizeCampfire`；**交互与弹窗状态机属 level-design skill**）交互后二选一：**回血** `campfireHeal`（`hp = maxHp`，满血）或**升级**三选一。升级数据由 `campfire.js:rollCampfireUpgrades` 生成、`campfire.js:applyCampfireOption` 生效。
+
+**option 契约**（`rollCampfireUpgrades` 固定返回 3 条，**3 条 `optionKey` 互不重复**：武器 id 可重复，但「武器 ｜ kind ｜ 词条 id 排序集」必须两两不同）：
+
+| 字段 | 取值 |
+| --- | --- |
+| `kind` | `'stat'`（属性祝福）\| `'mod'`（通用改件） |
+| `weaponType` / `weaponIndex` / `weaponName` | 该条抽中的武器 id / 下标 / 中文名（`WEAPON_LABELS`） |
+| `entries` | 属性类 **1~2 条**（`IDOL_BUFFS` 子集）；改件类**恒 1 条** `{ id, name, desc, icon }`；两类池都空 → `[]`（UI 侧跳过该按钮） |
+
+- **属性类 entries**：候选来自实体 `campfire.statBuffs`，经 `campfire.js:resolveBuffConfigs` 归一化为 `[{ id, name, value }]`（**无配置 / 空数组 = 全部 `IDOL_BUFFS` + 全用表默认**）；池 ≥2 时随机切 1~2 条，否则 1 条；每条由 `makeStatEntry(cfg)` 生成 `{ id, name, desc, stats }`（见 §3.5.1）。
+- **改件类 entries**：`genericModPool(scene, wt)` = `MOD_DEFS` 中 `weapon===''` 且**未装备**（排除该武器已装备 `generic` / `dedicated` 与局内 `tempMods`）的通用改件；`remainingGenericSlots(scene, wt)` ≤ 0 或池空 → 该条**回退属性类**。
+- **3 条去重 key**：`optionKey(option)` = `` `${weaponType}|${kind}|${entries.map(e => e.id).sort().join('+')}` ``（`entries` 为空 → 第三段为 `''`）。`rollCampfireUpgrades` 逐条调 `pickDistinctOption`，**成功确定一条后**才 `used.add(optionKey(option))`。下一条撞 `used` 时按三段降级（避免死循环）：
+
+| 降级阶段 | 做法（函数） | 上限 |
+| --- | --- | --- |
+| ① 独立重抽 | 重新随机武器 + kind（`buildOption`，保留「改件槽满/池空→属性类、属性池空→改件类、两类都空→`entries:[]`」回退） | `MAX_RETRY = 12` 次 |
+| ② 同武器换词条 | 固定武器：改件遍历池换 id（`shuffle`）、属性重试换一批祝福（`rebuildWithSameWeapon`） | 属性部分 12 次 |
+| ③ 换武器 | 优先选 `used` 中各 key 武器段未出现过的武器（`rebuildWithOtherWeapon`） | 每武器 12 次 |
+| ④ 接受重复 | 仍撞 key → 直接返回（`buildOption` 兜底，保证不死循环；`entries` 仍非空，除非两类池都空） | — |
+
+#### 3.5.1 火堆「可抽基础属性强化」配置 `campfire.statBuffs`
+
+字段契约（编辑器实体属性面板写入、`state.js:normalizeCampfire` 归一化）：
+
+| 字段 | 类型 | 语义 | 归一化 |
+| --- | --- | --- | --- |
+| `id` | string | `IDOL_BUFFS` 的祝福 id（`atk`/`crit`/`dodge`/`speed`/`hp`/`reduction`）；**未知 id 丢弃** | `String(e?.id ?? '')`，空 / 不在池中 → 过滤掉 |
+| `name` | string | 显示名；**`''` = 用表默认 `name`** | `typeof e?.name === 'string' ? e.name : ''` |
+| `value` | number \| null | 覆盖该祝福**第一条 stat** 的数值；**`null` = 用表默认 value** | `buffValueOrNull`（null/undefined/'' 先行回落，见 §7 坑 28） |
+
+- **空数组 = 全部祝福 + 全用表默认**（向后兼容）；兼容旧 `string[]` 数据（字符串项按 `{ id: 该字符串, name:'', value:null }` 处理）。
+- 归一化沉淀在**两处**：`state.js:normalizeCampfire`（关卡加载 / 存盘）与 `campfire.js:resolveBuffConfigs`（roll 时再兜底），**两处口径必须同步**（见 §7 坑 28）。
+
+**属性类词条 entry 形状 = `{ id, name, desc, stats }`**（`makeStatEntry(cfg)`）：
+
+| 字段 | 内容 |
+| --- | --- |
+| `id` | 祝福 id（透传 `cfg.id`） |
+| `name` | `cfg.name \|\| 表默认 name` |
+| `desc` | 词条完整文本 = `` `${name} ${deltaText}` ``，如 `暴击率 +20%` |
+| `stats` | `{ [statKey]: { op, value } }`；`statKey` = 该祝福 `stats` 的**第一条**键；`value` 已套用配置覆盖值（非 null 且有限时优先，否则表默认）→ **`weapon-buffs.js` 无需改动即可生效** |
+
+**`deltaText` 生成规则**（`formatDelta(op, statKey, value)`：取绝对值 + 符号，`trimNum` 保留最多 1 位小数）：
+
+| op / statKey | 文本 | 例 |
+| --- | --- | --- |
+| `op==='mul'` | `` `${(value-1)*100} 带符号%` `` | `1.15 → +15%`、`0.9 → -10%` |
+| `op==='add'` 且 `statKey` 以 `'Rate'` 结尾（`critRate`/`dodgeRate`） | `` `${value*100} 带符号%` `` | `0.2 → +20%`、`0.08 → +8%` |
+| `op==='add'` 其它（`maxHp`） | 原值带符号 | `25 → +25` |
+| `op==='set'` | `` `→value` ``（无符号前缀） | `0.5 → →0.5` |
+
+> **例**：`{ id:'crit', name:'暴击率', value:0.2 }` → `desc = '暴击率 +20%'`、`stats = { critRate: { op:'add', value:0.2 } }`。
+
+
+**生效写入的数据结构（挂 `player`，不写存档）**：
+
+| 字段 | 结构 | 说明 |
+| --- | --- | --- |
+| `player.weaponBuffs` | `{ [weaponType]: [{stat, op, value}] }` | 火堆属性祝福按武器累积；`op`：`mul` 乘 / 除（回退）、`add` 加 / 减（回退）、`set` **跳过不实现**；`stat==='maxHp'` 同步 `player.maxHp` 并把超出 `maxHp` 的 `hp` 夹紧 |
+| `player.buffedWeapon` | `weaponType \| null` | 当前已生效到 `player.combat` 的武器（防重复叠加 / 决定回退目标） |
+| `player.tempMods` | `{ [weaponType]: string[] }` | 火堆「改件类」写入的**局内临时通用改件**；`damage.js:activeMods` 并入生效集合（永久 `generic` 仍 `slice(0, caps.generic)`，`tempMods` 另计） |
+
+**切换语义**：`addWeaponBuffs`（追加祝福）→ 若目标是当前武器先 `leaveWeapon` 回退旧加成、再补入新条目重放（**幂等不叠加**）；`enterWeapon(scene, wt)` 把某武器累积祝福作用于 `player.combat`；`leaveWeapon(scene)` 回退 `buffedWeapon` 的加成并清空标记。
 
 ## 4. 关键流程
 
@@ -411,6 +484,16 @@ preloadRunItemArt()  loadInnerShop().then(→ preloadArtRefs(药水的 getItemAr
 | 消耗品「局内表现」美术 | `consumables[].artTypeInRun/artNameInRun` | **当前 4 行两列全为空** → `getItemArt` 回退「图标」两列（`artType/artName`） | 药水图标 | 策划填入后自动切到「局内表现」（无需改代码） |
 | `POTION_CAP` | `economy/run-items.js` | `4` | 药水队列容量 | 满 4 且新 id → `potionQueueAdd` 返回 false（丢弃新获得的，**金币已扣**） |
 | `statMul(value)` | `economy/run-items.js` | `1 + value/100` | 效果数值 → 属性乘子 | `25 → ×1.25`；限时到期回退乘 `1/mul`（见 §3.4） |
+| 火堆升级三选一条数 | `economy/campfire.js:rollCampfireUpgrades`(71) | `3`（固定） | 每次升级弹出 3 条 option，**3 条 key 互不重复**（武器 id 可重复但 key 需不同） | 改这里 + 弹窗布局（level-design skill） |
+| 火堆去重重抽上限 `MAX_RETRY` | `economy/campfire.js:58` | `12` | 单条 option 独立重抽 / 降级重试次数上限 | 调大 = 更少重复但更慢；调 `0` → 跳过重抽、几乎总走「接受重复」（见 §6.6 第 6 步） |
+| 火堆类型占比 | `economy/campfire.js:112`（`buildOption`） | 属性 / 改件池皆可用时**各 50%** | 单条 option 抽到属性祝福 vs 通用改件的分布 | 改 `Math.random() < 0.5` 阈值 |
+| 火堆属性类 entries 条数 | `campfire.js:180`（`rollStatEntries`） | 属性池 ≥2 → 随机 **1~2 条**；否则 **1 条** | 单条 option 携带的祝福条数 | 改抽样逻辑 |
+| 火堆属性祝福池 | `campfire.js:resolveBuffConfigs(campfire)` + 实体 `statBuffs` | 实体 `statBuffs` 空数组 = **全部 `IDOL_BUFFS` + 全用表默认** | 属性类候选来源（IDOL_BUFF id 子集，含每条的 `name`/`value` 覆盖） | 配实体 `statBuffs`（`state.js:normalizeCampfire`）只能收窄，不能扩；**旧 `campfireStatPool` 已删除** |
+| 火堆祝福名 / 数值覆盖 | 实体 `statBuffs[i].name` / `.value` | `name:''` = 用表 `IDOL_BUFFS[].name`；`value:null` = 用表 `stats[首条].value`（`atk=1.15` / `crit=0.1` / `dodge=0.08` / `speed=1.12` / `hp=25` / `reduction=0.9`） | 覆盖该祝福显示名与该祝福**第一条 stat** 的数值 | 改编辑器面板或 `data/levels/*.json` 的 `statBuffs`；`''`/`null` = 不覆盖（见 §6.6 第 4 步） |
+| 火堆回血量 | `economy/campfire.js:campfireHeal` | `hp = maxHp`（**回满**） | 火堆「回血」选项 | 只当局，不写存档 |
+| 火堆默认美术 | `economy/campfire.js:CAMPFIRE_ART_DEFAULT` | `'asset-1789356238754'` | 火堆画板动态资产 id | 编辑器放置写入同值；`state.js:normalizeCampfire` 兜底 |
+| 火堆交互半径 | `state.js:normalizeCampfire` | `interactRadius` 默认 `150`（下限 40） | 靠近显示 F 提示的距离 | 实体字段可调 |
+| 每武器通用改件上限 `caps.generic` | `art/weapon-caps.js:DEFAULT`（`setWeaponCaps` 写入） | `generic:3` / `dedicated:1` | `remainingGenericSlots` / `activeMods` / `normalizeWeaponMods` **共用同一上限** | 改每武器装配格数（0~9 / 0~3） |
 | 武器临时售价 / 时长 | `data/inner-shop.json` `weapons[]` | `cost:25` / `durationSec:15`（101/102/103 三条） | 局内限时武器 | 改 `武器.xlsx` 的「临时价格 / 临时时长」 |
 | 武器 id 映射（表格编号 ↔ 项目 id） | `data/inner-shop.json` `weapons[].weaponId` | `101→yellow` / `102→green` / `103→weapon-1788012926999` | 表格「编号」与项目武器 id **不同源**；导表按 `name` 交叉引用 `data/weapons/*.json` 补 `weaponId` | UI 取武器外观读 `item.weaponId || item.id`；未匹配到 → `""`（商店只显示背景盘） |
 | `SHOP_ITEM_COUNT` | `economy/inner-shop.js:11` | `4` | 商店一次刷出的商品数 | 改这里 **和** `screens.js:drawVendorShop` 布局 |
@@ -525,6 +608,25 @@ node tools/export-tables.mjs   # 重新生成 data/inner-shop.json，打印「�
 6. 老档里 `data/players/save-1.json:17` 有个残留 `currency.charge: 0`，它当前被 `normalizePlayer` **丢弃**——新增货币时别以为已经支持了。
    > 现状：`currency.gems`（钻石）获取链路已通——`DROP_ITEMS.diamond` 掉落 → 局内 `player.gems` 累加（`collectDrop`）→ `settleVictory` 通关写回；商店页顶部 `screens.js:drawWeaponShop` 展示，**暂无消费链路**。个体掉落默认 0（`DEFAULT_DROPS.diamond`），需策划在编辑器「掉落规则」面板按敌人类型配置，宝箱奖励也可选钻石。
 
+### 6.6 改火堆强化规则 / 加基础属性强化候选 / 改改件抽取池
+
+1. **改火堆升级规则**（三选一生成 / 生效）：改 `economy/campfire.js` —— `rollCampfireUpgrades`（条数固定 3、武器可重复、属性/改件各 50%）与 `applyCampfireOption`（改件写 `player.tempMods[wt]`、属性走 `addWeaponBuffs`）。要改「几条 option / 每类占比 / 是否允许同武器重复 / 改件类是否恒 1 条」都在此。弹窗层级与消耗火堆由 `level/interactables.js` 的 8 个 mixin 方法驱动（**level-design skill**）。
+2. **加基础属性强化候选**：往 `data/ui/idol-buffs.json` 的 `buffs` push 一条 `{ id, name, desc, icon, stats }`（`stats` = `{ 属性:{ op:'add'|'mul'|'set', value } }`）——火堆属性池直接复用 `IDOL_BUFFS`（`campfire.js:resolveBuffConfigs` 读它），**加完自动进池**，无需改代码。想让某座火堆只用其中一部分（并覆盖名 / 值），就配该实体的 `statBuffs` = `[{ id, name, value }]`（`state.js:normalizeCampfire` 归一化，兼容旧 `string[]`）。`stat` 写 `maxHp` 会自动同步 `player.maxHp`。
+3. **改改件抽取池**：候选 = `MOD_DEFS` 中 `weapon===''` 的通用改件（`genericModPool`）。新增通用改件按 §6.2 在 `state.js:ITEM_DEFS` 加 `{ category:'mod', weapon:'', stackable:true }`，**自动进池**；**专属改件（`weapon` 非空）不进火堆池**。改每武器可装配上限（影响 `remainingGenericSlots`、`activeMods`、`normalizeWeaponMods`）→ 改 `art/weapon-caps.js` 默认值或经 `setWeaponCaps(id, generic, dedicated)` 写入（默认 `generic:3 / dedicated:1`）。
+4. **改火堆祝福的显示名与数值**（「名称 / 数值可配置」）：
+   1. 编辑器选中休息火堆 → 实体属性面板「基础属性强化配置」区（`editor/entity-properties.js:renderCampfireStatBuffs`）。每行 = 勾选启用 + 名称输入 + 数值输入 + 只读口径小字（如 `攻击力（乘法，1.15 = +15%）`）；**不勾 = 该祝福不进池**。
+   2. 名称 / 数值填成**表默认**（或留空）时，`collect()` 归一化为 `name:''` / `value:null`（= 不覆盖、用表默认）；填了别的值才写进 `statBuffs`。
+   3. 面板 `input` 事件即时 `entity.statBuffs = collect()` 并 `saveDraft(state.levelId, state.level)` **存草稿**（落 `data/levels/*.json`）。
+   4. 运行时**无需改其它代码**：`state.js:normalizeCampfire` → `campfire.js:resolveBuffConfigs` 归一化 → `makeStatEntry` 生成 `{ id, name, desc, stats }`，`stats` 已套用覆盖值 → `weapon-buffs.js` 直接生效；词条 `desc`（`formatDelta`）自动显示覆盖后的名与值。
+   5. **空数组（全部不勾 / 新建火堆默认 `statBuffs: []`）→ 全部祝福 + 全用表默认**（向后兼容）。
+
+6. **调火堆抽取的重复率 / 去重行为**（`rollCampfireUpgrades` 现在保证 3 条互不重复）：
+   1. 重复率由三件事决定：可区分 key 数（武器 × kind × 词条 id 集）、`MAX_RETRY`、降级顺序。
+   2. **改重试上限**：`campfire.js:58 MAX_RETRY`（默认 12）。调大 = 更不容易退到「接受重复」但更慢；调 `0` → 完全跳过独立重抽与降级重试、几乎总走第 ④ 步接受重复。
+   3. **改降级顺序**：改 `pickDistinctOption`（`campfire.js:90`）里 ① `buildOption` 重抽循环 → ② `rebuildWithSameWeapon`（同武器换词条：改件优先遍历池、属性重试 12 次）→ ③ `rebuildWithOtherWeapon`（优先 used 未出现武器，每武器重试 12 次）→ ④ 接受重复 的串联顺序。
+   4. **想连武器都不重复**：把 `optionKey`（`campfire.js:166`）第三段（词条 id 集）去掉即可让同一武器只出现一次——但武器数 < 3 时必然退到第 ④ 步。
+   5. 改完 `node -e` 直跑 `rollCampfireUpgrades` 2000 次统计重复率（见 §8 实测口径）。
+
 ## 7. 坑与约束
 
 1. **`normalizePlayer` 是唯一的存档兼容层**。它是「白名单重建」而非「合并」：任何不在 `normalizePlayer` 返回对象里的字段，读档时会**直接消失**（`save-1.json` 里的 `mods` / `modInventory` / `currency.charge` 就是这样的死字段）。改/加存档字段必须同时改 `DEFAULT_PLAYER` + `normalizePlayer` + `test/player-data.test.js`，否则「往返幂等」用例（`:38`）和「字段存在性」用例（`:16`）会红。
@@ -555,17 +657,35 @@ node tools/export-tables.mjs   # 重新生成 data/inner-shop.json，打印「�
 24. **表格驱动内容不要硬编码**：药水的效果/数值/时长、图标美术方案、`局内栏位`/`是否即时生效` 全部走表 → `node tools/export-tables.mjs` → `data/inner-shop.json`（开发期 `server.js` 按 mtime 实时解析；打包态读 JSON）。算法常量（`POTION_CAP`、老虎机 `drawCost/goldPrize` 默认值）才留在代码里。
 25. **敌人个体 `e.drops = {gold, exp, diamond}` 不支持药水**：药水只支持「关卡级 `state.level.dropRules[敌人类型]`」与「宝箱 `rewards`」两个面板；`potionId` 留空 = 随机药水。
 26. **`resolveDropPotionId` 在配表未就绪时返回空串**（顺手触发一次 `loadInnerShop()`）→ 该次击杀不掉药水，属预期降级。
+27. **按武器生效的属性强化必须在「所有武器切换入口」成对 `leaveWeapon` / `enterWeapon`**。火堆属性祝福（`player.weaponBuffs`）只对**当前武器**生效到 `player.combat`；切武器必须「先离开旧武器回退、再进入新武器应用」。三个入口缺一不可：`combat/player-combat.js:99/104 switchWeapon`（滚轮切武器槽，`leaveWeapon` → 换 `weaponType` → `enterWeapon`）、`economy/run-items-runtime.js:144 useTempWeapon`（启用临时武器**前** `leaveWeapon(this)`）、`:171 cancelTempWeapon`（写回主武器态**后** `enterWeapon(this, s.weaponType)`）。**漏一处** → 切/换武器后旧武器加成残留（数值虚高）或新武器加成丢失；`player.buffedWeapon` 标记与实际不符，`addWeaponBuffs` 的幂等重放也会算错。**新增任何改 `player.weaponType` 的入口（技能 / 关卡切武器）都要同样成对调用**，并在 §8 用滚轮切武器手测。
+
+28. **火堆祝福数值回落不能用 `Number.isFinite(Number(v))`**。现象：配置 `value` 留空（或 `null`）时，词条显示 `+0%` 且实际生效值为 0（本该用表默认，如 `crit` 应为 `+10%`）。根因：`Number(null)` 与 `Number('')` **都等于 `0`**，用 `Number.isFinite(Number(v))` 会把「用表默认」误判成「覆盖为 0」。**正确做法**：先显式判 `v === null || v === undefined || v === ''` 回落到 `null`（= 用表默认），**再**对剩下的值做 `Number.isFinite` 校验。本次在**两处**都修了这个坑，**改一处必须同步另一处**：
+    - `state.js:267 buffValueOrNull`（`normalizeCampfire` 里每项 `.value` 走它）
+    - `campfire.js:237 resolveBuffConfigs`（roll 时归一化，口径与 `state.js` 一致）
+
+29. **火堆 3 条 option「各自独立随机」必然产生重复，必须用 `used` 集合去重**。现象：不加去重时**实测 400 次运行有 125 次出现重复 option**；3 条独立随机在武器数 / 词条池小时碰撞概率很高（生日问题）。**正确做法**：每条 option 确定后计算 `optionKey` 写入 `used:Set`，下一条撞 key 才降级（`pickDistinctOption`）。三个约束：
+    - **降级不能无限重试（死循环风险）**：每层都用 `MAX_RETRY = 12`（`campfire.js:58`）封顶；第 ④ 步「接受重复」是兜底出口，没有它会在「可区分 key 数 < 3」时卡死。
+    - **可区分 key 数 < 3 时必然重复**：例如只配 1 个祝福且改件池空（key 只有 1 种）→ 实测 2000/2000 全重复；此时**不是 bug**，`entries` 仍非空、按钮仍可用。
+    - **`used` 只在成功确定一条后才写入**（`pickDistinctOption` 返回后 `used.add(optionKey(option))`），别在候选阶段就写，否则会把未选中的 key 也占掉、误判重复。
 
 ## 8. 验证方式
 
 ```bash
-node --test test/               # 必跑：本分类改动直接命中 test/player-data.test.js
-npx vite build                  # 构建校验（ESM 循环依赖 / 未定义标识常在此暴露）；基线 90 modules
+node --test test/               # 必跑：本分类改动直接命中 test/player-data.test.js；基线 20 tests / 19 pass / 1 fail
+npx vite build                  # 构建校验（ESM 循环依赖 / 未定义标识常在此暴露）；基线 95 modules
 node tools/export-tables.mjs    # 改了策划表格 / 导表脚本后必跑（可重复执行；除 generatedAt 外幂等）
+node -e "console.log(require('fs').readFileSync('.codemaker/skills/economy-numbers/SKILL.md','utf8').split(/\r?\n/).length)"   # 查本 skill 行数（控制 300~760）
 ```
 
 - **测试基线：`# tests 20 / # pass 19 / # fail 1`**。唯一 fail 来自 `test/player-api.test.js` 的 round-trip 用例断言旧 schema `mods` 字段（已被 `normalizePlayer` 有意丢弃，既有问题，非本分类引入）。`test/player-data.test.js` 的 **16 个用例必须全绿**——它是存档数值契约的权威来源。
-- **可用 `node -e` 直接跑的单测**（无 Phaser 传递依赖）：`run-items.js`（队列 `potionQueueAdd`/`potionQueueTakeFront`、`statMul` 乘子、`applyStatEffect` 互逆回退）；`state.js` 的 `normalizeDropRules`/`normalizeRewardList`（`potionId` 保留与置空）。**注意**：`inner-shop.js` 有 `→ weapon-store → weapons.js` 的 Phaser 传递依赖，node 直跑会报 CJS/ESM 错（见 §7 坑 23），别把它当纯 node 单测入口。
+- **可用 `node -e` 直接跑的单测**（无 Phaser 传递依赖）：`run-items.js`（队列 `potionQueueAdd`/`potionQueueTakeFront`、`statMul` 乘子、`applyStatEffect` 互逆回退）；`state.js` 的 `normalizeDropRules`/`normalizeRewardList`（`potionId` 保留与置空）；**`campfire.js` 与 `weapon-buffs.js`**（补 **2 个**纯逻辑模块：`campfireHeal` 满血、`remainingGenericSlots` 非负不超上限、`applyCampfireOption` 幂等（重复同 option 不叠加）、`addWeaponBuffs`→`leaveWeapon` 互逆回退归零）。**注意**：`inner-shop.js` 有 `→ weapon-store → weapons.js` 的 Phaser 传递依赖，node 直跑会报 CJS/ESM 错（见 §7 坑 23），别把它当纯 node 单测入口。
+- **火堆祝福「名称 / 数值可配置」冒烟**（`campfire.js` 纯逻辑，`node -e` 直跑）：构造 campfire 对象调 `rollCampfireUpgrades`，检查属性类 entry 的 `desc`/`stats`：
+  - 空 `statBuffs` → `desc` 用表默认（如 `力量祝福 +15%`）；`['crit']` 旧 `string[]` 格式 → `致命祝福 +10%`（兼容）；`{ id:'crit', name:'暴击率', value:0.2 }` → `暴击率 +20%`，且 `applyCampfireOption` 后 `player.combat.critRate = 0.2`；未知 id（如 `['nope']`）被过滤 → 回落到全部祝福。
+  - 回归 `null→0` 坑：`{ id:'crit', name:'', value:null }` 必须产出 `+10%`（表默认）**而非** `+0%`。
+- **火堆三选一去重实测**（`campfire.js` 纯逻辑，`node -e` 直跑 `rollCampfireUpgrades` 各 **2000 次**统计）：
+  - **正常配置**（3 武器 / 3 通用改件 / 6 祝福）：**重复 0 次**、`entries.length===0` **0 次**；`kind` 分布 `mod 2952 / stat 3048`，武器分布各约 1990（均匀）。
+  - **边界**（单武器 + 改件池空 → 全部回退属性类）：**重复 0 次**，`entries` 条数分布 `1 条 2933 / 2 条 3067`。
+  - **客观限制**：**可区分 key 数 < 3 时必然重复**（如只配 1 个祝福且改件池空 → 2000/2000 重复）；此时 `entries` 仍非空、按钮可用，属预期降级（见 §7 坑 29）。
 - **局内商店**：`GET /api/inner-shop` 应返回 `consumables 4 条 / weapons 3 条 / lottery.kinds 4 类`（开发期实时解析 xlsx，解析失败回退 `data/inner-shop.json`，两者都不可用返回空骨架，**永不 500**）。
 - **导表产物交叉引用**：`node tools/export-tables.mjs` 后检查 `data/inner-shop.json` 的 `weapons[].weaponId` **全部非空**（空缺 = 武器名没在 `data/weapons/*.json` 里按 `name` 匹配到 → 商店只显示背景盘）。
 - 改了 `ITEM_DEFS` / `MOD_DEFS` / `points` 键 / `SLOT_UNLOCK_LEVELS` / `DEFAULT_PLAYER` 后，重点看这几个用例：`:16` 字段完整、`:38` 往返幂等、`:143` points 4 键、`:149` MOD_DEFS 派生、`:174` 槽位等级、`:202` 默认值不污染。
@@ -575,4 +695,6 @@ node tools/export-tables.mjs    # 改了策划表格 / 导表脚本后必跑（�
   - 伤害 / 减伤 → 用编辑器「游戏预览」面板（`src/editor/player-panels.js`）直接改 `attackPower` / `critRate` / `damageReduction` / `dodgeRate`，进关打怪观察（预览档不落盘，可随便调）。
   - 掉落 → 编辑器右侧「掉落规则」面板按敌人类型配 `item/count/chance`（item 可选 金币/经验/充能球/钻石/**药水**），试玩打死该类型敌人验证；金币/钻石/药水 90px 内自动吸附、26px 拾取，钻石进 `currency.gems`（通关结算）。
   - 局内消耗品 / 限时武器 → 售货机买药水与限时武器，看药水轮盘、数字键 5 切换临时武器（使用中才倒计时）、限时加成 HUD 状态图标到期消失；即时护盾在 `player.itemShields` 叠加、吸收后盾碎抖屏。
+  - 休息火堆 / 武器祝福 → 编辑器放置休息火堆实体（默认美术 `asset-1789356238754`），试玩靠近按 F 出「回血 / 升级」二选一：回血看 `hp` 回满；升级抽 3 条（**3 条互不重复**；属性 1~2 条祝福 / 通用改件 1 条），选属性后看 HUD 数值变化，**滚轮切武器确认加成随武器切换正确增减**（旧武器回退、新武器生效——漏配对会残留或丢失）；选改件后在生效集合 / 工坊「改件」体现，`tempMods` 仅当局、退出关卡消失。
+  - 火堆祝福**名称 / 数值配置** → 选中火堆 → 属性面板「基础属性强化配置」：取消勾选某祝福则该火堆不再抽它；给 `crit` 填显示名「暴击率」+ 数值 `0.2`，试玩抽到该词条应显示 `暴击率 +20%` 且 HUD 暴击率变化；把数值清空（留空 = 用表默认）应显示 `+10%`（**不是 `+0%`**，见 §7 坑 28）；改完刷新关卡 `statBuffs` 应已落 `data/levels/*.json`。
 - 跨分类：武器 `baseDamage` / `fireInterval` / `maxAmmo` 与改件实际效果实现见 **combat skill**；工坊拖拽交互、神像互动与掉落物渲染见 **gameplay-systems skill**；售货机页绘制 / 老虎机三窗动画 / 按钮派发见 **ui-interaction skill**；售货机 F 键入口（`level/interactables.js:updateVendorInteract`）与关卡内局内态清零见 **level-design skill**；导表脚本 / `/api/inner-shop` / 打包分发见 **engine-editor skill**；关卡 JSON schema 与编辑器面板骨架见 **editor skill**。

@@ -77,10 +77,12 @@ export const EditorInputMixin = {
       const selectedZone = selected && (l.spawnZones || []).includes(selected);
       const selectedVendor = selected && (l.vendors || []).includes(selected);
       const selectedIdol = selected && (l.idols || []).includes(selected);
+      const selectedCampfire = selected && (l.campfires || []).includes(selected);
       const selectedIcon = selected && (l.icons || []).includes(selected);
       const selectedPortal = selected && (l.portals || []).includes(selected);
+      const selectedChest = selected && l.chests.includes(selected);
 
-      if (tool === 'select' && selected && (selectedWall || selectedTrigger || selectedImage || selectedGate || selectedZone || selectedVendor || selectedIdol || selectedIcon || selectedPortal)) {
+      if (tool === 'select' && selected && (selectedWall || selectedTrigger || selectedImage || selectedGate || selectedZone || selectedVendor || selectedIdol || selectedCampfire || selectedIcon || selectedPortal || selectedChest)) {
         if ((selectedWall || selectedGate || selectedPortal) && rotationHandleAt(selected, wp.x, wp.y)) {
           this.drag = { mode: 'rotate', entity: selected };
           return;
@@ -123,6 +125,8 @@ export const EditorInputMixin = {
             l.vendors = l.vendors.filter(v => v !== hit.entity);
           } else if (hit.type === 'idol') {
             l.idols = l.idols.filter(v => v !== hit.entity);
+          } else if (hit.type === 'campfire') {
+            l.campfires = (l.campfires || []).filter(v => v !== hit.entity);
           } else if (hit.type === 'icon') {
             l.icons = (l.icons || []).filter(v => v !== hit.entity);
           } else if (hit.type === 'portal') {
@@ -140,6 +144,7 @@ export const EditorInputMixin = {
           && !l.gates.includes(selected)
           && !l.vendors.includes(selected)
           && !l.idols.includes(selected)
+          && !(l.campfires || []).includes(selected)
           && !(l.icons || []).includes(selected)
           && !(l.portals || []).includes(selected)
           && !(l.spawnZones || []).includes(selected)
@@ -167,6 +172,15 @@ export const EditorInputMixin = {
         const idol = { id: `idol-${Date.now()}`, x, y, w: 110, h: 110, interactRadius: 130, visible: true };
         (l.idols || (l.idols = [])).push(idol);
         ctx.state.selected = idol;
+      } else if (tool === 'campfire') {
+        const campfire = {
+          id: `campfire-${Date.now()}`, x, y, w: 290, h: 290,
+          art: 'asset-1789356238754', artScale: 1, interactRadius: 150,
+          visible: true, statBuffs: [], guide: false,
+          guideRange: 600, guideIcon: '', guideStopAfterUse: true
+        };
+        (l.campfires || (l.campfires = [])).push(campfire);
+        ctx.state.selected = campfire;
       } else if (tool === 'icon') {
         const icon = { id: `icon-${Date.now()}`, x, y, w: 64, h: 64, src: '', interactRadius: 120, tipText: '按 F 交互', event: 'workshop', visible: true };
         (l.icons || (l.icons = [])).push(icon);

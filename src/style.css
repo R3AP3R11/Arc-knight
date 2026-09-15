@@ -386,6 +386,69 @@ h2 {
   font-weight: 600;
 }
 
+.campfire-buffs {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #fff;
+}
+
+.campfire-buffs h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #fff;
+}
+
+.campfire-buff-list {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.campfire-buff-row {
+  border: 1px solid #3f5a75;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 6px 0;
+  background: #0b1622;
+  display: grid;
+  gap: 6px;
+}
+
+.campfire-buff-row .cb-enable {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #fff;
+}
+
+.campfire-buff-row .cb-desc {
+  font-size: 11px;
+  color: #7f9bb3;
+}
+
+.campfire-buff-row .cb-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.campfire-buff-row .cb-fields label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: #9fc3d8;
+}
+
+.campfire-buff-row .cb-fields input {
+  width: 100%;
+  min-width: 0;
+}
+
+.campfire-buff-row .cb-spec {
+  font-size: 11px;
+  color: #b78a3a;
+}
+
 .flowList {
   font-size: 12px;
   line-height: 2;
@@ -534,6 +597,20 @@ h2 {
 .drop-rule button {
   padding: 2px 8px;
   font-size: 12px;
+}
+
+/* 敌人默认数值（关卡兜底）面板：标签 + 输入同行，窄侧栏下不换行 */
+.drop-rule > label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #b7cce4;
+  white-space: nowrap;
+}
+
+.drop-rule > label input[type=number] {
+  width: 46px;
 }
 
 .import {

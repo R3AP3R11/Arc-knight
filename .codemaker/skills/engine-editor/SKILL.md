@@ -1,6 +1,6 @@
 ---
 name: engine-editor
-description: 改关卡编辑器交互（拖拽/画墙/手柄）、实体属性面板、撤销剪贴板、编辑器与试玩相机、运镜（过场动画）编辑器与播放器、server.js 存读盘 API、UI 配置页、画板/美术资产/独立画板轮廓绘制/轮廓库、导表（策划表格 xlsx → JSON）、打包前导表、Electron 打包时读这份。触发词：消耗品表 / 导表效果列 / 局内表现美术 / potionId / 武器本体美术 / 环链 / 内圈环链 / 出场动画 / 武器出场 / 运镜 / 过场运镜 / 死亡运镜 / 玩家被击败 / 运镜预览。
+description: 改关卡编辑器交互（拖拽/画墙/手柄）、实体属性面板、撤销剪贴板、编辑器与试玩相机、运镜（过场动画）编辑器与播放器、server.js 存读盘 API、UI 配置页、画板/美术资产/独立画板轮廓绘制/轮廓库、导表（策划表格 xlsx → JSON）、打包前导表、Electron 打包时读这份。触发词：消耗品表 / 导表效果列 / 局内表现美术 / potionId / 武器本体美术 / 环链 / 内圈环链 / 出场动画 / 武器出场 / 运镜 / 过场运镜 / 死亡运镜 / 玩家被击败 / 运镜预览 / 休息火堆 / 火堆 / 火堆属性面板 / 可抽基础属性强化。
 ---
 # 引擎(编辑器)需求 开发指南
 
@@ -35,10 +35,10 @@ description: 改关卡编辑器交互（拖拽/画墙/手柄）、实体属性�
 
 | 文件 | 职责 | 关键导出 | 行数 |
 |---|---|---|---|
-| `src/systems/editor/editor-input.js` | 编辑器鼠标/键盘：命中、拖拽、画墙、放实体、擦除、方向键微调；非编辑态下额外拦截选关页2背景拖动（`menuScreen==='levelSelect'&&levelSelectPage===2` 时 `pointerDown` 不命中按钮则记 `levelSelectDrag`，`pointerMove` 更新 `smallLevelPan`，`pointerup` 清空） | `EditorInputMixin`（`pointerDown` / `pointerMove` / `updateEditorKeys`） | 259 |
+| `src/systems/editor/editor-input.js` | 编辑器鼠标/键盘：命中、拖拽、画墙、放实体、擦除、方向键微调；非编辑态下额外拦截选关页2背景拖动（`menuScreen==='levelSelect'&&levelSelectPage===2` 时 `pointerDown` 不命中按钮则记 `levelSelectDrag`，`pointerMove` 更新 `smallLevelPan`，`pointerup` 清空）（含休息火堆 `tool==='campfire'` 的放置/擦除/选中/缩放，见 §4.13；**宝箱 `selectedChest` 已加入可缩放手柄集合**，拖四角手柄经 `resizeRect` 改 `w`/`h`（最小 `MIN_WALL_SIZE` 8，重载时由 `normalizeChest` 钳到 20）） | `EditorInputMixin`（`pointerDown` / `pointerMove` / `updateEditorKeys`） | 290 |
 | `src/systems/editor/editor-camera.js` | 世界与视口尺寸、缩放适配、滚轮、编辑器钳制、试玩跟随；**运镜**：`playCutsceneById`/`playCutscene` 按关键帧插值（`_stepCutscene`/`_cutsceneStateAt`/`_applyCutsceneState`/`_resolveFocusTarget`/`_easeValue`，`this.time.addEvent` 每 16ms 自驱动）、全屏黑蒙层 alpha 淡入淡出（`cinematicFade`）、**动态焦点**（`_resolveFocusTarget` 优先序 `opts.x/y` > `opts.focusTarget` > `clip.focus`；`'player'` 取 `this.player` 坐标、`'boss'` 取 `this.bossTarget`/激活母舰；动态目标存 `this.cinematicFocusTarget` **每帧重解析（跟随）**、显式坐标存 `this.cinematicFocus`（固定，向后兼容 BOSS 击破），`_applyCutsceneState` 按 `focus.x - cam.width/2` 换算）、**慢动作**（`cinematicTimeScale` 改为**每帧由关键帧 `timeScale` 插值写入**，`game-scene.update` 里 `dt *= slowmo`）、**叠层**（`_ensureCinematicOverlays`/`_createCinematicVignette`/`_applyCinematicOverlays`/`_hideCinematicOverlays`/`hideCinematicFade`/`cinematicInputLocked`/`_hexToInt`：黑幕 `cinematicFade`、上下黑边 `cinematicLetterbox`、暗角 `cinematicVignette`、色调 `cinematicTint`、闪光 `cinematicFlash`、去饱和 `cinematicDesat`，**全部挂屏幕空间相机 `uiCam`（创建时 `cameras.main.ignore(obj)`，绝不能 `uiCam.ignore`）**）、`stopCutscene(opts)` 支持 `opts.holdBlack`（保留黑幕 α=1、不调 `setupPlayCamera`，仍 `setRotation(0)`+`onComplete`）；运镜期间 `updatePlayCamera` 首行 `if (this.cinematicActive) return` 让权；`onWheel` 在 `this.switchWeapon` 前有 `if (this.isTempWeaponActive?.()) return` 守卫（临时武器使用中禁滚轮切主武器） | `EditorCameraMixin`（26 方法） | 635 |
-| `src/systems/editor/editor-geometry.js` | 纯函数：手柄命中、矩形/背景缩放、实体拾取、闸门绘制 | `resizeRect` `rotationHandleAt` `handleAtRect` `hitBackground` `backgroundHandleAt` `resizeBackground` `pickTopEntity` `drawGates` `BG_HANDLE_SIZE` `MIN_BG_SIZE` | 280 |
-| `src/systems/ui/world-render.js` | `draw()` 主绘制 + 选中框/手柄绘制（`:377` `:382` `:442` `:446`）+ 精灵同步 + 画板设计稿按需加载 + `drawPlayer` 之前调 `drawBoss25T5Vortices`（`:582`）与 `drawBoss25T5Zones`（`:585`） | `WorldRenderMixin` `requestArtDesigns` | 735 |
+| `src/systems/editor/editor-geometry.js` | 纯函数：手柄命中、矩形/背景缩放、实体拾取（`pickTopEntity` 叠加顺序 …idols → campfires → icons → spawnZones…；**宝箱命中 = `hitBackground`（`w`/`h` 包围盒）或 `openRadius` 圆，两者取大**，便于拖角缩放）、闸门绘制 | `resizeRect` `rotationHandleAt` `handleAtRect` `hitBackground` `backgroundHandleAt` `resizeBackground` `pickTopEntity` `drawGates` `BG_HANDLE_SIZE` `MIN_BG_SIZE` | 289 |
+| `src/systems/ui/world-render.js` | `draw()` 主绘制 + 选中框/手柄绘制（`:377` `:382` `:442` `:446`）+ 精灵同步 + 画板设计稿按需加载 + `drawPlayer` 之前调 `drawBoss25T5Vortices`（`:582`）与 `drawBoss25T5Zones`（`:585`）+ 休息火堆 `drawCampfires`（`:469`）与编辑态选中框（`:705`）；**宝箱：`syncChestSprites` 按 `max(w,h)` 等比缩放贴图（原写死 `CHEST_SIZE`）+ 运行态给 `locked` 宝箱画 8px 红环 + 编辑态选中绘制尺寸包围盒与四角手柄** | `WorldRenderMixin` `requestArtDesigns` | 802 |
 | `src/systems/ui/boss25t5-art.js` | BOSS「原型机-2-5T5」渲染（子任务 C）：本体（圆弧4/5 各自自转 / 护盾渐显渐隐 / 受击闪白 / 技能3 紫弧合并、中心取两弧中点）+ 技能区域 `e.zones`（延长线/**三种技能统一多条同心弧 + `MAX_RINGS` 上限**/紫重叠/黑遮罩；`drawZone` 按 `visMin/visMax` 径向裁剪实现方向性消散）+ 技能4 灰弧 + **技能5 蓝色漩涡 `drawBoss25T5Vortices`**（6 槽位蓝色同心弧「旋转+向心收缩+末段渐隐+原位重生」/ 中心白色刻度星环 / 上方细血条 / 模块内 250ms 击杀淡出环） | `drawBoss25T5Body` `drawBoss25T5Zones` `drawBoss25T5Vortices` | 517 |
 | `src/systems/ui/world-overlay.js` | 交互提示/Tip 覆盖层，多处 `if (this.editing) return` | `WorldOverlayMixin` | 331 |
 | `src/game-scene.js` | 场景类 + mixin 装配（`Object.assign` 共 **25** 个，:902）+ `create()` 输入接线 + `update()`（构造函数注入 `this.playerDamage`，`:58` 初始化场景级 `boss25t5Vortices`；子弹 filter 顺序见 `combat` skill §6.2）；`addKeys` 新增 `NUMPAD4/NUMPAD5/DIGIT4/DIGIT5`（Phaser 4 实测 `NUMPAD_FOUR=100`/`NUMPAD_FIVE=101`/`FOUR=52`/`FIVE=53`，小键盘与主键盘都响应），`update()` 在 `updateVendorSlot()` 后接 `updateRunItems(dt)`/`updateBattleItemsInput(dt)` | `createGameScene(ctx)` | 922 |
@@ -49,11 +49,12 @@ description: 改关卡编辑器交互（拖拽/画墙/手柄）、实体属性�
 | `src/main.js` | 入口：模块顶层 `registerBuiltinWeapons()`（先于一切 `normalizePlayer()`）、初始玩家状态、7 钩子注册、`initialize()` | （无，副作用模块） | 93 |
 | `src/editor/context.js` | 共享 `ctx` 单例 + `ctx.hooks` 钩子表 | `ctx` | 39 |
 | `src/editor/bindings.js` | `bind()` 全量 DOM 接线 + 快捷键 + beforeunload 兜底保存 + 画板/武器/宠物/运镜接线（含 `dom.cinematic`→`showCinematicsBoard`+`initCinematicsBoard`）；Ctrl+Z/C/V 早退加入 `cinematics-mode` | `bind` `showUIConfig` | 384 |
-| `src/editor/history.js` | 撤销栈（上限 60）、实体归类、剪贴板 | `pushUndo` `undo` `copySelected` `pasteClipboard` `entityKind` | 86 |
-| `src/editor/entity-properties.js` | 实体属性面板（15 种实体分支）、宝箱奖励子编辑器、嵌套读写、敌人「画板美术方案」下拉、指引字段组条件显示（`guideRows`，勾「是否游戏内指引」才出距离/图标/交互后停止）；能量门分支含「只挡子弹」`shieldOnly` 布尔；**触发器事件类型下拉 `eventTypeOptions` 含 `playCinematic`（播放运镜）**；**敌人分支按 `type` 追加两套 BOSS 配置字段：母舰（`artScale`/召唤间隔/召唤表/顶层 `cutsceneId`）与 `boss-2-5t5`（`:150-237`：`artScale` + **81 个 `boss.*`，共 82 项**）——本轮删除 `boss.zoneAimTrackDeg`（旧「技能1/2-成型期瞄准跟随」，**已废弃**）与 `boss.s5PullAccel`，新增 `boss.s5PullMin`「技能5-最小吸力(px/s，半径边缘处)」/`boss.s5PullMax`「技能5-最大吸力(px/s，涡心处，需<玩家移速180)」；上一轮删除 `boss.zoneHitPadDeg`/`boss.s1BulletForce`/`boss.s2BulletForce`、新增 `boss.zoneHitPadPx`「技能1/2-命中像素容差(px)」（技能5 拖尾宽/长旧键 `…RedTrailWidth`/`…RedTrailLength` 形态已于上一轮改名为 `boss.s5BulletTrailWidth`/`boss.s5BulletTrailLength`）；**本轮宝箱奖励子编辑器新增药水下拉（`data-reward-k="potionId"`，模块级 flag 防重入 + `loadInnerShop().then(重渲)` + item 切换清空 `potionId`）** | `renderEntityProperties` `bindEntityFieldInputs` `getNested` `setNested` `updateWall` | 667 |
+| `src/editor/history.js` | 撤销栈（上限 60）、实体归类（含 `campfires`）、剪贴板 | `pushUndo` `undo` `copySelected` `pasteClipboard` `entityKind` | 87 |
+| `src/editor/entity-properties.js` | 实体属性面板（15 种实体分支）、宝箱奖励子编辑器、嵌套读写、敌人「画板美术方案」下拉、指引字段组条件显示（`guideRows`，勾「是否游戏内指引」才出距离/图标/交互后停止）；能量门分支含「只挡子弹」`shieldOnly` 布尔；**触发器事件类型下拉 `eventTypeOptions` 含 `playCinematic`（播放运镜）**；**敌人分支按 `type` 追加两套 BOSS 配置字段：母舰（`artScale`/召唤间隔/召唤表/顶层 `cutsceneId`）与 `boss-2-5t5`（`:150-237`：`artScale` + **81 个 `boss.*`，共 82 项**）——本轮删除 `boss.zoneAimTrackDeg`（旧「技能1/2-成型期瞄准跟随」，**已废弃**）与 `boss.s5PullAccel`，新增 `boss.s5PullMin`「技能5-最小吸力(px/s，半径边缘处)」/`boss.s5PullMax`「技能5-最大吸力(px/s，涡心处，需<玩家移速180)」；上一轮删除 `boss.zoneHitPadDeg`/`boss.s1BulletForce`/`boss.s2BulletForce`、新增 `boss.zoneHitPadPx`「技能1/2-命中像素容差(px)」（技能5 拖尾宽/长旧键 `…RedTrailWidth`/`…RedTrailLength` 形态已于上一轮改名为 `boss.s5BulletTrailWidth`/`boss.s5BulletTrailLength`）；**本轮宝箱奖励子编辑器新增药水下拉（`data-reward-k="potionId"`，模块级 flag 防重入 + `loadInnerShop().then(重渲)` + item 切换清空 `potionId`）**；**休息火堆分支**（`:448`）字段契约见 §3.8；「可抽基础属性强化」已由下拉/`multiselect` 改成本地行编辑器：模块级 `renderCampfireStatBuffs`（`:100`，调用点 `:669`，`bindEntityFieldInputs` 之后、母舰 hint 之前）后置渲染自定义 DOM（DOM/写回见 §3.8 / §7 坑 59）；通用 `multiselect` 渲染分支与 `bindEntityFieldInputs` 里 `input.dataset.ms` 处理已删除；**本轮新增「重装机兵」敌人分支（`entity.type === 'heavy-mech'`，`:353-363`）：`artScale`(大小) + 5 个 `mech.*`（移动-速度 / 瞄准-旋转速度 / 瞄准-瞄准速度 / 激光-开枪延迟 / 激光-射击间隔），且切类型时 `entity.mech = normalizeHeavyMechConfig(entity.mech)` 补全默认值，否则面板字段空白**；**本轮宝箱分支（`:527`）加 `w`/`h` 尺寸字段**（面板输入钳到 ≥20，与 `state.js:normalizeChest` 一致；四角手柄同样可改，见 `editor-input.js` 的 `selectedChest`）**+ 尾部 hint「上锁/解锁由触发器事件控制」**；**`eventTypeOptions` 加 `lockChest`/`unlockChest`（共 11 项）** | `renderEntityProperties` `bindEntityFieldInputs` `getNested` `setNested` `updateWall` | 808 |
 | `src/editor/level-flow.js` | 面板同步 `sync`、重绘落盘 `redraw`、启动 `startGame`、模式切换、快照恢复、关卡加载 | `sync` `redraw` `startGame` `setMode` `restoreEditorSnapshot` `selectLevel` `refreshLevels` `switchToLevel` `fadeAndSwitch` `rememberLevel` `recallLevel` `renderFlows` `LAST_LEVEL_KEY` | 222 |
 | `src/editor/room-panel.js` | 多箱庭房间面板与墙体重生成（含房间大小/标记/类型弹窗：`roomCellSize`/`roomCellMarkerType`/`roomCellMarkerIcon`/`roomCellType`） | `applyRooms` `renderRoomPanel` `updateRoomNumber` `updateRoomPanelSize` `toggleRoomCell` `openRoomCellPopup` `closeRoomCellPopup` `applyRoomMarker` `applyRoomType` | 173 |
-| `src/editor/trigger-panel.js` | 触发器事件列表编辑器（波次/切关/能量门多选） | `renderTriggerEvents` | 240 |
+| `src/editor/trigger-panel.js` | 触发器事件列表编辑器（波次/切关/能量门多选/**宝箱上锁·解锁多选**/**每波敌人数值覆盖 `hp·damage·scale`（`applyWaveStat`：留空即 `delete` 该键，见 §3.9）**）；**多选写回已通用化**：`change` 分支按 `el.dataset.ms.split('.').pop()` 取字段名（`gateIds`/`chestIds`…），新增多选字段无需再改 handler；切事件类型时 `delete ev.chestIds` 并按新类型初始化 `ev.chestIds = []` | `renderTriggerEvents` | 370 |
+| `src/editor/enemy-defaults-panel.js` | **关卡级「敌人默认数值」兜底面板**（侧栏 `#enemyDefaultsEditor`）：按 `ENEMY_TYPES` 渲染 7 组 血量/伤害/尺寸倍率，写 `level.enemyDefaults[type]`（留空 = `delete` 键），供触发器波次未配置时回落（契约见 §3.9） | `renderEnemyDefaults` `bindEnemyDefaults` | 75 |
 | `src/editor/drop-rules-panel.js` | 按敌人类型的掉落规则面板；`item==='potion'` 时在「数量」前插入药水下拉（`data-drop-field="potionId"`，选项来自 `getPotionList()`，空值显示「（随机药水）」），模块级 flag 防重入（首次渲染若 `getPotionList()` 空则 `loadInnerShop().then(renderDropRules)`），`input` 分支挡住 `potionId`（避免 select 的 input 事件当数字写坏）、赋值走 `change`，`item` 切换重渲染并清空 `potionId` | `renderDropRules` `bindDropRules` | 113 |
 | `src/editor/player-panels.js` | 预览玩家 / 试玩存档两套属性表单（改件区按**库存数量**配置：通用无上限 / 专属每种最多 1） | `renderPreviewPlayer` `renderTrialPlayer` `bindPlayerPanels` | 172 |
 | `src/editor/save-flow.js` | 存档源切换、新游戏、选存档、试玩启动 | `startTrial` `startNewGame` `selectSave` `listStoreSaves` `saveStorePlayer` `loadStorePlayer` `isTrialSaveStore` | 102 |
@@ -90,7 +91,7 @@ description: 改关卡编辑器交互（拖拽/画墙/手柄）、实体属性�
 | `server.js` | HTTP API + 静态/vite 服务（含 `/api/pixels` 像素库路由、`/api/inner-shop` 策划表实时解析 + mtime 缓存 + JSON 回退，`dirs.pixels`/`mkdir`/`readOnlyDenied`） | `startServer(options)` | 523 |
 | `tools/export-tables.mjs` | **导表工具**：`策划文档/server/{消耗品,武器,老虎机}.xlsx` → `data/inner-shop.json`（依赖 `exceljs`），**并交叉引用项目数据**（`loadWeaponNameIndex` 读 `data/weapons/*.json` 按 `name` 建「名 → 项目武器 id」，写入 `weapons[].weaponId`），导出 `buildInnerShop` 供 server 开发期复用；`parseConsumables` 本轮新增 5 字段：`effectType`/`effectValue`/`effectSec`（对应消耗品表新增第 16~18 列 `效果类型`/`效果数值`/`效果时长`）+ `artTypeInRun`/`artNameInRun`（对应既有 `美术方案类型（局内表现）`/`美术方案名称（局内表现）` 两列） | `buildInnerShop`、`parseConsumables`、`parseWeapons`、`parseLottery`、`loadWeaponNameIndex`、`DEFAULT_DRAW_COST`、`DEFAULT_GOLD_PRIZE` | 272 |
 | `data/inner-shop.json` | 导表生成物（`consumables[4]` / `weapons[3]` / `lottery`；本轮重新生成含局内表现/效果字段）——打包态的回退数据源 | — | 129 |
-| `index.html` | 编辑器 DOM 结构（id 集合 + 15 个 `.tool` 按钮 + 画板页 + 独立画板弹层（**绘制轮廓 + 像素画板两个弹层**，7+ 组工具条）+ **像素库下拉 `#artPixelSelect`/`#artAddPixel`/`#artDeletePixel`** + 玩家美术按武器绑定） | — | 503 |
+| `index.html` | 编辑器 DOM 结构（id 集合 + 16 个 `.tool` 按钮（含 `data-tool="campfire"` 休息火堆）+ 画板页 + 独立画板弹层（**绘制轮廓 + 像素画板两个弹层**，7+ 组工具条）+ **像素库下拉 `#artPixelSelect`/`#artAddPixel`/`#artDeletePixel`** + 玩家美术按武器绑定） | — | 551 |
 | `electron/main.cjs` | Electron 主进程：起内嵌 server（port 0）+ BrowserWindow | — | 60 |
 | `package.json` | scripts（含 `export-tables`，且 `build`/`pack` 前置导表）+ electron-builder 配置（`extraResources` 带 `data/inner-shop.json`） | — | 60 |
 > `electron/` 目录**只有 `main.cjs` 一个文件，没有 preload**。`contextIsolation: true` + `nodeIntegration: false`，打包标记靠 URL 参数 `?packaged=1`（`electron/main.cjs:43`）传递，不是 preload 注入。`context.js:15` 里那句 `window.__APP_PACKAGED__` 是预留的另一条判定通路，当前无人写入。
@@ -103,9 +104,11 @@ description: 改关卡编辑器交互（拖拽/画墙/手柄）、实体属性�
 | 改实体拾取优先级（谁盖谁） | `editor-geometry.js:pickTopEntity`（从上到下的 return 顺序） | — |
 | 改编辑器缩放上下限 / 视图钳制 | `editor-camera.js:onWheel:151` / `clampEditorView:34` | `resetEditorCamera:48` 的 `0.1~1` |
 | 改试玩镜头跟随 | `editor-camera.js:updatePlayCamera:89` | `setupPlayCamera:76`、`playZoom:60` |
-| 加/改属性面板字段 | `entity-properties.js:renderEntityProperties` 对应分支 | `state.js` normalize + 需重绘则 `bindEntityFieldInputs` |
+| 加/改属性面板字段 | `entity-properties.js:renderEntityProperties` 对应分支（标量字段走 `fields` 数组） | `state.js` normalize + 需重绘则 `bindEntityFieldInputs`；**结构化/多值字段不要塞 `fields`/`multiselect`**，仿火堆模块级 `renderCampfireStatBuffs` 后置行编辑器（§3.8） |
 | 改/加小地图箱庭标记配置 | `room-panel.js` 的 `#roomCellPopup`（右键房间弹窗）+ `index.html` 的 `#roomCellMarkerType`/`#roomCellMarkerIcon` + `bindings.js` 事件绑定 + `ui.js` ids；`applyRoomMarker(c,r)` 写 `cell.marker`；数据契约 `MINIMAP_MARKER_TYPES/LABELS` 见 level-design skill §3.8。房间类型下拉另走 `#roomCellType` + `applyRoomType(c,r)` 写 `cell.type`（`ROOM_TYPES/ROOM_TYPE_LABELS`，未知房间详 level-design §3.8） |
 | 加编辑器工具（工具栏按钮） | `index.html` `.tool` 按钮 + `editor-input.js:pointerDown` 的 `tool === 'xxx'` 分支 | `state.js` normalize 函数、`history.js:COPY_ID_PREFIX` |
+| 加/改触发器召唤敌人的数值覆盖（血量/伤害/尺寸倍率）+ 关卡兜底 | 波次侧：`editor/trigger-panel.js` 每波输入 + `applyWaveStat`；兜底侧：新建/改 `src/editor/enemy-defaults-panel.js`（`renderEnemyDefaults`/`bindEnemyDefaults`）+ `level-flow.js:sync` + `index.html` + `src/ui.js` ids | `state.js` 的 `normalizeWave` / `normalizeEnemyDefaults` / `DEFAULT_LEVEL.enemyDefaults` / `normalizeLevel`、`resolveEnemyStats` 消费方 `combat/enemy-ai.js:initEnemy` 与 `level/spawning.js` 的 `waveScale`/`canSpawnAt`；契约见 §3.9、level-design §3.5.1、combat §7 坑 60 |
+| 加/改一种**可放置实体**（范例：休息火堆 `campfire`） | §4.13 穿线顺序：`index.html` 按钮 → `editor-input.js:pointerDown`（放置/擦除/选中/缩放）→ `editor-geometry.js:pickTopEntity` → `history.js:entityKind`+`COPY_ID_PREFIX` → `entity-properties.js` 面板 → `world-render.js` 编辑态选中框 | `state.js:normalizeXxx`（`DEFAULT_LEVEL` 数组 + `normalizeLevel`）；字段契约见 §3.8；踩坑见 §7 坑 57/58 |
 | 加撤销/快捷键 | `bindings.js:314` keydown 监听 | 撤销点要显式 `pushUndo()` |
 | 加后端接口 | `server.js` `parts[1] === 'xxx'` 分支 | `src/api.js` 封装、打包只读白名单 `server.js:172` |
 | 改/加「策划表格 → 游戏数据」链路（导表） | `tools/export-tables.mjs` 的 `parseXxx` + `server.js:175 getInnerShop()`（mtime 缓存 + JSON 回退） | `src/api.js:getInnerShop` 取数封装、`package.json` 的 `export-tables`/`build`/`pack` 脚本与 `build.extraResources`；数据契约见 economy-numbers skill |
@@ -245,74 +248,76 @@ description: 改关卡编辑器交互（拖拽/画墙/手柄）、实体属性�
 | 其它 | `server.js:294` | 有 `staticDir` → `serveStatic`（含无扩展名 SPA 回退 index.html）；否则 → vite 中间件 |
 `id` 校验统一 `/^[-\w]+$/`，不合法 400。所有 API 异常统一被 `server.js:271` catch 成 404 并 `console.error('[api error]')`——**调后端时看终端日志，别只看 404**。
 
+### 3.8 休息火堆实体字段契约（`campfires[]`）
+火堆是编辑器**可放置实体**之一（`state.js:normalizeCampfire` 归一化，`DEFAULT_LEVEL.campfires:[]`）。字段 / 默认值 / 语义：
+
+| 字段 | 默认 | 语义 |
+|---|---|---|
+| `id` | `campfire-N` / `campfire-<ts>` | 编号；**由面板公共分支 `fields.unshift(['id','编号','text'])` 统一渲染，实体分支里勿再写**（§7 坑 58） |
+| `x`/`y` | 落点（吸附 CELL） | 中心坐标；`w`/`h` 默认 290×290 = 绘制包围盒 = `hitBackground` 命中矩形 |
+| `art` / `artScale` | `asset-1789356238754` / `1` | 画板美术方案 id（下拉来自 `getArtChoices()`）/ 倍率 |
+| `interactRadius` | `150` | 靠近触发范围（`hitBackground` / 世界层 `strokeCircle` 提示圈） |
+| `visible` | `true` | 游戏中是否显示 |
+| `statBuffs` | `[]` | **可抽基础属性强化**：`[{ id, name, value }]` —— `id`=IDOL_BUFFS 祝福 id；`name`=显示名（`''`=用表默认 name）；`value`=数值（`null`=用表默认 value）；**空数组 = 全部祝福、全用表默认**（`economy/campfire.js:campfireStatPool` 按此过滤，空/非数组回落全量 `IDOL_BUFFS`）。`state.js:normalizeCampfire` 把旧 `string[]` 归一成 `{ id, name:'', value:null }` 并做 `id` 过滤 |
+| `guide`/`guideRange`/`guideIcon`/`guideStopAfterUse` | `false`/`600`/`''`/`true` | 「是否游戏内指引」及联动三项（走 `guideRows(entity,true)`） |
+
+面板「可抽基础属性强化」是**行编辑器**（非下拉/复选）：模块级 helper `STAT_LABELS`/`OP_LABELS`/`fmtSignedPct`/`firstStat`/`buffTableValue`/`buffSpecText`/`renderCampfireStatBuffs`（`entity-properties.js:58-159`），数据源 `import { IDOL_BUFFS } from '../systems/economy/buffs.js'`。DOM：`div.campfire-buffs > h3 + p.hint + div.campfire-buff-list > div.campfire-buff-row[data-buff-id] × IDOL_BUFFS.length`；每行 = `label.cb-enable > input[type=checkbox][data-buff-enable]` + 表原名 ／ `span.cb-desc`（表 desc）／ `div.cb-fields`（名称 `input[type=text][data-buff-k=name]` + 数值 `input[type=number][step=any][data-buff-k=value]`）／ `div.cb-spec`（口径小字，如 `攻击力（乘法，1.15 = +15%）`）。写回（保证「恢复默认」可逆）：**仅勾选行写入**，`name===表默认 → 存 ''`、数值留空或 `===表默认 → 存 null`、其余存原值；事件 = 容器 `focusin → pushUndo()`、`input → entity.statBuffs = collect() + saveDraft`，**不重渲染**（避免打字丢焦点）；旧数据 `string[]` 按字符串 id 提取，显示为「已勾选 + 表默认」。新增 CSS（`src/style.css:389-451`）：`.campfire-buffs`/`h3`/`.campfire-buff-list`(max-height:320px + overflow-y:auto)/`.campfire-buff-row`/`.cb-enable`/`.cb-desc`/`.cb-fields`/`.cb-spec`，风格沿用 `.chest-reward-row`（深色 #0b1622、border #3f5a75）。
+
+### 3.9 关卡级「敌人默认数值」面板（`#enemyDefaultsEditor`）
+触发器召唤敌人的数值兜底层。波次自身的覆盖在触发器事件面板（`trigger-panel.js`，每波三项输入），两者共同的语义是**留空 = 未配置**。
+
+| 项 | 内容 |
+|---|---|
+| 数据 | `state.level.enemyDefaults[type] = { hp?, damage?, scale? }`（`scale` = 尺寸倍率，同时放大美术与碰撞体）。schema 见 level-design §3.1/§3.5.1；`state.js:normalizeEnemyDefaults` 只保留 `hp>0` / `damage>=0` / `scale>0`，未配置的键**不落盘** |
+| DOM | `index.html` 的 `.settings` 区块内：`<h2>敌人默认数值（本关卡兜底）</h2>` + `<p class="hint">` + `<div id="enemyDefaultsEditor"></div>`；`src/ui.js` 的 `ids` 已登记 `'enemyDefaultsEditor'`（三处同步，见 §7 坑 32） |
+| 渲染 | `enemy-defaults-panel.js:renderEnemyDefaults()`，由 `level-flow.js:sync()` 调用（写 `renderDropRules()` 之前）。按 `ENEMY_TYPES` 出 7 组 `.drop-rule-group`（复用 drop-rules 的 CSS），每组一行 `.drop-rule` 装 3 个 `<label>血量/伤害/尺寸倍率<input type=number data-ed-type data-ed-field>`，`value=${d[key] ?? ''}`，`placeholder="未配置"` |
+| 写回 | `enemy-defaults-panel.js:bindEnemyDefaults()`（在 `bindings.js` 里 `bindEnemyDefaults(); bindDropRules();`）。`focusin` → `pushUndo()`；`input` → `value.trim()===''` 时 `delete entry[field]`，否则 `hp`/`scale` 需 `>0`、`damage` 允许 `0`；条目空则 `delete map[type]`；`saveDraft` 静默落盘（不重渲染，避免打字丢焦点） |
+| 波次面板 | `trigger-panel.js` 每波三项输入 + 模块内 `applyWaveStat(ev, field, rawValue)`（正则 `/^spawn\.waves\.(\d+)\.(hp|damage|scale)$/`，留空即 `delete wave[key]`）；`input`/`change` 两个通用分支都在 `setNested` 之前先调它并 return |
+| CSS | 新增 `.drop-rule > label`（flex 同行、12px、不换行）与 `.drop-rule > label input[type=number] { width:46px }`（`src/style.css`），避免窄侧栏撑破 |
+
+> 「留空 = 未配置」是本面板的**唯一契约**，两侧（面板 + `normalizeXxx`）都必须显式判 `null/undefined/''`（`Number(null)===0` 陷阱，见 §7 坑 62）。消费链（`resolveEnemyStats` → `initEnemy`、尺寸倍率对生成点校验的影响）见 level-design §3.5.1 与 combat §7 坑 60。
+
 ## 4. 关键流程
 ### 4.1 应用启动（开发/编辑器）
 
 ```
-index.html（86 个 id + 15 .tool 按钮）
-  → src/main.js（模块顶层）：state.player/playerId/hasAnySave/saveStore/previewPlayer/trialPlayer 初始化（:15-28）
-  → ctx.hooks.{sync,redraw,renderTriggerEvents,startNewGame,selectSave,listStoreSaves,saveStorePlayer} 注册（:31-37）
-  → initialize()（:40）
-      ctx.dom = getDom()          ui.js:56，缺 id 直接 throw
-      bind()                       bindings.js:31 全量接线（含 bindDropRules / bindPlayerPanels）
-      若 PACKAGED → initializePackaged() 后 return（见 4.2）
-      editorPanel 显示
-      state.templates = await get('/templates')
-      ctx.iconChoices = (await get('/icons')).icons
-      loadPackagedUi()             packaged.js:17 预载 5 张 UI 图
-      state.player = normalizePlayer(await loadPlayer('save-1'))
-      listPlayers() → state.hasAnySave
-      refreshLevels()              失败即 return
-      selectLevel(defaultId, false, false)   ← 固定 level-1，不恢复上次关卡
-      startGame()                  level-flow.js:73 建 Phaser.Game
+index.html（86 个 id + 16 .tool 按钮）
+  → src/main.js 模块顶层：state.player/playerId/hasAnySave/saveStore/previewPlayer/trialPlayer 初始化（:15-28）；ctx.hooks.{sync,redraw,renderTriggerEvents,startNewGame,selectSave,listStoreSaves,saveStorePlayer} 注册（:31-37）
+  → initialize()（:40）：ctx.dom = getDom()（ui.js:56，缺 id throw）→ bind()（bindings.js:31，含 bindDropRules/bindPlayerPanels）
+      若 PACKAGED → initializePackaged() 后 return（见 4.2）；否则 editorPanel 显示
+      state.templates = await get('/templates')；ctx.iconChoices = (await get('/icons')).icons；loadPackagedUi()（packaged.js:17 预载 5 张 UI 图）
+      state.player = normalizePlayer(await loadPlayer('save-1'))；listPlayers() → state.hasAnySave
+      refreshLevels()（失败即 return）→ selectLevel(defaultId,false,false)（固定 level-1，不恢复上次关卡）→ startGame()（level-flow.js:73）
       state.ready = true; setStatus('初始化完成')
 ```
 > `rememberLevel/recallLevel`（localStorage `editor:lastLevelId`）**目前只写不读**：`main.js:70` 注释明确「打开编辑器固定加载空关卡 level-1，避免自动加载真实关卡导致误覆盖」。想恢复上次关卡就改这行。
 ### 4.2 打包端启动路径（PACKAGED）
 
 ```
-electron/main.cjs:7 start()
-  → 动态 import('../server.js') 拿 startServer（避免 Electron 直接跑 vite）
-  → dataRoot = %APPDATA%/arc-engine（players / test-players / uploads 可写）
-  → levelsDir/uiDir = app.isPackaged ? resources/data/{levels,ui} : 项目 data/{levels,ui}
-  → staticDir = ../dist（vite build 产物）
-  → startServer({ isPackaged:true, host:'127.0.0.1', port:0 })  ← 端口 0 = 随机
-  → BrowserWindow 1920x1080，contextIsolation:true / nodeIntegration:false（无 preload）
-  → loadURL(`http://127.0.0.1:${port}/?packaged=1`)
-页面侧：
-  context.js:13 PACKAGED = URL 参数 packaged==='1'（或预留的 window.__APP_PACKAGED__）
-  → main.js:44 走 initializePackaged()（packaged.js:38）
-      state.templates = null; player = normalizePlayer(); saveStore='formal'
-      loadPackagedUi() → listPlayers() → refreshLevels()
-      enterPackagedLogin()：进 login 关卡 → setMode('trial')
-  → setMode 里 editorVisible = !PACKAGED && mode==='editor' ⇒ 面板永久隐藏
-  → server 端 readOnlyDenied（server.js:172）拦 levels/level/ui/flow 的写请求 → 403
+electron/main.cjs:7 start() → 动态 import('../server.js') 拿 startServer（避免 Electron 直接跑 vite）
+  → dataRoot = %APPDATA%/arc-engine（players/test-players/uploads 可写）；levelsDir/uiDir = app.isPackaged ? resources/data/{levels,ui} : 项目 data/{levels,ui}；staticDir = ../dist（vite 产物）
+  → startServer({ isPackaged:true, host:'127.0.0.1', port:0 })（端口 0 = 随机）→ BrowserWindow 1920x1080，contextIsolation:true / nodeIntegration:false（无 preload）→ loadURL(`http://127.0.0.1:${port}/?packaged=1`)
+页面侧：context.js:13 PACKAGED = URL 参数 packaged==='1'（或预留 window.__APP_PACKAGED__）
+  → main.js:44 initializePackaged()（packaged.js:38）：state.templates=null; player=normalizePlayer(); saveStore='formal'；loadPackagedUi() → listPlayers() → refreshLevels()
+      enterPackagedLogin()：进 login 关卡 → setMode('trial') → editorVisible = !PACKAGED && mode==='editor' ⇒ 面板永久隐藏
+      server 端 readOnlyDenied（server.js:172）拦 levels/level/ui/flow 写请求 → 403
 ```
 ### 4.3 编辑器鼠标交互（拖拽 / 缩放 / 旋转）
 
 ```
 Phaser pointerdown（game-scene.js:71） → EditorScene.pointerDown（editor-input.js:12）
-  const ctx = this.ctx
-  !this.editing → 走游戏侧分支（工坊/登录按钮/暂停/结算），直接 return
+  const ctx = this.ctx；!this.editing → 走游戏侧分支（工坊/登录按钮/暂停/结算），直接 return
   中键或右键 → this.panning = true, 记 panStart，return（不 pushUndo）
-  ctx.pushUndo?.()                       ← 每次编辑器左键点击都先存快照
-  wp = cameras.main.getWorldPoint(p.x, p.y); x/y = snap(wp)   ← CELL=30 吸附
-  tool==='select' 且已选中 →
-      rotationHandleAt(selected)（仅 wall/gate/portal）→ drag={mode:'rotate'}
-      handleAtRect(selected)              → drag={mode:'resize', handle}
-      selected===l.background → backgroundHandleAt → drag={mode:'bg-resize'}
+  ctx.pushUndo?.()（每次编辑器左键点击都先存快照）；wp = cameras.main.getWorldPoint(p.x,p.y); x/y = snap(wp)（CELL=30 吸附）
+  tool==='select' 且已选中 → rotationHandleAt(selected)（仅 wall/gate/portal）→ {mode:'rotate'}；
+      handleAtRect(selected) → {mode:'resize',handle}；selected===l.background → backgroundHandleAt → {mode:'bg-resize'}
   tool==='erase' → pickTopEntity 命中后按 hit.type 从对应数组 filter 掉；再校验 selected 是否已失效
-  tool==='wall'/'enemy'/'trigger'/'gate'/'vendor'/'idol'/'icon'/'portal'/'spawnzone'/'crate'/'barrel'/'chest'/'spawn'
-      → push 新实体（wall/trigger/gate/vendor/idol/icon/spawnzone 是内联字面量；enemy/crate/barrel/chest/portal 走 state.js 的 normalizeXxx）
-  else（select） → pickTopEntity → drag = move / bg-move / spawn / null；state.selected = entity
-  ctx.redraw()
-pointermove（editor-input.js:192）
-  panning → scrollX/Y = panStart - delta/zoom → clampEditorView() → draw()
-  drag.mode 分派：spawn / move（snap）/ rotate（5°吸附）/ bg-move（不吸附）/ bg-resize / 默认 resizeRect
-  ctx.redraw()
+  tool==='wall'/'enemy'/…/'campfire'/'spawn' → push 新实体（wall/trigger/gate/vendor/idol/campfire/icon/spawnzone 内联字面量；enemy/crate/barrel/chest/portal 走 state.js 的 normalizeXxx）
+  else（select） → pickTopEntity → drag = move / bg-move / spawn / null；state.selected = entity → ctx.redraw()
+pointermove（editor-input.js:192）：panning → scrollX/Y = panStart - delta/zoom → clampEditorView() → draw()；
+      drag.mode 分派 spawn / move（snap）/ rotate（5°吸附）/ bg-move（不吸附）/ bg-resize / 默认 resizeRect → ctx.redraw()
 pointerup（game-scene.js:73）→ handleWorkshopPointerUp(); drag=null; panning=false; ctx.redraw()
-方向键微调：update() → updateEditorKeys（editor-input.js:237）
-  输入框聚焦时跳过 → pushUndo?.() → sel.x/y = snap(±CELL) → redraw?.()
+方向键微调：update() → updateEditorKeys（editor-input.js:237）：输入框聚焦时跳过 → pushUndo?.() → sel.x/y = snap(±CELL) → redraw?.()
 ```
 `redraw()`（`level-flow.js:59`）= `draw()` + `sync()` + **仅 editor 模式**才 `saveDraft` 落盘（`:63` 注释强调试玩里的射击 pointer 事件也会走 redraw，绝不能写关卡文件）。
 ### 4.4 属性面板链路
@@ -335,7 +340,7 @@ state.selected 变化 → redraw() → sync()（level-flow.js:36）→ renderEnt
   icon 分支（:392）追加「上传图标」按钮 → POST /api/uploads → entity.src
   trigger 分支（:425）→ ctx.hooks.renderTriggerEvents(entity, {enemyTypeOptions, levelOptions, gateOptions, eventTypeOptions})
 ```
-> 敌人分支现在按 `entity.type` 追加 BOSS 配置字段（**两套并行**）：`mothership`（`entity-properties.js:141`）→ 「大小 / 召唤间隔 / 召唤表 / 被击败运镜 id」；`boss-2-5t5`（`entity-properties.js:150`）→ **`artScale` + 81 个 `boss.*`，共 82 项**（基础·移动·护盾·圆弧·技能1-4·技能5 全量数值，含 `boss.name` 与 `boss.cutsceneId`）。本轮改动：删除 `boss.zoneAimTrackDeg`（旧「技能1/2 成型期瞄准跟随」，**已废弃**：跟随会让扇形一直罩住玩家、玩家无法走出躲避）+ `boss.s5PullAccel`（旧单一吸力加速度），新增 `boss.s5PullMin`（技能5-最小吸力(px/s，半径边缘处)）/`boss.s5PullMax`（技能5-最大吸力(px/s，涡心处，**需 < 玩家移速 180**)，同时是向量累加后的速度上限）；扇形方向改为**释放瞬间写死、全程不变（不跟随玩家）**，命中仅保留 `boss.zoneHitPadPx`（技能1/2 命中**像素级**容差(px)、s3 不参与）；技能1/2 对子弹的施力改为**一次性固定速度+固定距离**（速度复用 `s1DragSpeed`/`s2PushSpeed`，**距离 = `s1DragDist`/`s2PushDist` × 2**）。技能5 拖尾宽/长旧键（`boss.*RedTrailWidth`/`boss.*RedTrailLength` 形态）已于**上一轮**改名为 `boss.s5BulletTrailWidth`/`boss.s5BulletTrailLength`（关卡 json 里的 4 / 250 已同步）。字段名必须与运行时读取路径逐字一致（见 `combat` skill §3.7/§5）。上一轮新增 `arc4SpinDeg`；`arc5AlignDeg`→`arcAlignDeg`；`skill2HalfDeg`→`parkMinDeg`；`mergeOverlapPct` 现由渲染端 `boss25t5-art.js:drawBoss25T5Body` 判定两弧是否合并（运行时几何判定已移除）。写路径不同：母舰的运镜 id 写**顶层** `e.cutsceneId`（运行时 `enemy-ai.js:defeatEnemy` 也读 `e.cutsceneId`；该键由 `state.js:normalizeEnemy` 保留，否则落盘→读回会丢）；`boss-2-5t5` 写 **`e.boss.cutsceneId`**（运行时读 `e.bossCfg.cutsceneId`，两侧已对齐，见 §7 坑 33）。其余字段经 `setNested` 写进 `e.boss.*`，由 `state.js:normalizeEnemy` 各自的 normalize 分支消费（`boss-2-5t5` 走 `normalizeBoss25T5Config`）。
+> 敌人分支现在按 `entity.type` 追加配置字段（**三套并行**）：`mothership`（`entity-properties.js:141`）→ 「大小 / 召唤间隔 / 召唤表 / 被击败运镜 id」；`boss-2-5t5`（`entity-properties.js:150`）→ **`artScale` + 81 个 `boss.*`，共 82 项**（基础·移动·护盾·圆弧·技能1-4·技能5 全量数值，含 `boss.name` 与 `boss.cutsceneId`）；**`heavy-mech`（`:353`）→ `artScale` + 5 个 `mech.*`（移动-速度(px/s) / 瞄准-旋转速度(°/s) / 瞄准-瞄准速度(°/s) / 激光-开枪延迟(ms) / 激光-射击间隔(ms)）**，运行期读 `e.mechCfg`（`state.js:normalizeEnemy` 的 `mech` 分支保留该对象，落盘→读回不丢；`initEnemy` 里 `normalizeHeavyMechConfig(e.mech)` 补全；血量为顶层 `hp`，契约见 `combat` skill §3.9）。本轮改动：删除 `boss.zoneAimTrackDeg`（旧「技能1/2 成型期瞄准跟随」，**已废弃**：跟随会让扇形一直罩住玩家、玩家无法走出躲避）+ `boss.s5PullAccel`（旧单一吸力加速度），新增 `boss.s5PullMin`（技能5-最小吸力(px/s，半径边缘处)）/`boss.s5PullMax`（技能5-最大吸力(px/s，涡心处，**需 < 玩家移速 180**)，同时是向量累加后的速度上限）；扇形方向改为**释放瞬间写死、全程不变（不跟随玩家）**，命中仅保留 `boss.zoneHitPadPx`（技能1/2 命中**像素级**容差(px)、s3 不参与）；技能1/2 对子弹的施力改为**一次性固定速度+固定距离**（速度复用 `s1DragSpeed`/`s2PushSpeed`，**距离 = `s1DragDist`/`s2PushDist` × 2**）。技能5 拖尾宽/长旧键（`boss.*RedTrailWidth`/`boss.*RedTrailLength` 形态）已于**上一轮**改名为 `boss.s5BulletTrailWidth`/`boss.s5BulletTrailLength`（关卡 json 里的 4 / 250 已同步）。字段名必须与运行时读取路径逐字一致（见 `combat` skill §3.7/§5）。上一轮新增 `arc4SpinDeg`；`arc5AlignDeg`→`arcAlignDeg`；`skill2HalfDeg`→`parkMinDeg`；`mergeOverlapPct` 现由渲染端 `boss25t5-art.js:drawBoss25T5Body` 判定两弧是否合并（运行时几何判定已移除）。写路径不同：母舰的运镜 id 写**顶层** `e.cutsceneId`（运行时 `enemy-ai.js:defeatEnemy` 也读 `e.cutsceneId`；该键由 `state.js:normalizeEnemy` 保留，否则落盘→读回会丢）；`boss-2-5t5` 写 **`e.boss.cutsceneId`**（运行时读 `e.bossCfg.cutsceneId`，两侧已对齐，见 §7 坑 33）。其余字段经 `setNested` 写进 `e.boss.*`，由 `state.js:normalizeEnemy` 各自的 normalize 分支消费（`boss-2-5t5` 走 `normalizeBoss25T5Config`）。
 ### 4.5 保存链路
 
 | 入口 | 调用 | 目标 |
@@ -350,21 +355,13 @@ state.selected 变化 → redraw() → sync()（level-flow.js:36）→ renderEnt
 
 ```
 「流程试玩」按钮（bindings.js:227）→ save-flow.js:startTrial:76
-  await saveDraft(levelId, level)                      先落盘当前编辑内容
-  ctx.editorSnapshot = { level: clone(level), levelId } ← 关卡快照
-  ctx.editorPlayerSnapshot = { player: clone(player), playerId, hasAnySave } ← 玩家快照
-  state.saveStore = 'test'                             存档读写切到 data/test-players
-  state.player = normalizePlayer(); state.playerId='save-1'
-  listTestPlayers() → hasAnySave（决定 login 页「继续游戏」是否可点）
-  fadeAndSwitch(() => selectLevel('login', false, false).then(() => setMode('trial')))
+  await saveDraft(levelId, level)（先落盘）；ctx.editorSnapshot = { level: clone(level), levelId }；ctx.editorPlayerSnapshot = { player: clone(player), playerId, hasAnySave }
+  state.saveStore = 'test'（存档读写切 data/test-players）；state.player = normalizePlayer(); state.playerId='save-1'
+  listTestPlayers() → hasAnySave（决定 login 页「继续游戏」是否可点）；fadeAndSwitch(() => selectLevel('login',false,false).then(() => setMode('trial')))
   catch → restoreEditorSnapshot() 回滚
 「游戏预览」按钮（bindings.js:222）→ 只存关卡快照（不存玩家快照），setMode('play')，用 state.previewPlayer
-退出（「关卡编辑」按钮 bindings.js:221 / ESC → ctx.onExitPreview → level-flow.js:92）
-  → restoreEditorSnapshot()（level-flow.js:160）
-      state.level / state.levelId 还原；editorSnapshot = null
-      若有 editorPlayerSnapshot → 还原 player/playerId/hasAnySave 并清空
-      state.saveStore = 'formal'                       ← 必须复位，否则后续存档写进 test 目录
-  → setMode('editor')
+退出（「关卡编辑」按钮 bindings.js:221 / ESC → ctx.onExitPreview → level-flow.js:92）→ restoreEditorSnapshot()（level-flow.js:160）
+      state.level/state.levelId 还原；editorSnapshot=null；若有 editorPlayerSnapshot → 还原 player/playerId/hasAnySave 并清空；state.saveStore='formal'（必须复位，否则后续存档写进 test 目录）→ setMode('editor')
 ```
 **新增任何「进游戏」入口都必须成对**：进之前存快照，退出走 `restoreEditorSnapshot()`。漏了会导致游戏内切关（`switchToLevel` 直接改 `state.level`/`state.levelId`）把编辑器当前关卡替换掉，随后一次 `redraw()` 就把 A 关的数据写进 B 关文件。
 ### 4.7 相机链路
@@ -400,8 +397,7 @@ state.selected 变化 → redraw() → sync()（level-flow.js:36）→ renderEnt
 **hover/focus 交互（数据驱动，`ui-interact.js` 纯函数）**：节点写 `interact.hover` → 运行时 `ui-runtime.js drawUI` 每帧用 `nodeRect`+`uiPointer()` 算命中集 `this.uiHovered`，经 `interactProgress` 产出进度，`ui-layer.js drawXxx` 按进度混合 fill/stroke/alpha/dx/dy/scale（按 `animMs` 平滑）。编辑器预览（`ui-preview.js`）与游戏运行时共用同一引擎。示例见 `data/ui/interface.json` 的 `close` 按钮（hover 提亮 + 上浮 + 缩放 + press 缩放）。按钮点击的 press 缩放复用现有 `pressScale(id)`（`ui-runtime.js` `onUIPointer` 兜底 `pressAnim(b.id)`）。
 ### 4.9 UI 组件库（可复用控件，保留原视觉）
 **方向**：不把代码绘制页改成数据节点（那样必然动视觉，已于 S1 验证并放弃）。改为**把原控件抽象成可复用组件 + 建组件库**。
-- 组件 = `src/ui-library.js`：`defaultProps` + `propsSchema`（可配置属性：背景/边框/颜色/尺寸/文字）+ `draw2d`(Canvas2D，库面板/预览) + `drawPhaser`(Phaser，真机页面)。原绘制逻辑不动，只是参数化 → **视觉保真**且可配置。
-- 库入口：`#uilibrary` 按钮（index.html:26）→ `uilibrary-mode` → `initUILibraryPanel` 渲染列表 + schema 属性表单 + 预览 canvas + 「模拟悬停」。注册表由 `registerBuiltinComponents()`（bindings.js:307）填充。选中 `GiftCard` 时表单换成赐福配置编辑器（多卡 + 图标/名称/描述/加成 + offerCount + 保存写回 `data/ui/idol-buffs.json`，保存即 `setIdolBuffs` 生效；面板改的 `propState` 不落盘，真源是那次 POST 的配置 JSON）。
+- 组件 = `src/ui-library.js`：`defaultProps` + `propsSchema`（可配置属性：背景/边框/颜色/尺寸/文字）+ `draw2d`(Canvas2D，库面板/预览) + `drawPhaser`(Phaser，真机页面)。原绘制逻辑不动，只是参数化 → **视觉保真**且可配置。库入口：`#uilibrary` 按钮（index.html:26）→ `uilibrary-mode` → `initUILibraryPanel` 渲染列表 + schema 属性表单 + 预览 canvas + 「模拟悬停」。注册表由 `registerBuiltinComponents()`（bindings.js:307）填充。选中 `GiftCard` 时表单换成赐福配置编辑器（多卡 + 图标/名称/描述/加成 + offerCount + 保存写回 `data/ui/idol-buffs.json`，保存即 `setIdolBuffs` 生效；面板改的 `propState` 不落盘，真源是那次 POST 的配置 JSON）。
 - **登录页已用 `LoginButton` 组件还原**：`save-login.js:drawLoginButtons` 用 `LoginButton.drawPhaser` 逐按钮绘制（扫光悬停 + 文字变深），`loginButtonRects` + `editor-input.js` 恢复点击，`hideLoginButtonTexts` 在非登录页隐藏文本。此前 S1 的「登录按钮改数据节点」已回退（`data/ui/login.json` 还原为 logo/title/version 3 节点）。
 - **`GiftCard` 组件已注册**（神像三选一增幅卡）：`defaultProps` 含 `icon`/`iconSize`/`name`/`desc`/`nameSize`/`descSize`/`textColor`/`bgColor`/`hoverScale`；`draw2d` 用 `makeG` + `renderAsset` 渲染 `icon`(画板资产 id) 为动态资产，缺省退化黑圆占位；`drawPhaser` 用单 text 渲染 `名称\n描述` 两行。`propsSchema` 里 `icon` 是 `type:'asset'`（面板用 `getArtChoices()` 生成下拉）。`makeG` 已从 artboard.js 挪到 `asset-render.js` 共享导出（组件库预览与画板共用）。**注意**：组件库预览是 Canvas2D，动态资产需经 `ensureDesign(icon)` 异步拉取，`draw2d` 先画黑圆占位、加载完成后 `renderUILibraryPreview` 重绘换动态资产；神像弹窗 `drawIdolOffer` 已改为读 `offer.cards[i].icon`（`data/ui/idol-buffs.json`）渲染画板资产，缺省才黑圆，张数按 `IDOL_OFFER_COUNT`；后续批量注册其余控件（menuClose✕ / 面板 / 血条 / 卡片等）再逐步替换。
 ### 4.10 UI 设计稿（mxGraph 线框 → 供 AI 实现）
@@ -409,8 +405,7 @@ state.selected 变化 → redraw() → sync()（level-flow.js:36）→ renderEnt
 - **导入**：文本框粘贴 draw.io/mxGraph XML（**支持 URL 编码 `%3C...` 自动解密**）→ `parseMxGraph`（`ui-mxgraph.js`，`DOMParser`）：**顶点**（`vertex=1`）读 `mxGeometry` x/y/w/h + value=label + style 的 `shape`(椭圆/菱形/rounded/首 token `ellipse;`/`text;`)/`fillColor`/`strokeColor`/`strokeWidth`/`arcSize`/`absoluteArcSize`/`fontColor`/`fontSize`/`align`/`verticalAlign`/`rotation`/`dashed`/`fillOpacity`；**连线**（`edge=1`）→ `{shape:'line', x/y/w/h=折线包围盒, points:[相对 bbox 原点的折线顶点]}`，端点优先取游离 `mxPoint as="sourcePoint"/"targetPoint"`，否则取所连顶点(`source`/`target`)的 `exitX/exitY`(`entryX/entryY`) 比例点或中心，`Array as="points"` 作折点；HTML 化 label 剥纯文本，`<font color>`/`<font-size>` 作为颜色字号兜底。生成可移动形状数组（连线按文档序在顶点之后 → 画在上层）。**形状**：`shape` 支持 `rect/rounded/ellipse/rhombus/triangle/parallelogram`（`triangle` 按 mxTriangle 语义：默认顶点朝东，`direction=north/south/west` 改朝向；`parallelogram` 按 stencil：上下边水平、左右边右倾，倾斜量取 style 的 `size`，缺省 20 设计单位、夹到 `W/2`；其余未知 shape 仍回落矩形）；**颜色**：统一走 `colorValue()` —— 新版 draw.io 的 `light-dark(#浅,#深)` 取浅色分支，非法值回落 mxGraph 默认（填充白/描边黑）；**旋转**：`rotation` 正向 = 顺时针，与 mxGraph/canvas 同向（**别写负号**）。
 - **导入已有页面**：`#wireframePageSel` 下拉（`pageProfiles`：workshop/weapon/levelSelect/settlement）+ `#wireframePageImport` 按钮 → `profilePage(pageId)`（`ui-page-profiles.js`）按**与绘制代码相同的布局常量**还原现有页面的控件矩形数组。这些页面是 **代码绘制**（`drawWorkshopUI`/`drawWeaponShop`/`drawLevelSelect`/`drawSettlement`），无节点图，故用静态画像而非节点。画像含一个 **`pg_bg` 全屏背景矩形**(1920×1080)，`computeView()` 取其最大面积当背景 → 缩放系数=1、坐标 1:1 还原到设计坐标，可直接标注 `note`。**改页面布局 ⇒ 同步改 `ui-page-profiles.js` 对应函数及第 2 章行数**。
 - **编辑**：画布（`ui-wireframe.js`）拖移控件、点选；左侧填「名称/X/Y/宽/高/功能·动画·逻辑描述(note)」。预览**滚轮缩放（围绕光标）**；`computeView()` 自动把最大面积矩形当背景铺满整窗。
-- **保存**：`saveUiDesign(name, {name, shapes})` → `POST /api/ui-designs/<name>` → `docs/ui-designs/<name>.json`。
-- **加载/删除**：`#wireframeSelect` 下拉经 `listUiDesigns` 填充 → `loadUiDesign` 加载、`deleteUiDesign` 删除（`api.js` 已有）。
+- **保存/加载/删除**：`saveUiDesign(name, {name, shapes})` → `POST /api/ui-designs/<name>` → `docs/ui-designs/<name>.json`；`#wireframeSelect` 下拉经 `listUiDesigns` 填充 → `loadUiDesign` 加载、`deleteUiDesign` 删除（`api.js` 已有）。
 - **名称字符集**：设计稿 id = 文件名 `docs/ui-designs/<name>.json`，**允许中文等 Unicode**。`server.js` ui-designs 分支先把 URL 段 `decodeURIComponent`、再用 `/^[-\w\p{L}\p{N}]+$/u` 校验后才落盘（`server.js:355`）。名字可自由用中文命名，`list` 返回 id/name 均为原样。**别把该正则退回成 `/^[-\w]+$/`**（会拒中文，报 400）；也勿信 `url.pathname` 已是解码态——`parts[2]` 仍是百分号编码，必须先 decode。
 - **设计稿格式（AI 消费）**：`{ name, shapes:[{id,x,y,w,h,label,shape,fill,stroke,rounded,fontColor,fontSize,align,verticalAlign,rotation,note}] }`。AI 读每控件 `note`（功能/动画/逻辑）+ 坐标/颜色/形态实现。
 - **1:1 关键**：mxGraph 形状**默认填充白、描边黑**（显式 `fillColor=none`/`strokeColor=none` 才透明/无边框）；`whiteSpace=wrap` 已自动换行 + 多行垂直居中；`<font size="N">` 相对字号映射；`fontColor` 从 `<font color>` 兜底。
@@ -446,8 +441,7 @@ state.selected 变化 → redraw() → sync()（level-flow.js:36）→ renderEnt
   - 保存为轮廓：名称非空 + ≥2 点 → 点集平移到重心坐标系 → **同名覆盖**（`listOutlines` 查同名 → 复用其 id）→ `saveOutline` → 刷新 `drawRefOutline` 下拉 + `boardHooks.onSaved(id)` 通知主画板刷 `#artOutlineSelect`（保留当前绘制内容）。
   - 「完成」→ ≥2 点写入选中 stroke 元素（替换 points + 同步样式，**写回后状态栏反馈「已写回元素 N」**）或新建 shape='stroke' 元素；Esc/「取消」→ `closeDrawBoard()` 清空会话态。**与关卡撤销解耦**：`bindings.js` 的 Ctrl+Z/C/V 已 `if (artboard-mode) return`，且独立画板 document keydown **首行 `isDrawBoardOpen()` 早退**，避免误触关卡撤销。
   - 反馈约定：弹层内所有「生效类」操作（应用变换/载入轮廓/填充/保存）都 `setStatus` 提示；「应用变换」对 0°/100% 恒等输入提示「无变化，改完请点完成写回」——防止用户把「应用变换」误当「写回」。
-载入：#artAssetSelect.onchange → loadAsset(id) → normalizeDesign → 重渲
-  > 下拉由 `refreshAssetSelect` 生成：**兼容 `/api/assets` 旧版 `[id,...]` 与新版 `[{id,name},...]` 两种返回**（`typeof a==='string'?{id:a,name:a}:a`），并过滤 `id==='undefined'`。若本地 server 未重启仍返回旧版，下拉会回退显示 id（不会出现 undefined / 404）。
+载入：#artAssetSelect.onchange → loadAsset(id) → normalizeDesign → 重渲；下拉由 `refreshAssetSelect` 生成（**兼容 `/api/assets` 旧版 `[id,...]` 与新版 `[{id,name},...]` 两种返回**：`typeof a==='string'?{id:a,name:a}:a`，并过滤 `id==='undefined'`；本地 server 未重启仍返回旧版时下拉回退显示 id，不出现 undefined/404）。
 主画板 stroke 增强（artboard.js）：
   - 字段：轨道半径 `orbitRadius`（numberField）、填充色 `fill`、「填充」checkbox；`fillOn` oninput 保留已设色：`item.fill = checked ? (item.fill || '#ffa914') : null`。
   - 手柄：选中 stroke 画「重心最远点距离」虚线圈（不画无意义的 el.radius 圈）+ 沿 ga 方向 rim 缩放手柄（≤14 命中，拖动以拖起时重心为原点等比缩放点集，k 下限保底 maxDist≥2px）+ 外延 24px 旋转手柄（≤12 命中，拖动 5° 吸附反推 `phase = ga − simT·rotSpeed·dir`）。手柄锚点一律 `elementCenter` 现算（orbit>0 时返回轨道点而非圆心）。
@@ -463,42 +457,24 @@ state.selected 变化 → redraw() → sync()（level-flow.js:36）→ renderEnt
   附加 UI：**玩家面板已移除「画板美术方案」下拉**（`#pvArt`/`#tpArt` 已删，武器美术方案集成到武器系统 —— 装备设计武器时玩家本体用其 `appearance`，见 entity-art.drawPlayer 的 `player.weaponArt` 分支）。敌人属性面板（entity-properties 敌人分支）「画板美术方案」下拉仍写 enemy.art。
 「生成默认美术方案」`#artGenDefaults`：调 default-art.js `buildAllDefaultArt()`（默认玩家圆、hex-ring/yellow/green 三色环、basic1..advanced2 敌人），逐个 saveAsset + registerDesign。
 ```
-**设计稿 JSON 结构**（`normalizeDesign` / `normalizeElement` 钳制并补默认值）：
-```js
-{ id, name, scale, center:{x,y},
-  elements:[ { shape:'polygon'|'arc'|'stroke'|'pixel',
-    count,        // 围绕圆心等角放置的副本数（"一组"）；arc/stroke 同 polygon 支持，仅 pixel 恒为 1
-    orbitRadius,  // polygon：形状中心到设计圆心的轨道半径；stroke/pixel >0 时元素中心挂轨道公转
-    radius, sides,                    // polygon：外接半径 / 边数
-    lineWidth, color, fill,           // 描边粗细(=环厚) / 颜色 / 填充色（null=不填充；**有填充色即按闭合区域上色**）
-    rotSpeed, dir, phase,             // 旋转角速度 rad/s / 方向(1=逆时针,-1=顺时针) / 初始相位 rad
-    arcStart, arcEnd,                 // arc：起止角（°）
-    pattern,                          // arc：plain=普通圆弧 / clock=钟表表盘 / hands=长短针（只画针不画环）
-    tickShortLen, tickLongLen, tickDensity, tickRatio, tickDir,        // clock/hands：短/长针长 px(6/12)、总针数(12)、长短比(1)、朝向 in/out/both
-    handLongRadius, handShortRadius, handLongColor, handShortColor,    // hands：长/短针轨道半径(0)、颜色（默认继承 color）
-    points, closed,                   // stroke：轮廓点 [{x,y}]（orbit=0 相对设计圆心，orbit>0 相对轮廓重心）/ 是否闭合
-    cols, rows, cellSize, gridColor,  // pixel：规格(12/12, 1~64)、每格边长(8, 1~2000)、网格线色（空=不描网格）
-    cells } ] }                       // pixel：稀疏有色格 [{x,y,color}]，整数格索引（相对网格左上角），越界/负坐标在 normalize 时过滤
-```
-**轮廓库 JSON**（`data/outlines/<id>.json`，归一化 `normalizeOutline`，同文件导出）：
-```js
-{ id, name, points:[{x,y}],   // 点相对轮廓重心（保存时已平移）
-  color, lineWidth, closed, fill }
-```
+**设计稿 JSON 结构**（`normalizeDesign`/`normalizeElement` 钳制并补默认值）：顶层 `{ id, name, scale, center:{x,y}, elements:[...] }`，元素按 `shape` 分四类（`polygon`/`arc`/`stroke`/`pixel`）：
+- `polygon`：`count`（绕圆心等角副本数，arc/stroke 同支持，仅 pixel 恒 1）、`orbitRadius`（形状中心到设计圆心的轨道半径；stroke/pixel >0 时元素中心挂轨道公转）、`radius` 外接半径、`sides` 边数。
+- 四类共有：`lineWidth`（描边粗细=环厚）、`color`、`fill`（null=不填充；**有填充色即按闭合区域上色**）、`rotSpeed`（角速度 rad/s）、`dir`（1=逆时针/-1=顺时针）、`phase`（初始相位 rad）。
+- `arc`：`arcStart`/`arcEnd`（°）+ 显示形式 `pattern`（`plain` 普通 / `clock` 钟表表盘 / `hands` 长短针只画针不画环），clock/hands 附 `tickShortLen`/`tickLongLen`（短/长针长 px，默认 6/12）、`tickDensity`（总针数 12）、`tickRatio`（长短比 1）、`tickDir`（in/out/both）；`hands` 另用 `handLongRadius`/`handShortRadius`（长/短针轨道半径 0）、`handLongColor`/`handShortColor`（默认继承 color）。
+- `stroke`：`points`（轮廓点 `[{x,y}]`，orbit=0 相对设计圆心、orbit>0 相对轮廓重心）、`closed`（是否闭合）。
+- `pixel`：`cols`/`rows`（规格 12/12，1~64）、`cellSize`（每格边长 8，1~2000）、`gridColor`（网格线色，空=不描网格）、`cells`（稀疏有色格 `[{x,y,color}]` 整数格索引，越界/负坐标 normalize 时过滤）。
+**轮廓库 JSON**（`data/outlines/<id>.json`，归一化 `normalizeOutline`，同文件导出）：`{ id, name, points:[{x,y}]（点相对轮廓重心，保存时已平移）, color, lineWidth, closed, fill }`。
 注意：**本分类的编辑器场景统一用 `this.editing` 区分编辑器/游戏；画板是唯一不依赖场景、也不走 `state.mode` 的独立页**（靠 `body.artboard-mode` 接管）。它有自己的属性面板，与 `entity-properties.js` 的实体属性面板**互不相通**。
 ### 4.10 武器 · 弹道编辑器链路（批3 工作台 + 批4 战斗接入）
 武器系统 = **独立设计页**（纯 Canvas2D + DOM 表单，复用画板矢量渲染 `renderAsset` + 统一弹道解释器 `weapon-runtime`），**不碰 EditorScene / `this.editing` / `state.mode`**。一份武器设计 = 武器外形(画板) + 发射媒介(最外层圆环小球) + 发射逻辑(子弹外形+子弹轨迹) + 弹道/进入游戏参数。
 
 ```
 「武器」按钮（bindings.js 附近，body.weapon-mode）→ showWeaponBoard(true, dom, state)（weapon-board.js）
-  登录 body.weapon-mode；body 隐藏 main、显示 #weaponPage
-  design = defaultWeaponDesign()（首次）
-  renderForm(dom)      ← 左侧表单分组（标量字段 data-path + 三段画板矢量组 + 矢量场/光束 + 拖尾）
-  fillTemplateSelect(dom)  ← buildDefaultWeapons().filter(isTemplate) 载入 3 模板 + 空白
-  refreshWeaponSelect(dom) ← GET /api/weapons 合并 buildBuiltinWeaponDesigns()（内置 yellow/green，未落盘也能列出）→ #weaponSelect
-  loop(canvas)         ← requestAnimationFrame 驱动开火预览（buildWeaponRuntimeEntry(design).fire→stepBullet→drawBullet）
-「保存」→ saveWeapon(id, design) + registerWeapon(design)（回注册到 WEAPONS 表，会话内即用）+ refreshWeaponSelect
-「载入」→ ensureWeaponDef(id)（内置/已注册武器从目录取，其它从 /api/weapons/:id 取，取不到则报「未找到武器」）→ normalizeWeaponDesign → renderForm + registerWeapon + preview
+  body 隐藏 main、显示 #weaponPage；design = defaultWeaponDesign()（首次）
+  renderForm(dom)（左侧表单：标量字段 data-path + 三段画板矢量组 + 矢量场/光束 + 拖尾）；fillTemplateSelect(dom)（buildDefaultWeapons().filter(isTemplate) 载 3 模板 + 空白）
+  refreshWeaponSelect(dom)（GET /api/weapons 合并 buildBuiltinWeaponDesigns() 内置 yellow/green）→ #weaponSelect；loop(canvas)（RAF 驱动开火预览）
+「保存」→ saveWeapon(id, design) + registerWeapon(design)（回注册 WEAPONS 表，会话内即用）+ refreshWeaponSelect
+「载入」→ ensureWeaponDef(id)（目录取，其它从 /api/weapons/:id 取，取不到报「未找到武器」）→ normalizeWeaponDesign → renderForm + registerWeapon + preview
 「模板」→ buildDefaultWeapons().find(isTemplate) 载入 3 模板 + 空白
 表单编辑：标量字段走 data-path；画板矢量组（外形/媒介/子弹）走「+多边形/圆弧/轮廓 + 从画板导入」，每个字段输入必须带 data-index（否则 bindShapeInput 定位不到，改了不生效——已踩坑）。
 开火预览：drawPreview(canvas) 用 makeG(ctx) Canvas2D 适配器绘制 外形/媒介环/媒介小球 + 模拟发弹（beam 也画成激光束 / ttl 淡出）。
@@ -512,38 +488,37 @@ state.selected 变化 → redraw() → sync()（level-flow.js:36）→ renderEnt
 - 数值管道：设计稿 `baseDamage/fireInterval/maxAmmo/chargeRequired` 进运行时 WEAPONS 条目 → 现有 `playerDamage()`/`fireClock` 零改动生效。
 - 武器轮/工坊/图标：`WEAPONS[type]?.ringColor` + `drawWeaponGlyph` 对未知武器走 else 分支（橙圆+环）优雅回退，不崩。
 - 设计页保存/载入/载入模板即 `registerWeapon`，当前浏览器会话即可用（不必刷新）。
-**武器设计稿 JSON 结构**（`normalizeWeaponDesign` 钳制）：
-```js
-{ id, name, baseDamage, fireInterval, maxAmmo, chargeRequired,
-  purchasable, price, unlockLevel, slot(1/2/3), maxGenericMods, maxDedicatedMods, isTemplate,
-  appearance: { scale, center, elements:[画板矢量] },      // 武器外形
-  medium: { ringIndex, angle, radius, size, ringColor, ringWidth, orbitSpeed, fireSpeed, elements:[画板矢量] },  // 发射媒介
-  bullet: { count, spreadDeg, spreadRandom, range, speed, fadeDuration, randomColor, randomPalette, baseAngleOffset, size,
-            shape: { scale, center, elements:[画板矢量] },  // 子弹外形
-            trail: { type:'cone'|'equal'|'snake'|'particle', length, width, color, fade, tailWidth, midWidth, midAt, particleSize, particleGap, historyMax },
-            trajectory: { kind:'vector'|'beam',
-                          vector: { speed, angleOffset, gravityX, gravityY, zigzag:{enabled,ampDeg,wavelength}, jitter:{enabled,amount,freq} },
-                          beam: { width, color } } } }
-```
+**武器设计稿 JSON 结构**（`normalizeWeaponDesign` 钳制）：顶层 `{ id, name, baseDamage, fireInterval, maxAmmo, chargeRequired, purchasable, price, unlockLevel, slot(1/2/3), maxGenericMods, maxDedicatedMods, isTemplate, appearance:{scale,center,elements:[画板矢量]}, medium:{ringIndex,angle,radius,size,ringColor,ringWidth,orbitSpeed,fireSpeed,elements:[画板矢量]}, bullet:{...} }`（`appearance`=武器外形、`medium`=发射媒介）。
+- `bullet` = `{ count, spreadDeg, spreadRandom, range, speed, fadeDuration, randomColor, randomPalette, baseAngleOffset, size, shape:{scale,center,elements:[画板矢量]}, trail:{type:'cone'|'equal'|'snake'|'particle', length, width, color, fade, tailWidth, midWidth, midAt, particleSize, particleGap, historyMax}, trajectory:{kind:'vector'|'beam', vector:{speed, angleOffset, gravityX, gravityY, zigzag:{enabled,ampDeg,wavelength}, jitter:{enabled,amount,freq}}, beam:{width, color}} }`。
 > 画板矢量元素（外形/媒介/子弹共用，`normalizeWeaponShape`+`renderAsset`）新增 **`offsetX/offsetY/offsetSpeed`**（移动滞后：`renderAsset(g,design,x,y,t,scale,motion,alpha)` 第 7 参 `motion`（归一化移动向量，game 用 `moveLeanX/Y÷PLAYER_LEAN.hex`）驱动元素沿移动方向错位；第 8 参 `alpha` 供子弹淡出）。圆弧新增**钟表表盘/长短针**：`pattern`（plain/clock/hands）+ `tickShortLen`/`tickLongLen`/`tickDensity`/`tickRatio`/`tickDir` 与长短针 `handLongRadius`/`handShortRadius`/`handLongColor`/`handShortColor`（与 asset-render 对齐，渲染走 `renderAsset` arc 分支的 `drawArcTicks`/`drawArcHands`；`normalizeWeaponShape` 携带这些字段，故武器外形/媒介/子弹圆弧都能用钟表/长短针花纹）。媒介新增 **`ringWidth`**（环线宽）、**`orbitSpeed`/`fireSpeed`**（球怠速/射击转速°/s，`game-scene.js` 转动角速度改用之，回退 180/20）。子弹新增 **`range`**（射程，超出淡出消失）、**`speed`**（飞行速度，缺省回退旧 `vector.speed`）、**`fadeDuration`**（消失时长 ms：到达最远距离（配 `range`）**或撞墙**时停驻原地、在时长内原地渐隐——被墙壁阻挡时同样渐隐而非直接销毁；0=按距离淡出）、**`spreadRandom`**（每发随机偏移°）、**`randomColor`**（每发随机色，`randomPalette` 指定随机合集[调色盘 chip，规范化为 `#rrggbb`，空则全场随机色相]）；拖尾新增 **`midWidth`**（菱形中间宽，>0 时渲染头尾尖中间宽的 6 顶点菱形）与 **`midAt`**（最宽处占比）。发射媒介环上小球由 `entity-art.drawPlayer` 的 `drawWeaponMedium()` 绘制（球兜底色取 `medium.ringColor`，非硬编码白）。**weapon-board 圆弧钟表 UI**：`shapeFieldEdit` arc 分支追加「显示形式」select（`pattern`）+ 条件性钟表/长短针子字段；`bindShapeInput` 对 `pattern` 特判 `renderForm(dom)` 重渲（钟表子字段显隐）、`tickDir` 特判字符串写入；`miniSelect` 为新增 select 渲染助手。
 ### 4.12 导表 → server 实时解析 → 打包分发（策划表格链路）
 
 ```
 策划文档/server/{消耗品,武器,老虎机}.xlsx
-  ├─（开发期）server.js:175 getInnerShop()
-  │    key = 三份表 mtime 拼接（server.js:160 tableMtimeKey，缺文件记 'missing'）
-  │    命中 innerShopCache → 直接返回；否则 await import('./tools/export-tables.mjs').buildInnerShop({tablesDir})   ← **动态 import**
+  ├─（开发期）server.js:175 getInnerShop()：key = 三份表 mtime 拼接（server.js:160 tableMtimeKey，缺文件记 'missing'）；命中 innerShopCache → 直接返回
+  │    否则 await import('./tools/export-tables.mjs').buildInnerShop({tablesDir})（**动态 import**）
   │    失败（文件缺失 / 被 ~$ 锁文件占用 / 格式异常 / 打包态无 exceljs）→ console.warn + 回退 data/inner-shop.json（:168 readInnerShopFallback）
-  │    两者都不可用 → 返回空骨架（{consumables:[],weapons:[],lottery:{drawCost:15,goldPrize:15,kinds:[]}}），**永不 500**
-  └─（打包态）无 策划文档目录、无 exceljs → 直接读 extraResources 带进来的 data/inner-shop.json（JSON 回退路径）
-GET /api/inner-shop → src/api.js:81 getInnerShop → economy/inner-shop.js:31 loadInnerShop（Promise 去重 + 失败可重试）
-  → InnerShopMixin.setupVendorStock → screens.js:drawVendorShop
-
+  │    两者都不可用 → 空骨架（{consumables:[],weapons:[],lottery:{drawCost:15,goldPrize:15,kinds:[]}}），**永不 500**
+  └─（打包态）无 策划文档目录、无 exceljs → 直接读 extraResources 带进来的 data/inner-shop.json
+GET /api/inner-shop → src/api.js:81 getInnerShop → economy/inner-shop.js:31 loadInnerShop（Promise 去重 + 失败可重试）→ InnerShopMixin.setupVendorStock → screens.js:drawVendorShop
 打包链：npm run pack = node tools/export-tables.mjs && vite build && electron-builder --win
-        build.files          = electron/** dist/** server.js package.json（**不含 tools/**）
-        build.extraResources = data/levels、data/ui、data/inner-shop.json
+        build.files = electron/** dist/** server.js package.json（**不含 tools/**）；build.extraResources = data/levels、data/ui、data/inner-shop.json
 ```
 **设计意图（重要）**：`tools/` 与 `exceljs`（devDependency）**故意不进 `build.files`** —— 打包态用不到导表脚本，靠 `extraResources` 里的 `data/inner-shop.json` 兜底；server 端因此必须**动态** `import()` 导表模块（写成顶层静态 import 会让打包后启动直接崩）。开发期策划改表免重启（mtime 缓存自动失效）。**导表产物不止来自 xlsx**：`buildInnerShop` 还会**交叉引用项目数据**——`loadWeaponNameIndex()` 读 `data/weapons/*.json` 的 `name` 建「武器名 → 项目武器 id」，写入 `weapons[].weaponId`，故产物字段依赖 `data/` 的现状（不能只看 xlsx）；匹配不到时 `weaponId` 留空串（不报错）。
+
+### 4.13 放置一种新实体：穿线顺序（以休息火堆 `campfire` 为例）
+同一条实体被 6 个文件消费，**必须按序成对改**（漏一个即功能残缺，详见 §6.1 / §7 坑 57）。
+```
+① index.html 工具栏加 <button data-tool="campfire" class="tool">休息火堆</button>（在 idol 之后）
+② editor-input.js:pointerDown —— 选中判定 selectedCampfire 加入 select 可拖拽/缩放集合（:80/:84）；
+     擦除 hit.type==='campfire' → l.campfires=(l.campfires||[]).filter(v=>v!==hit.entity)（:127）；
+     清空 selected 判定链补 !(l.campfires||[]).includes(selected)（:146）；
+     放置 tool==='campfire' push 默认对象 + state.selected=它（:174，默认值见 §3.8）
+③ editor-geometry.js:pickTopEntity —— 在 idols 之后、icons 之前加 hitBackground 命中（:250），返回 { entity, type:'campfire' }
+④ history.js —— entityKind 加 campfires（:48）；COPY_ID_PREFIX 加 campfires:'campfire'（:60）→ 可复制/撤销
+⑤ entity-properties.js —— type 判定加 (l.campfires||[]).includes(entity)?'休息火堆'（:180）+ fields 分支（:448，勿再写 id）；非标量字段（「可抽基础属性强化」）不能用 fields/multiselect，改为后置行编辑器 renderCampfireStatBuffs（:100，调用点 :669；DOM/写回见 §3.8、坑 59）
+⑥ world-render.js —— draw() 调 drawCampfires（:469）；editing 且选中时画编辑态选中框 + 角手柄（:705）
+```
 
 ## 5. 关键常量与数值
 
@@ -582,7 +557,19 @@ GET /api/inner-shop → src/api.js:81 getInnerShop → economy/inner-shop.js:31 
 | 导表数据资源 | `package.json:38-51` | `extraResources`: `data/levels`、`data/ui`、`data/inner-shop.json` | 随包分发的只读数据 | 新增表产物必须在此加条目 |
 
 ## 6. 扩展指南
-### 6.1 新增一种可编辑实体类型（最重的一类需求，跨 6~8 个文件）
+### 6.1 新增一种可放置实体类型（最重的一类需求，跨 6~8 个文件）
+编辑器侧「放置 + 可编辑」一种新实体，下列 5 处**必须同时改**（漏一处即功能残缺，症状见右列）：
+
+| # | 文件 | 必改点 | 漏了的症状 |
+|---|---|---|---|
+| 1 | `editor-input.js` | `tool==='xxx'` 放置分支 + erase filter + 选中集(:84) + selected 失效链(:146) | 放不下 / 删不掉 |
+| 2 | `editor-geometry.js` | `pickTopEntity` 插一段命中 | **点不中**（选择、擦除都失灵） |
+| 3 | `history.js` | `entityKind` 归类 + `COPY_ID_PREFIX` 前缀 | **不能复制粘贴、撤销后该实体丢失**（且不报错） |
+| 4 | `entity-properties.js` | type 判定 + fields 分支（**勿再写 id 字段**）；非标量/多值控件仿火堆 `renderCampfireStatBuffs` 后置**行编辑器**（通用 `multiselect` 已删除） | 无属性面板 / 面板出现两行「编号」/ 多值字段无法编辑 |
+| 5 | `world-render.js` | `draw()` 绘制段 + 编辑态选中框/手柄 | 画布不显示 / 选中无框 |
+
+另有 `index.html` 按钮（`data-tool`）+ `state.js:normalizeXxx`（`DEFAULT_LEVEL` 数组 + `normalizeLevel`）。**落盘例外**：已存在的关卡 json 不会自动写入新字段，直到下次保存。
+
 以「新增 `turret`（炮台）」为例，按顺序：
 1. **`src/state.js`**：仿 `normalizeIcon`（`:204`）写 `normalizeTurret(value, index)`；在 `DEFAULT_LEVEL`（`:323`）加 `turrets: []`；在 `normalizeLevel`（`:438`）返回对象里加 `turrets: (Array.isArray(data.turrets)?data.turrets:[]).map(normalizeTurret)`。
 2. **`index.html`**：工具栏加 `<button data-tool="turret" class="tool">炮台</button>`（`:88-102` 区块内）。不需要改 `ui.js` 的 `ids`（工具按钮是 `querySelectorAll('.tool')` 收的）。
@@ -591,13 +578,13 @@ GET /api/inner-shop → src/api.js:81 getInnerShop → economy/inner-shop.js:31 
    - 若要支持缩放/旋转手柄，把 `turret` 加进 `:61-70` 的 `selectedXxx` 判定和 `:71` 的长条件、以及 `:72` 的旋转白名单；
    - `erase` 分支（`:91`）加 `hit.type === 'turret'` 的 filter，并把它加进 `:124-134` 的 selected 失效校验链。
 4. **`src/systems/editor/editor-geometry.js`**：`pickTopEntity`（`:200`）按期望的遮挡优先级插入 `for` 循环（越靠前越优先命中）。
-5. **`src/editor/entity-properties.js`**：`type` 三元链（`:50-64`）加一行；再加 `else if ((l.turrets||[]).includes(entity))` 的 `fields` 分支。
+5. **`src/editor/entity-properties.js`**：`type` 三元链（`:167-182`）加一行；再加 `else if ((l.turrets||[]).includes(entity))` 的 `fields` 分支（**勿写 `id`**）。多值/结构化字段不要塞 `fields`，仿火堆 `renderCampfireStatBuffs` 在 `bindEntityFieldInputs` 之后渲染后置行编辑器。
 6. **`src/editor/history.js`**：`entityKind`（`:36`）加 `if ((l.turrets||[]).includes(entity)) return 'turrets';`；`COPY_ID_PREFIX`（`:56`）加 `turrets: 'turret'`。**漏这两处 = 该实体不能复制粘贴且不报错**。
 7. **`src/systems/ui/world-render.js`**：`draw()` 里加绘制段；若用精灵，仿 `syncIconSprites`（`:220`）写一个 sync 并在 `draw()` 里调用；选中框/手柄绘制仿 `:427-450` 的 portal 段。
 8. **游戏侧生效**：`systems/level/spawning.js` 等处把关卡数据实例化为运行时对象（详见 gameplay-systems / level-design skill）。
 9. 关卡 json 无需手改（`normalizeLevel` 会补 `turrets: []`），但**已存在的关卡文件不会自动写入该字段**，直到下次保存。
 ### 6.2 新增一个属性面板字段
-1. `entity-properties.js` 对应实体的 `fields` 数组加 `['fieldKey', '中文标签', 'number'|'text'|'color'|'boolean'|'select'|'multiselect', options?]`。嵌套字段直接写点号路径（`getNested`/`setNested` 支持，如 `'spawn.waves.0.count'`）。
+1. `entity-properties.js` 对应实体的 `fields` 数组加 `['fieldKey', '中文标签', 'number'|'text'|'color'|'boolean'|'select', options?]`（通用 `multiselect` 渲染分支与 `input.dataset.ms` 处理已删除；`trigger-panel.js` 自渲染的多选不受影响）。嵌套字段直接写点号路径（`getNested`/`setNested` 支持，如 `'spawn.waves.0.count'`）。**结构化/多值字段**（行编辑器类）不要走 `fields`，仿火堆 `renderCampfireStatBuffs` 在 `bindEntityFieldInputs` 之后后置渲染，且字段键名/结构与 `state.js:normalizeXxx` 契约逐字对齐（坑 59）。
 2. `src/state.js` 对应 `normalizeXxx` 加该字段的默认值与钳制——**不加会导致关卡重载后字段丢失**。
 3. 如果改这个字段需要立刻重绘/重算：在 `bindEntityFieldInputs`（`:435` 的 `oninput`）里加特判（参考 `field === 'type'` / `field === 'id'` 的写法）。默认路径已经会 `draw() + saveDraft`。
 4. `select` 的选项若来自其它实体列表（如引用某个 gate/trigger），记得在 `renderEntityProperties` 里现算（参考 `gateOptions:88`、`l.triggers.map(...)`：`:251`），并考虑「被引用实体改 id 后要刷新下拉」——已有的 `field === 'id'` 特判（`:476`）就是为此存在。
@@ -620,22 +607,16 @@ GET /api/inner-shop → src/api.js:81 getInnerShop → economy/inner-shop.js:31 
 3. 若资源需**可写**（如上传目录），不能放 `extraResources`（只读），要放 `dataRoot`（`%APPDATA%/arc-engine`）下，参考 `server.js:69` 的 `uploads`。
 4. `build.files`（`:30`）只含 `electron/**`、`dist/**`、`server.js`、`package.json`——**新增运行时需要的根级 js 文件必须加进这里**，否则打包后 `import('../server.js')` 之外的模块会找不到。
 ### 6.6 运镜锚定中心工具（`cinematics-board.js`）
-给「运行时动态位置」（如 BOSS 死亡坐标）的运镜做**编辑器侧迁移**：选中关键帧 → `#cinematicSetAnchor` 进入 `pickAnchor` 模式 → 点击预览画布拾取世界坐标作锚点 → `applyCenterMigration(dom, ax, ay)`。
-**核心换算**（编辑器模型，**已与运行时统一为「视口左上角世界坐标」**：`camParams` 里 `camCenterWorld = { x: panX + camW/2, y: panY + camH/2 }`，`camW = level.camera.width`、`camH = camW * VIEW_H/VIEW_W`）：
+给「运行时动态位置」（如 BOSS 死亡坐标）的运镜做**编辑器侧迁移**：选中关键帧 → `#cinematicSetAnchor` 进入 `pickAnchor` 模式 → 点击预览画布拾取世界坐标作锚点 → `applyCenterMigration(dom, ax, ay)`。核心换算（`camParams` 里 `camCenterWorld = { panX + camW/2, panY + camH/2 }`，`camW = level.camera.width`、`camH = camW * VIEW_H/VIEW_W`）：
 ```
-当前帧镜头中心 = { x: kf.panX + camW/2, y: kf.panY + camH/2 }
-delta = { x: ax - 相机中心.x, y: ay - 相机中心.y }
-所有关键帧: panX += delta.x, panY += delta.y
+当前帧镜头中心 = { kf.panX + camW/2, kf.panY + camH/2 }；delta = { ax − 中心.x, ay − 中心.y }；所有关键帧 panX += delta.x, panY += delta.y
 ```
-选中帧镜头中心即对准锚点，其余帧同 delta 平移，**相对轨迹不变**。
-**要点**：
-1. `applyCenterMigration` 首参放 `dom`（本文件惯例），函数体内要用 `dom`/`stateRef`。
-2. **`pickAnchor` 与「添加参照物」互斥**：预览 canvas 单一点击入口，`onclick` 先判 `pickAnchor`，true 只做锚点拾取并 `return`，不进 `refs.push`。
-3. `pickAnchor` 复位路径：`showCinematicsBoard`（进出）、`cinematicSelect.onchange`、`cinematicNew.onclick`、`deleteCurrent`。
-4. **新增 `#cinematicSetAnchor` 必须进 `src/ui.js` 的 `ids` 数组**（getDom 校验，缺即 Missing DOM elements）。
-5. 纯编辑器、不落盘新字段——迁移只改关键帧 `panX/panY` 值；运行时仍由 `focusTarget:'boss'`（`_resolveFocusTarget`）覆盖为真实坐标；`asar: false`（`:26`）是故意的（server.js 要读真实文件）。改成 true 会让 `path.join(__dirname, '..', 'dist')` 之类的路径失效。
-6. 验证：`npm run pack`（= `vite build && electron-builder --win`，产物 `release/`，target `portable`）。快速验证不打包也行：`npm run build && npm run electron`（`app.isPackaged` 为 false 时会回退项目 `data/`）。
-7. 配套离线预览页 `docs/cinematic-preview.html`（**单文件零依赖** Canvas2D，653 行）：1:1 复刻运行时相机数学（`screen = R(-rot)·(world−camCenterWorld)·z + viewportCenter`，`camCenterWorld = scroll + camW/(2z)`）与叠层顺序，含 A/B（新 3400ms vs 旧 4450ms 方案）对比、播放/暂停/进度条/关键帧刻度/实时参数面板、页内自检徽章（200 随机点误差 < 0.5px 显 PASS）。**改运镜相机数学/叠层顺序时同步它**（`worldToScreen`/`camParams` 的单一真源在 `cinematics-board.js`）。
+选中帧镜头中心即对准锚点，其余帧同 delta 平移，**相对轨迹不变**。**要点**：
+1. `applyCenterMigration` 首参放 `dom`（本文件惯例）；**`pickAnchor` 与「添加参照物」互斥**（预览 canvas 单一点击入口，`onclick` 先判 `pickAnchor`，true 只拾取锚点并 return，不进 `refs.push`）。
+2. `pickAnchor` 复位路径：`showCinematicsBoard`（进出）、`cinematicSelect.onchange`、`cinematicNew.onclick`、`deleteCurrent`。
+3. **新增 `#cinematicSetAnchor` 必须进 `src/ui.js` 的 `ids` 数组**（getDom 校验，缺即 Missing DOM elements）。
+4. 纯编辑器、不落盘新字段——迁移只改关键帧 `panX/panY`；运行时仍由 `focusTarget:'boss'`（`_resolveFocusTarget`）覆盖为真实坐标；`asar: false`（`:26`）是故意的（server.js 要读真实文件），改成 true 会让 `path.join(__dirname, '..', 'dist')` 之类路径失效。
+5. 验证：`npm run pack`（= `vite build && electron-builder --win`，产物 `release/`，target `portable`）；快速验证 `npm run build && npm run electron`（`app.isPackaged=false` 回落项目 `data/`）。配套离线预览页 `docs/cinematic-preview.html`（**单文件零依赖** Canvas2D，653 行）：1:1 复刻运行时相机数学（`screen = R(-rot)·(world−camCenterWorld)·z + viewportCenter`，`camCenterWorld = scroll + camW/(2z)`）与叠层顺序，含 A/B 对比、播放/暂停/进度条/关键帧刻度/实时参数面板、页内自检徽章（200 随机点误差 < 0.5px 显 PASS）。**改运镜相机数学/叠层顺序时同步它**（`worldToScreen`/`camParams` 单一真源在 `cinematics-board.js`）。
 ### 6.7 新增一张策划表 → 供游戏读取
 以「再导一张 `策划文档/server/xxx.xlsx` 给前端用」为例（现有 inner-shop 链路即此范式）：
 1. `tools/export-tables.mjs` 加 `SHEET_XXX = { file:'xxx.xlsx', sheet:'页签名', headerKey:'某中文列名' }` + `export async function parseXxx(dir)`（`loadSheet` → `findHeaderRow` → `buildColumnMap` → 逐行读）。**跳表头**：有编号列用「编号是数字」，无编号列用「某数值列必须是数值」。**空行终止**：连续 `BLANK_ROW_STOP(5)` 行无有效数据即停。结果并进 `buildInnerShop` 或另开 `buildXxx`。
@@ -687,7 +668,7 @@ delta = { x: ax - 相机中心.x, y: ay - 相机中心.y }
 30. **运镜期间必须让 `updatePlayCamera` 让权 + 结束后恢复相机，且运镜只在 play/trial 生效**。① **让权**：`editor-camera.js` 的 `updatePlayCamera` 是每帧驱动播放相机的函数，运镜播放时若不同时插值会被它覆写 → **必须在函数最前（`const ctx=this.ctx;` 之后、`const cam=...` 之前）加 `if (this.cinematicActive) return;`**，否则运镜被每帧重置、看不到效果。② **结束恢复**：`stopCutscene` 里 `cinematicActive=false` + `cam.setRotation(0)`（清除运镜旋转，Phaser 相机不会自动回零）+ 调 `setupPlayCamera()` 让相机回到播放态（deadzone/center/menu 重新接管）。③ **只在 play/trial 生效**：`playCutscene` 首部 `if (this.editing) { console.warn(...); return; }`——编辑器模式下用户是正在配时间轴，不应被运镜带走；运镜数据由 `state.level.cinematics` 驱动，编辑器 UI 用 canvas 自绘预览，不依赖相机引擎。**判据**：任何「临时接管相机然后交还」的逻辑，都必须同时做「接管期间让 update 让权」+「交还时恢复状态」两件事，否则要么看不到效果，要么运镜结束后相机卡死在运镜末帧。
 31. **运镜动态焦点 ≠ 关键帧 pan 的简单平移，且慢动作只作用于世界 dt，编辑器与运行时 panX/panY 语义不同**。① **动态焦点**：关键帧 `panX/panY` 是「视口左上角世界坐标」，但用户语义是「镜头中心对准某点」。运行时 `playCutsceneById(id,{ focusTarget, x, y })`：`_resolveFocusTarget` 取 `opts.x/y`（直接坐标）优先，再 `focusTarget==='boss'` 取 `this.bossTarget`/激活母舰。**有 `cinematicFocus` 时 `_applyCutsceneState` 必须做 `panX = focus.x - cam.width/2` 换算**，否则镜头会偏半屏。**判据**：凡「运镜瞄准非固定点」的需求，必须在 `_resolveFocusTarget` 里区分「直接坐标」与「具名参考物（boss）」，且换算只发生在 `_applyCutsceneState`（勿改关键帧存储的 pan）。② **慢动作**：`clip.timeScale` → `cinematicTimeScale`，在 `game-scene.js:142 update` 开头 `dt *= slowmo`（仅 <1 才缩）——**只缩放走 `dt` 的世界模拟（玩家/敌人/子弹/特效），不影响运镜相机推进**（运镜走 `this.time.addEvent` 真实时间）。**判据**：慢动作放对地方（update 的 dt），别误放 `this.time.timeScale`（会影响运镜计时器本身）。③ **编辑器 vs 运行时 `panX/panY` 语义已统一为「视口左上角世界坐标」**：编辑器 `camParams`（`cinematics-board.js`）`camCenterWorld = { panX + camW/2, panY + camH/2 }`，与运行时（`editor-camera.js`）的 `panX = cam.scrollX`（**视口左上角**）同源；有焦点目标时 `_applyCutsceneState` 覆盖为 `focus.x - cam.width/2`。§6.6「锚定中心」工具已改用该模型（**旧「`worldW/2 + panX` 相对世界中心偏移」口径已作废**），`screenToWorld`/`drawAnchorHint`/`applyCenterMigration` 三处同步改过。
 32. **新增 DOM id 漏注册进 `src/ui.js` 的 `ids` → `Cannot set properties of undefined (setting 'onchange')`，且**不会**报 `Missing DOM elements`**（真实踩过：`cinematics-board.js` 加慢动作 `#cinematicTimeScale`，`index.html` 有元素、`ui.js` 的 `ids` 却漏登记，于是 `dom.cinematicTimeScale` 是 `undefined`，`initCinematicsBoard` 里 `dom.cinematicTimeScale.onchange` 直接抛错、编辑器白屏「初始化失败」）。**关键区分**：坑 16/29 讲的是「`index.html` 缺元素 → `getDom()` throw `Missing DOM elements`」；这次是**反过来的第三种**——`index.html` 有元素、但 **id 没登记进 `ui.js` 的 `ids` 数组**，`getDom()` 不会校验没登记过的 id，所以不 throw `Missing`，而是等你代码里某处 `dom.xxx.onchange/onclick` 才因 `undefined` 炸。**排查法**：报 `Cannot set properties of undefined (setting 'xxx')` → 立即查 `src/ui.js` 的 `ids` 数组是否登记了该 id，而非查 `index.html`（index.html 大概率有）。**三处同步**（漏任何一处都崩）：① `index.html` 加 `id="xxx"` 元素；② `src/ui.js` 的 `ids` 数组加 `'xxx'`（getDom 逐项取 `getElementById`，登记了才校验存在——**反过来没登记就不校验，只在你用它的地方炸**）；③ `bindings.js`（或对应模块 `initXxx`）接线。**判据**：凡报「初始化失败 / 白屏」且错误是**属性访问 undefined**，先怀疑 `ui.js` `ids` 漏登记，再怀疑 `index.html` 缺元素；两者症状不同，别只找「页面缺元素」。
-33. **BOSS 属性面板字段名必须与「运行时读取路径」逐字一致，且该路径要能穿过 `normalizeEnemy` 不丢键（已踩过）**：`boss-2-5t5` 的「被击败运镜 id」最初写成**顶层** `cutsceneId`（`setNested(entity,'cutsceneId',…)` 写 `e.cutsceneId`），而运行时 `enemy-ai.js:defeatEnemy` 读 `e.bossCfg.cutsceneId`（= `e.boss.cutsceneId`）；更致命的是 `state.js:normalizeEnemy` 对 `boss-2-5t5` 只回传 `boss` 对象，**顶层 `cutsceneId` 在落盘→读回时被静默丢弃** → 面板配的击破运镜既不生效、重开后也丢失，且**全链路无任何报错**。**遗留**：无（母舰的顶层 `cutsceneId` 已在 `state.js:normalizeEnemy` 补保留，见下）。**两处修复**：①`boss-2-5t5` 字段改为 `boss.cutsceneId`（`entity-properties.js` 的 `boss-2-5t5` 分支尾部），与运行时读取路径对齐（`normalizeBoss25T5Config` 保留字符串键 `cutsceneId`）②`state.js:normalizeEnemy` 输出补 `cutsceneId: (typeof enemy?.cutsceneId === 'string' ? enemy.cutsceneId : '')`，使母舰的顶层路径也能穿过落盘→读回；`enemy-ai.js:defeatEnemy` 对 `boss-2-5t5` 改为 `e.bossCfg?.cutsceneId || e.cutsceneId`（手写关卡顶层也能生效）。**判据**：新增 BOSS 面板字段时，先确认 ①运行时读哪个路径（`e.xxx` 还是 `e.bossCfg.xxx`）②该路径是否被 `state.js:normalizeEnemy` 的对应分支保留，两者缺一字段就"能配不生效"。
+33. **BOSS 属性面板字段名必须与「运行时读取路径」逐字一致，且该路径要能穿过 `normalizeEnemy` 不丢键（已踩过）**：`boss-2-5t5` 的「被击败运镜 id」最初写成**顶层** `cutsceneId`（`setNested(entity,'cutsceneId',…)` 写 `e.cutsceneId`），而运行时 `enemy-ai.js:defeatEnemy` 读 `e.bossCfg.cutsceneId`（= `e.boss.cutsceneId`）；更致命的是 `state.js:normalizeEnemy` 对 `boss-2-5t5` 只回传 `boss` 对象，**顶层 `cutsceneId` 在落盘→读回时被静默丢弃** → 面板配的击破运镜既不生效、重开后也丢失，且**全链路无任何报错**。**遗留**：无（母舰的顶层 `cutsceneId` 已在 `state.js:normalizeEnemy` 补保留，见下）。**两处修复**：①`boss-2-5t5` 字段改为 `boss.cutsceneId`（`entity-properties.js` 的 `boss-2-5t5` 分支尾部），与运行时读取路径对齐（`normalizeBoss25T5Config` 保留字符串键 `cutsceneId`）②`state.js:normalizeEnemy` 输出补 `cutsceneId: (typeof enemy?.cutsceneId === 'string' ? enemy.cutsceneId : '')`，使母舰的顶层路径也能穿过落盘→读回；`enemy-ai.js:defeatEnemy` 对 `boss-2-5t5` 改为 `e.bossCfg?.cutsceneId || e.cutsceneId`（手写关卡顶层也能生效）。**判据**：新增 BOSS 面板字段时，先确认 ①运行时读哪个路径（`e.xxx` 还是 `e.bossCfg.xxx`）②该路径是否被 `state.js:normalizeEnemy` 的对应分支保留，两者缺一字段就"能配不生效"。**同类第 3 例（重装机兵）**：面板写 `e.mech.*` → 由 `normalizeEnemy` 的 `mech: type === 'heavy-mech' ? normalizeHeavyMechConfig(enemy?.mech) : null` 负责保留（已按此实现）；**非 `heavy-mech` 类型该键恒为 `null`**，所以「切类型后再切回来」面板字段会重新补默认值（切类型分支的 `entity.mech = normalizeHeavyMechConfig(entity.mech)`）。
 34. **mxGraph 线框导入的 5 个坑**（斜线全丢 / 圆角矩形变圆 / 三角形变矩形 / 白色变黑 / rotation 反向；本轮一次性修复，都在设计稿页）：
    - **现象 A**：draw.io 里画的斜线（`edge=1` 的 mxCell，几何是 `mxPoint as="sourcePoint"/"targetPoint"`，或连在两个顶点上）粘贴到「设计稿 → 导入」后**一条都不出来**，控件数少一半；**根因 A**：`parseMxGraph` 循环首行 `if (isEdge) continue;` 把连线整体跳过。**正确做法**：连线单独解析成 `{shape:'line', x/y/w/h=折线包围盒, points:[相对 bbox 原点的折线顶点]}`；端点三种来源按序兜底 —— 游离 `mxPoint[as=sourcePoint/targetPoint]` → 所连顶点(`source`/`target`)的 `exitX/exitY`(`entryX/entryY`) 比例点 → 顶点中心；`Array as="points"` 作中间折点；两端都定位不到才丢弃。渲染侧三处配套：`drawShape` 加 line 分支（只描边不填充）、`computeView` 跳过 `line`（否则一条长斜线的包围盒会被当成背景把视图缩飞）、命中检测改「点到线段距离」（细线若用包围盒会点中一大片空白）。**`points` 必须存相对 bbox 原点的偏移**，否则拖动时 `s.x/s.y` 变了而点没动，线立刻脱位。
    - **现象 B**：15×15 的圆角矩形（`rounded=1`，draw.io 缺省 arcSize=15%）在画布上**显示成整圆**（`docs/ui-designs/ui-battle-12.json` 里 15×15 的「消耗品槽」就是这例）；**根因 B**：`drawShape` 圆角半径写死 `Math.min(8 * sc, W / 2, H / 2)`，小尺寸时被 `W / 2` 夹住 → 半径 = 半边长 = 全圆。**正确做法**（`cornerRadius`）：百分比模式取 `arcSize`%（缺省 15，夹到 ≤50）× `min(W,H)`；`absoluteArcSize=1` 时 `arcSize` 直接是设计单位 × `sc`；最后仍夹到半边。**判据**：凡「本应随尺寸变化的视觉参数」都不要写成固定像素再夹到半边长，必然在小尺寸退化成极端形状。
@@ -718,17 +699,26 @@ delta = { x: ax - 相机中心.x, y: ay - 相机中心.y }
 55. **链环 z 序必须在原有元素之后**（否则被不透明填充体盖住，看起来像「新生成的链环被抹掉」）。`weapon-body.js:renderWeaponBody` 与 `entity-art.js:drawHexRingPlayer`（`drawHexRingPlayer` 链环用**显式 `chain:true` 标记**、不能用半径判断——武器球半径比内环还小）都改成**两趟遍历**：先画全部原有元素、再画链环。原来按外径升序直画时，链环外径最小 → 最先画 → 被后面绘制的不透明填充体（散射中心黑三角内切半径 7.5，链环 extent 3.75/7.13 都在里面）整块盖住。出场计时仍按外径升序的 `item.index`（`drawHexRingPlayer` 里为 `item.revealIndex`），只改 z 序、不动时序。**判据**：凡「向内生成的小元素叠在实心父元素之上」的渲染，绘制顺序必须与原件的不透明性对齐，不能只按几何尺寸排序。
 56. **链环厚度剔除的判据必须用固定参考缩放 `refZoom`，不能用当帧 zoom**（否则「生成变慢 + 撕裂」）。用当帧 zoom 时每个链环会在不同时刻依次跨过 `minPx`(1px) 阈值 → 放大过程中环一个接一个冒出来。**正确做法**（`weapon-ring-chain.js:chainRefScale(refZoom = WEAPON_RING_CHAIN.refZoom)`）：`pxFactor = scale × designScale × chainRefScale(opts.refZoom)` 固定，可见集合只由配置决定、与当帧 zoom 无关 —— 相机一旦越过 `minZoom`，该显示的几个环**一次性整体出现**，全程稳定。**实测结论**：散射/激光/禅灭/冥狙/地狱火/普通武器 radial 六个在 zoom ≥ `minZoom` 时都能生成链环；同一武器在 zoom 2 与 zoom 5 的绘制 op 数完全一致（可见集合稳定，不再逐帧级联）；战斗 zoom≈1 时全部不生成。`entity-art.js:drawHexRingPlayer` 的厚度判据同样改用 `chainRefScale()`。
 
+57. **新实体必须同时改 5 个编辑器文件（漏 `editor-geometry` 点不中、漏 `history` 不能复制/撤销）**（本轮休息火堆踩中）。只加放置分支（`editor-input.js`）不够：`editor-geometry.js:pickTopEntity` 不加 `hitBackground` 段 → 选择/擦除都点不中；`history.js` 的 `entityKind`（归类）+ `COPY_ID_PREFIX`（复制前缀）不加 → `Ctrl+C/V` 复制体 id 前缀错、`entityKind` 返回空串使 `copySelected` 静默失败、撤销后该实体类丢失（均**不报错**）。另两处：`entity-properties.js`（type 判定 + fields 分支）与 `world-render.js`（`draw()` 绘制段 + 编辑态选中框）。完整清单见 §6.1 / §4.13。
+58. **实体属性面板分支不要再写 `id` 字段**（本轮休息火堆踩中）。`renderEntityProperties` 渲染任何实体前都会 `fields.unshift(['id','编号','text'])` 统一补「编号」；若实体自己的 `fields` 又写一条 `['id', ...]`，面板会渲染出**两行「编号」**（值相同，看起来像重复 bug）。字段分支只写该实体**特有**字段（见 §3.8 火堆示例）。
+59. **火堆「基础属性强化」行编辑器三个坑**（本轮 `multiselect`→行编辑器踩中）：① **面板字段必须与 `state.js` 的 `normalizeCampfire` 契约逐字一致**——`statBuffs` 现为 `[{ id, name, value }]`（非旧 `string[]`），面板 `collect()` 产出的键名/结构与 `state.js:273 normalizeCampfire`（含 `id` 过滤）必须对齐，否则落盘→读回被**静默改写**（如旧 `string[]` 会被 `normalizeCampfire` 重新映射）。② **「恢复默认」可逆性靠「等于表默认就写空」**：仅勾选行写入；`name === 表默认 name → 存 ''`；数值留空或 `=== 表默认 value → 存 null`；其余存原值。事件 = 容器 `focusin → pushUndo()`、`input → entity.statBuffs = collect() + saveDraft`，**不重渲染**（否则打字丢焦点）。③ **`Number(null) === 0` 会把「用表默认」误判成「覆盖为 0」**：判空必须显式写 `v === null || v === undefined || v === ''`，**不能**用 `Number.isFinite(Number(v))`；`state.js:266 buffValueOrNull` 与 `economy/campfire.js:170`（`campfireStatPool`）**两处必须同步**，漏一处则数值回落失效（配「0」既保存不了也读不回默认）。
+
+60. **同一段 handler 服务多组多选时，字段名必须从 `data-ms` 派生，不要硬编码**（本轮加「宝箱上锁/解锁」的 `chestIds` 时踩中）：`trigger-panel.js` 的 `change` 分支原先写死 `ev.gateIds = [...querySelectorAll('input[data-ms="events.N.gateIds"]:checked')]`，宝箱多选复用同一 handler 会把勾选写进 `gateIds`（`chestIds` 永远为空 → 事件静默不生效）。已改为 `const key = el.dataset.ms.split('.').pop(); ev[key] = [...querySelectorAll(\`input[data-ms="${el.dataset.ms}"]:checked\`)]`。**判据**：凡「多组多选/多组同构控件共用一段事件处理」的地方，标识都从 data 属性派生。
+61. **宝箱尺寸的钳制有三处，改下限必须一起改**：① 面板输入 `entity-properties.js:bindEntityFieldInputs`（`(field==='w'||field==='h') && node 属宝箱` → `Math.max(20, v || 20)`）；② schema `state.js:normalizeChest` → `Math.max(20, Number(chest.w) || CHEST_SIZE)`；③ 拖角手柄走 `resizeRect`（下限 `MIN_WALL_SIZE`=8，比 20 松）。③ 与 ①② 不一致时会表现为「画布上能拖到很小、存盘重载后变大」，看似 bug 实为钳制不同值。同理 `world-render.js:syncChestSprites` 的缩放取 `Math.max(c.w || 0, c.h || 0, 1)`，**`w`/`h` 任一为 0 时不能让它缩成 0**（`.png` 会直接看不见）。
+
+62. **「留空 = 未配置」的可选数值字段：面板侧必须 `delete` 键，且 `input` 与 `change` 两个分支都要接**（本次加触发器敌人数值覆盖 `hp/damage/scale` + 关卡兜底面板时踩中）。要点：① `state.js` 侧的 `normalizeWave` 的 `hp`/`damage`/`scale` 与 `normalizeEnemyDefaults` 都走私有 `optionalNum(v)`（**先显式判 `null`/`undefined`/`''` 再 `Number()`**；`Number(null)` 与 `Number('')` 都是 `0`，写成 `Number.isFinite(Number(v)) ? Number(v) : null` 会把「未配置」误判成「覆盖为 0」→ 0 血 / 0 伤害 / 尺寸 0）。② 面板侧同样不能写 `0`：`trigger-panel.js:applyWaveStat` 与 `enemy-defaults-panel.js` 在 `value.trim()===''` 时 **`delete` 该键**（`hp`/`scale` 需 `>0`、`damage` 允许 `0`），条目空则连父键一起删（保持 JSON 干净、重载不残留）。③ **`trigger-panel.js` 的 `change` 分支会再跑一遍通用 `setNested(..., Number(el.value))`**：若只在 `input` 分支特判，清空输入框后失焦（`change`）会又把 `Number('')=0` 写回去 → 表现为「清空后保存仍是 0」。故 `applyWaveStat` 必须在 **`input` 与 `change` 两处**都在 `setNested` 之前调用并 `return`。④ 新增面板 DOM id 别忘了 `src/ui.js` 的 `ids`（漏登记症状见坑 32：`Cannot set properties of undefined`，而不是 `Missing DOM elements`）。
+
 ## 8. 验证方式
 **1. 构建**
 ```
 npx vite build
 ```
-基线：`✓ 90 modules transformed.`（接线前 86；+4 = 两个新运行时模块 + 因接线才进依赖图的 `run-items.js`/`battle-items-art.js`）无 error；装配 mixin 由 23 → **25**。注意它**检测不出** `const ctx = this.ctx;` 漏写、`ctx.hooks` 未注册、未 import 的自由变量（见坑 11）。
+基线：`✓ 98 modules transformed.`（实测：本轮 +1 = 新建 `src/editor/enemy-defaults-panel.js`（关卡级敌人默认数值兜底面板）；此前 97）无 error；装配 mixin 仍 **25**。**本轮为宝箱尺寸字段 + 触发器「宝箱上锁/解锁」事件**（新增 `InteractablesMixin.setChestsLocked`/`chestLockWalls` 两方法 → mixin 方法数 **303** / 冲突 2 全为 `if`/`for` 假阳性；test 20/19/1 不变）。注意它**检测不出** `const ctx = this.ctx;` 漏写、`ctx.hooks` 未注册、未 import 的自由变量（见坑 11）。
 **2. 单测**
 ```
 node --test test/
 ```
-基线 **20 tests / 19 pass / 1 fail**，唯一 fail 是 `test/player-api.test.js` round-trip 里旧 schema 的 `mods` 字段被 `normalizePlayer` 有意丢弃（既有 schema 迁移不一致，非本轮引入）。mixin 同名自检基线 **方法数 285 / 冲突 2**（均为 `if`/`for` 假阳性；较上一轮 +9，`EditorCameraMixin` 由 21 → 26）。**改了 `server.js` 或 `src/api.js` 起服再跑一遍**（表现与上面一致）：
+基线 **20 tests / 19 pass / 1 fail**，唯一 fail 是 `test/player-api.test.js` round-trip 里旧 schema 的 `mods` 字段被 `normalizePlayer` 有意丢弃（既有 schema 迁移不一致，非本轮引入）。mixin 同名自检基线 **方法数 303 / 冲突 2**（均为 `if`/`for` 假阳性；本轮敌人数值覆盖未新增任何 mixin 方法）。**改了 `server.js` 或 `src/api.js` 起服再跑一遍**（表现与上面一致）：
 ```
 node server.js          （另开终端，默认 5173）
 node --test test/
@@ -761,6 +751,7 @@ node -e "const fs=require('fs');const b=fs.readFileSync('src/editor/xxx-board.js
 11. 若改了 icon/上传相关：导入一张背景图（走 `/api/uploads`）+ 可交互图标下拉能列出 `图标/` 目录内容。
 12. 若改了画板/轮廓相关：画板 → 「绘制轮廓」→ 加点/选择双模式 + 点选中（拖动/方向键 1px/XY/Delete）→ 插入圆作参考底图与转点 → 整条变换 → 完成写回 stroke；「保存为轮廓」→ `data/outlines/` 落盘 → 主画板「+ 从轮廓库添加」→ stroke 调轨道半径/缩放/旋转手柄均生效。
 13. 若改了设计稿页（`ui-mxgraph.js`/`ui-wireframe.js`）：粘贴一段**带斜线 + 圆角矩形 + 三角形 + 白色圆形 + 平行四边形**的 mxGraph XML（斜线 `edge=1` + `mxPoint as="sourcePoint"/"targetPoint"`；圆角矩形 `rounded=1` 且 15×15 见 `docs/ui-designs/ui-battle-12.json`；三角形 + `rotation=-90` + 白色圆形见 `docs/ui-designs/ui-arrow.json`；平行四边形 + `size=` 见 `docs/ui-designs/ui-smalllevel.json`）→ 斜线出现在正确位置（可点选/拖动且端点不脱位）、圆角矩形是**圆角方块而非整圆**、**三角形是三角而非矩形且按 `rotation=-90` 指向正确**、**白色圆形是白色而非黑色**、**平行四边形是斜四边形（倾斜量≈`size` 设计单位）而非矩形**、视图缩放正常（长斜线没被当背景）、保存后重新载入形状数不变。
+14. 若改了触发器敌人数值覆盖 / 关卡兜底面板（§3.9）：侧栏「敌人默认数值」应有 7 组（按 `ENEMY_TYPES`）；填 `基础敌人1` 的血量 500 → `data/levels/<当前关卡>.json` 出现 `enemyDefaults: { basic1: { hp: 500 } }`；**把输入清空后失焦，JSON 里该键消失**（`hp` 与父键 `basic1` 都被删，不留 `hp: 0`、不留空对象）；触发器面板每波三项输入同样「留空不落盘」；三个输入框在小侧栏下不换行、不撑破。
 **4. 打包验证**（仅当改了 `electron/`、`package.json`、`server.js` 的打包分支）
 ```
 npm run pack          （= vite build && electron-builder --win，产物 release/）

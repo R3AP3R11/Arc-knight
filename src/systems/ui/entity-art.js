@@ -14,7 +14,9 @@ import { buildOrbitInstance } from '../art/weapon-runtime.js';
 import { getDesign, ensureDesign } from '../art/design-store.js';
 import { isKnownWeapon } from '../../player-data.js';
 import { BOSS25T5_ART } from '../combat/boss25t5.js';
+import { HEAVY_MECH_ART } from '../combat/heavy-mech.js';
 import { drawBoss25T5Body } from './boss25t5-art.js';
+import { drawHeavyMechBody } from './heavy-mech-art.js';
 
 // ── 颜色与旋转矩形工具 ──
 export function color(value) {
@@ -399,6 +401,11 @@ export function drawEnemyShape(g, e, dynamic, target, t = 0, alpha = 1) {
     const bossDesign = getDesign(e.art || BOSS25T5_ART);
     if (drawBoss25T5Body(g, e, bossDesign, target, t, alpha)) return;
   }
+  // 重装机兵：设计稿整体按头部朝向旋转（顶部的尖 = 头，始终瞄准玩家）+ 瞄准期两条瞄准线
+  if (e.type === 'heavy-mech') {
+    const mechDesign = getDesign(e.art || HEAVY_MECH_ART);
+    if (drawHeavyMechBody(g, e, mechDesign, target, t, alpha)) return;
+  }
   // 应用画板美术方案：实体带 art 且设计稿已加载 → 用 renderAsset 覆盖默认绘制
   const design = e?.art ? getDesign(e.art) : null;
   if (design) { renderAsset(g, design, e.x, e.y, t, e.artScale || 1, undefined, alpha); return; }
@@ -528,7 +535,8 @@ export function updatePlayerMoveLean(player, dx, dy, dt) {
 }
 
 // 玩家本体环组：5 环 + 武器球。opts 传 { screenScale, elapsedMs } 时走「内圈环链 + 出场渐显」路径（局内）；
-// opts 为 null（HUD / 工坊卡片等 UI）时维持原观感（无六边形、无环链、alpha 全 1）。
+// opts 为 null 或未传 screenScale（HUD / 工坊卡片等 UI）时维持原观感（无六边形、无环链、alpha 全 1）。
+// opts.hideWeaponRing = true（卡片兜底美术）时跳过最外圈发射环与武器球，只留 4 个同心环。
 export function drawHexRingPlayer(graphics, player, scale = 1, opts = null) {
   const centerX = player.x;
   const centerY = player.y;
@@ -538,16 +546,22 @@ export function drawHexRingPlayer(graphics, player, scale = 1, opts = null) {
   const middleK = PLAYER_LEAN.middle / PLAYER_LEAN.hex;
   const outerK = PLAYER_LEAN.outer / PLAYER_LEAN.hex;
 
-  // 元素表（设计单位；渲染时统一乘 scale）：5 环 + 武器球
+  // 元素表（设计单位；渲染时统一乘 scale）：5 环 + 武器球；weaponRing / kind:'orb' 标记供 opts.hideWeaponRing 剔除
   const items = [
     { radius: PLAYER_ART.innerRingRadius, lineWidth: PLAYER_ART.innerRingThickness, color: weaponColor, leanK: innerK, kind: 'ring' },
     { radius: PLAYER_ART.outerRingRadius, lineWidth: PLAYER_ART.outerRingThickness, color: weaponColor, leanK: middleK, kind: 'ring' },
     { radius: PLAYER_ART.outer2RingRadius, lineWidth: PLAYER_ART.outer2RingThickness, color: weaponColor, leanK: outerK, kind: 'ring' },
     { radius: PLAYER_ART.bodyRingRadius, lineWidth: PLAYER_ART.bodyRingThickness, color: '#ffffff', leanK: 0, kind: 'ring' },
-    { radius: PLAYER_ART.weaponRingRadius, lineWidth: PLAYER_ART.weaponRingThickness, color: weaponColor, leanK: 0, kind: 'ring' },
+    { radius: PLAYER_ART.weaponRingRadius, lineWidth: PLAYER_ART.weaponRingThickness, color: weaponColor, leanK: 0, kind: 'ring', weaponRing: true },
     // 武器球骑在武器环上，出场次序紧随武器环之后（sortKey 用「环半径 + 球半径」，否则球半径最小会最先出现）
     { radius: PLAYER_ART.weaponOrbRadius * 1.25 * 1.5, lineWidth: 0, color: '#ffffff', leanK: 0, kind: 'orb', sortKey: PLAYER_ART.weaponRingRadius + PLAYER_ART.weaponOrbRadius * 1.25 * 1.5 }
   ];
+  // opts.hideWeaponRing（卡片/HUD 场景）：去掉最外圈发射环与其上的武器球，只留 4 个同心环
+  if (opts?.hideWeaponRing) {
+    for (let i = items.length - 1; i >= 0; i--) {
+      if (items[i].weaponRing || items[i].kind === 'orb') items.splice(i, 1);
+    }
+  }
 
   // 单项渲染：环用 lineStyle+strokeCircle（带 alpha），球用 fillStyle+fillCircle
   const drawItem = (item, alpha) => {

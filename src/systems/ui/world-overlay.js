@@ -1,7 +1,7 @@
 /**
- * 文件职责：世界层特效与悬浮 UI 绘制（宝箱十字星 / 图标 / 传送门 / 神像 / 图标 UI / 神像出价 / 售货机 / 宝箱特效 / 传送门特效 / 屏外实体指引箭头）
+ * 文件职责：世界层特效与悬浮 UI 绘制（宝箱十字星 / 图标 / 传送门 / 神像 / 休息火堆 / 图标 UI / 神像出价 / 售货机 / 宝箱特效 / 传送门特效 / 屏外实体指引箭头）
  * 归属分类：UI交互
- * 主要导出：WorldOverlayMixin（11 个方法）
+ * 主要导出：WorldOverlayMixin（12 个方法）
  * 依赖：systems/constants.js、systems/ui/entity-art.js、systems/art/design-store.js、systems/art/asset-render.js
  */
 import { VIEW_W, VIEW_H, FONT_TECH_SC, CHEST_SIZE, CHEST_OPEN_FX_MS, CHEST_SPAWN_FX_MS } from '../constants.js';
@@ -158,6 +158,51 @@ export const WorldOverlayMixin = {
       }
       const tip = this.idolTipText;
       tip.setText('神像');
+      tip.setPosition(tx + skew + 42, ty);
+      tip.setAlpha(alpha);
+      tip.setVisible(true);
+
+      const badge = this.getFKeyBadge();
+      if (badge) {
+        badge.setPosition(tx + skew + 21, ty);
+        badge.setAlpha(alpha);
+        badge.setVisible(true);
+      }
+    },
+
+    drawCampfireUI(g) {
+      const alpha = this.campfireTipT ?? 0;
+      if (alpha <= 0 || !this.campfireNearest || this.editing || this.state !== 'playing') {
+        this.campfireTipText?.setVisible(false);
+        return;
+      }
+
+      const p = this.player;
+      const nv = this.campfireNearest;
+      const halfDiag = Math.hypot(nv.w, nv.h) / 2;
+      const reach = Math.max(nv.interactRadius || 150, halfDiag + p.r + 40);
+      g.lineStyle(2, 0xffd54f, 0.7 * alpha);
+      g.strokeCircle(nv.x, nv.y, reach);
+
+      const tx = p.x + 20, ty = p.y - 20;
+      const w = 200, h = 44, skew = 18;
+      g.fillStyle(0xffffff, 0.92 * alpha);
+      g.beginPath();
+      g.moveTo(tx + skew, ty - h / 2);
+      g.lineTo(tx + w, ty - h / 2);
+      g.lineTo(tx + w - skew, ty + h / 2);
+      g.lineTo(tx, ty + h / 2);
+      g.closePath();
+      g.fillPath();
+
+      if (!this.campfireTipText) {
+        this.campfireTipText = this.add.text(0, 0, '', {
+          fontFamily: FONT_TECH_SC, fontSize: '22px', color: '#000000'
+        }).setOrigin(0, 0.5).setDepth(13);
+        if (this.uiCam) this.uiCam.ignore(this.campfireTipText);
+      }
+      const tip = this.campfireTipText;
+      tip.setText('休息火堆');
       tip.setPosition(tx + skew + 42, ty);
       tip.setAlpha(alpha);
       tip.setVisible(true);
@@ -390,7 +435,7 @@ export const WorldOverlayMixin = {
       const hh = Math.max(1, b.h / 2 - GUIDE_EDGE_INSET);
       for (const [list, label] of [
         [this.chests, '宝箱'], [this.portals, '撤离传送门'], [this.vendors, '售货机'],
-        [this.idols, '神像'], [this.icons, '图标']
+        [this.idols, '神像'], [this.icons, '图标'], [this.campfires, '休息火堆']
       ]) {
         for (const e of (list || [])) {
           if (!e.guide || e.visible === false || e.spawned === false) continue;

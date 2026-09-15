@@ -33,64 +33,113 @@
       "x": 960,
       "y": 1140,
       "type": "basic1",
+      "art": "",
+      "artScale": 1,
       "hp": 30,
       "damage": 10,
+      "cutsceneId": "",
       "drops": {
         "gold": 1,
         "exp": 1,
-        "charge": 5
-      }
+        "diamond": 0
+      },
+      "boss": null,
+      "mech": null
     },
     {
       "id": "enemy-2",
       "x": 960,
       "y": 1020,
       "type": "basic1",
+      "art": "",
+      "artScale": 1,
       "hp": 30,
       "damage": 10,
+      "cutsceneId": "",
       "drops": {
         "gold": 4,
         "exp": 1,
-        "charge": 0
-      }
+        "diamond": 0
+      },
+      "boss": null,
+      "mech": null
     },
     {
       "id": "enemy-3",
       "x": 1080,
       "y": 1020,
       "type": "basic1",
+      "art": "",
+      "artScale": 1,
       "hp": 30,
       "damage": 10,
+      "cutsceneId": "",
       "drops": {
         "gold": 3,
         "exp": 6,
-        "charge": 0
-      }
+        "diamond": 0
+      },
+      "boss": null,
+      "mech": null
     },
     {
       "id": "enemy-4",
       "x": 570,
       "y": 960,
       "type": "basic2",
+      "art": "",
+      "artScale": 1,
       "hp": 50,
       "damage": 15,
+      "cutsceneId": "",
       "drops": {
         "gold": 4,
         "exp": 5,
-        "charge": 4
-      }
+        "diamond": 0
+      },
+      "boss": null,
+      "mech": null
     },
     {
       "id": "enemy-5",
       "x": 1140,
       "y": 1200,
       "type": "advanced1",
+      "art": "",
+      "artScale": 1,
       "hp": 80,
       "damage": 20,
+      "cutsceneId": "",
       "drops": {
         "gold": 3,
         "exp": 5,
-        "charge": 5
+        "diamond": 0
+      },
+      "boss": null,
+      "mech": null
+    },
+    {
+      "id": "enemy-1789397134484",
+      "x": 960,
+      "y": 810,
+      "type": "heavy-mech",
+      "art": "",
+      "artScale": 1,
+      "hp": 55,
+      "damage": 20,
+      "cutsceneId": "",
+      "drops": {
+        "gold": 1,
+        "exp": 1,
+        "diamond": 0
+      },
+      "boss": null,
+      "mech": {
+        "moveSpeed": 40,
+        "rotateSpeed": 120,
+        "aimSpeed": 25,
+        "fireDelay": 600,
+        "fireInterval": 4000
       }
     }
   ],
@@ -109,13 +158,83 @@
       "yellow",
       "green"
     ],
-    "weaponType": "radial"
+    "weaponType": "radial",
+    "id": "spawn"
   },
   "dropRules": {},
   "triggers": [],
+  "cinematics": [
+    {
+      "id": "cine-1789288387998",
+      "name": "玩家被击败运镜",
+      "durationMs": 4450,
+      "timeScale": 0.2,
+      "focus": "none",
+      "blackHoldMs": 0,
+      "keyframes": [
+        {
+          "t": 0,
+          "zoom": 1,
+          "panX": 0,
+          "panY": 0,
+          "rotation": 0,
+          "alpha": 0,
+          "ease": "linear",
+          "timeScale": 0.2,
+          "vignette": 0,
+          "letterbox": 0,
+          "tint": 0,
+          "tintColor": "#1a0a0a",
+          "flash": 0,
+          "flashColor": "#ffffff",
+          "desat": 0
+        },
+        {
+          "t": 2000,
+          "zoom": 5,
+          "panX": 40,
+          "panY": 40,
+          "rotation": -16,
+          "alpha": 0,
+          "ease": "linear",
+          "timeScale": 0.2,
+          "vignette": 0,
+          "letterbox": 0,
+          "tint": 0,
+          "tintColor": "#1a0a0a",
+          "flash": 0,
+          "flashColor": "#ffffff",
+          "desat": 0
+        },
+        {
+          "t": 4450,
+          "zoom": 1000,
+          "panX": 0,
+          "panY": 0,
+          "rotation": 0,
+          "alpha": 1,
+          "ease": "linear",
+          "timeScale": 0.2,
+          "vignette": 0,
+          "letterbox": 0,
+          "tint": 0,
+          "tintColor": "#1a0a0a",
+          "flash": 0,
+          "flashColor": "#ffffff",
+          "desat": 0
+        }
+      ]
+    }
+  ],
+  "deathCinematic": "cine-1789288387998",
   "crates": [],
   "barrels": [],
   "chests": [],
+  "portals": [],
+  "vendors": [],
+  "idols": [],
+  "campfires": [],
+  "icons": [],
   "background": null,
   "images": [],
   "gates": [],

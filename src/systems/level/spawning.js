@@ -21,12 +21,17 @@ import Phaser from 'phaser';
 import { CELL, ENEMY_BEHAVIOR } from '../constants.js';
 import { toCell } from '../combat/geometry.js';
 import { findPath, nearestWalkable } from '../../pathfinding.js';
-import { ENEMY_TYPES } from '../../state.js';
+import { ENEMY_TYPES, resolveEnemyStats } from '../../state.js';
 
 // ── 本模块私有常量 ──
 const SPAWN_OFFSCREEN_PX = 10;
 const NEWBEE_TRIANGLE_RADIUS = 500;    // 新手关阶段3三角形生成半径
 const ENEMY_EDGE_MARGIN = 60;          // 敌人生成距世界边界的最小边距
+
+// 波次召唤敌人的尺寸倍率（波次 > 关卡兜底 > 1）：生成点校验与碰撞半径共用
+function waveScale(level, type, wave) {
+  return wave ? (resolveEnemyStats(level, type, wave).scale ?? 1) : 1;
+}
 
 export const SpawningMixin = {
   // ── 生成点求解 ──
@@ -42,11 +47,14 @@ export const SpawningMixin = {
       return { x: Phaser.Math.Clamp(x, 0, ww), y: Phaser.Math.Clamp(y, 0, wh) };
     },
 
-    spawnOffscreen(t, count, enemyType) {
-      const type = enemyType || 'basic1';
+    spawnOffscreen(t, wave) {
+      const ctx = this.ctx;
+      const type = wave?.enemyType || 'basic1';
+      const count = Math.max(1, Number(wave?.count) || 1);
+      const scale = waveScale(ctx.state.level, type, wave);
       // 母舰：体型巨大，走专用生成（含保证生成兜底），防止视口外环找不到点导致波次空转
       if (type === 'mothership') {
-        for (let i = 0; i < count; i++) this.spawnMothership(t);
+        for (let i = 0; i < count; i++) this.spawnMothership(t, wave);
         return;
       }
       const v = this.viewRect();
@@ -59,33 +67,35 @@ export const SpawningMixin = {
         for (let attempt = 0; attempt < 60 && !p; attempt++) {
           const off = baseOff * (1 + Math.floor(attempt / 12));
           const c = this.sampleRingPoint(v, off, ww, wh);
-          if (this.canSpawnAt(c.x, c.y, type)) p = c;
+          if (this.canSpawnAt(c.x, c.y, type, 0, scale)) p = c;
         }
-        if (!p) p = this.findClearSpawnNearPlayer(type);
+        if (!p) p = this.findClearSpawnNearPlayer(type, scale);
         if (!p) continue;
 
-        this.enemies.push(this.initEnemy({ x: p.x, y: p.y, type, triggerId: t.id }));
+        this.enemies.push(this.initEnemy({ x: p.x, y: p.y, type, triggerId: t.id, wave }));
       }
     },
 
     // 母舰专用生成：整圆不穿墙的视口外点极难命中，逐档放宽兜底，保证产出一只
-    spawnMothership(t) {
+    spawnMothership(t, wave) {
+      const ctx = this.ctx;
       const v = this.viewRect();
       const baseOff = SPAWN_OFFSCREEN_PX / this.cameras.main.zoomX;
       const { w: ww, h: wh } = this.worldSize();
       const type = 'mothership';
       const b = ENEMY_BEHAVIOR[type] || ENEMY_BEHAVIOR.basic1;
       const r = b.size / 2;
+      const scale = waveScale(ctx.state.level, type, wave);
 
       // 第一轮：严格校验（整圆不穿墙 + 与玩家连线），视口外环最多 60 次外扩
       let p = null;
       for (let attempt = 0; attempt < 60 && !p; attempt++) {
         const off = baseOff * (1 + Math.floor(attempt / 12));
         const c = this.sampleRingPoint(v, off, ww, wh);
-        if (this.canSpawnAt(c.x, c.y, type)) p = c;
+        if (this.canSpawnAt(c.x, c.y, type, 0, scale)) p = c;
       }
       if (p) {
-        this.enemies.push(this.initEnemy({ x: p.x, y: p.y, type, triggerId: t.id }));
+        this.enemies.push(this.initEnemy({ x: p.x, y: p.y, type, triggerId: t.id, wave }));
         return;
       }
 
@@ -101,7 +111,7 @@ export const SpawningMixin = {
       // 第三轮兜底：一个可达开放格，保证 push 一只母舰，绝不让波次空转
       if (!p) p = this.nearestReachablePoint(this.player.x, this.player.y, CELL * 12);
 
-      this.enemies.push(this.initEnemy({ x: p.x, y: p.y, type, triggerId: t.id }));
+      this.enemies.push(this.initEnemy({ x: p.x, y: p.y, type, triggerId: t.id, wave }));
     },
 
   // ── 可达性与安全校验 ──
@@ -146,12 +156,13 @@ export const SpawningMixin = {
     },
 
     // 生成点是否安全：世界边界内、不在墙内、与玩家连线无障碍（可被击杀）、可选最小玩家距离
-    canSpawnAt(x, y, enemyType = 'basic1', minPlayerDist = 0) {
+    // scale = 尺寸倍率（波次/关卡兜底生效后的碰撞半径等比放大，留白同口径）
+    canSpawnAt(x, y, enemyType = 'basic1', minPlayerDist = 0, scale = 1) {
       const b = ENEMY_BEHAVIOR[enemyType] || ENEMY_BEHAVIOR.basic1;
       // 母舰 Hitbox 与画板本体一致：生成点留白用其风筝形包围半径（设计尖端 180 × artScale）
-      const r = enemyType === 'mothership'
+      const r = (enemyType === 'mothership'
         ? 180 * ((ENEMY_TYPES.mothership && ENEMY_TYPES.mothership.artScale) || 1)
-        : b.size / 2;
+        : b.size / 2) * scale;
       const { w: ww, h: wh } = this.worldSize();
       if (x < r || y < r || x > ww - r || y > wh - r) return false;
       if (this.pointInWall(x, y)) return false;
@@ -165,9 +176,9 @@ export const SpawningMixin = {
     },
 
     // 玩家附近螺旋找一个连线无障碍的生成点（多边形全顶点被挡时的兜底）
-    findClearSpawnNearPlayer(enemyType = 'basic1') {
+    findClearSpawnNearPlayer(enemyType = 'basic1', scale = 1) {
       const b = ENEMY_BEHAVIOR[enemyType] || ENEMY_BEHAVIOR.basic1;
-      const r = b.size / 2;
+      const r = (b.size / 2) * scale;
       for (let ring = 1; ring <= 8; ring++) {
         const samples = ring * 8;
         for (let a = 0; a < samples; a++) {
@@ -175,7 +186,7 @@ export const SpawningMixin = {
           const dist = ring * (r + 40);
           const x = this.player.x + Math.cos(ang) * dist;
           const y = this.player.y + Math.sin(ang) * dist;
-          if (this.canSpawnAt(x, y, enemyType)) return { x, y };
+          if (this.canSpawnAt(x, y, enemyType, 0, scale)) return { x, y };
         }
       }
       return null;
@@ -230,6 +241,9 @@ export const SpawningMixin = {
         fadeDuration: Math.max(1, Number(w.fadeDuration) || 500),
         circleCount: Math.max(1, Number(w.circleCount) || 8),
         enemyType: w.enemyType || 'basic1',
+        // 波次对象 + 尺寸倍率：落地生成时用它取三层回落的数值（波次 > 关卡兜底 > 全局）
+        wave: w,
+        scale: waveScale(this.ctx.state.level, w.enemyType || 'basic1', w),
         phase: 'draw',
         progress: 0,
         spawned: 0,
@@ -244,7 +258,7 @@ export const SpawningMixin = {
     },
 
     spawnEnemyAt(x, y, fx) {
-      const enemy = this.initEnemy({ x, y, type: fx.enemyType, triggerId: fx.triggerId || null });
+      const enemy = this.initEnemy({ x, y, type: fx.enemyType, triggerId: fx.triggerId || null, wave: fx.wave });
       enemy.frozen = true;
       fx.spawnedEnemies.push(enemy);
       this.enemies.push(enemy);
@@ -253,20 +267,21 @@ export const SpawningMixin = {
     spawnAtVertex(fx, i, total) {
       const step = Math.PI * 2 / total;
       const baseAngle = fx.startAngle + (i / total) * Math.PI * 2;
+      const scale = fx.scale || 1;
       // 理想顶点 → 其余顶点轮转（允许一个顶点承载多个敌人）→ 半径/角度抖动
       for (let k = 0; k < total; k++) {
         const a = baseAngle + k * step;
         for (const s of [1, 0.85, 1.15]) {
           const x = fx.cx + Math.cos(a) * fx.radius * s;
           const y = fx.cy + Math.sin(a) * fx.radius * s;
-          if (this.canSpawnAt(x, y, fx.enemyType)) {
+          if (this.canSpawnAt(x, y, fx.enemyType, 0, scale)) {
             this.spawnEnemyAt(x, y, fx);
             return;
           }
         }
       }
       // 全部顶点都被障碍阻挡：玩家附近找连线无障碍点兜底
-      const fb = this.findClearSpawnNearPlayer(fx.enemyType);
+      const fb = this.findClearSpawnNearPlayer(fx.enemyType, scale);
       if (fb) this.spawnEnemyAt(fb.x, fb.y, fx);
     },
 
@@ -304,9 +319,10 @@ export const SpawningMixin = {
         fx.t += dt;
         if (fx.t >= fx.duration) {
           // 生成前再校验一次连线无障碍；失效则玩家附近兜底，仍无解跳过
-          let p = this.canSpawnAt(fx.x, fx.y, fx.enemyType) ? fx : this.findClearSpawnNearPlayer(fx.enemyType);
+          const scale = fx.scale || 1;
+          let p = this.canSpawnAt(fx.x, fx.y, fx.enemyType, 0, scale) ? fx : this.findClearSpawnNearPlayer(fx.enemyType, scale);
           if (p) {
-            const enemy = this.initEnemy({ x: p.x, y: p.y, type: fx.enemyType, triggerId: fx.triggerId || null });
+            const enemy = this.initEnemy({ x: p.x, y: p.y, type: fx.enemyType, triggerId: fx.triggerId || null, wave: fx.wave });
             this.enemies.push(enemy);
           }
           return false;
@@ -407,6 +423,7 @@ export const SpawningMixin = {
       const minRadius = Math.max(0, Number(wave.playerMinRadius ?? 200) || 0);
       const count = Math.max(1, Number(wave.count) || 1);
       const type = wave.enemyType || 'basic1';
+      const scale = waveScale(ctx.state.level, type, wave);
 
       // 生成范围：优先使用该波次指定的生成区域，否则回退到触发器自身矩形
       const zone = (wave.zoneId && ctx.state.level.spawnZones?.find(z => z.id === wave.zoneId))
@@ -423,16 +440,16 @@ export const SpawningMixin = {
         // 第一轮：严格满足 安全半径 + 连线无障碍
         for (let attempt = 0; attempt < 60 && !p; attempt++) {
           const c = rand();
-          if (this.canSpawnAt(c.x, c.y, type, minRadius)) p = c;
+          if (this.canSpawnAt(c.x, c.y, type, minRadius, scale)) p = c;
         }
         // 第二轮：区域整体落在安全半径内时，退化为仅连线无障碍 + 避玩家脚下
         for (let attempt = 0; attempt < 60 && !p; attempt++) {
           const c = rand();
-          if (this.canSpawnAt(c.x, c.y, type, 20)) p = c;
+          if (this.canSpawnAt(c.x, c.y, type, 20, scale)) p = c;
         }
         if (!p) continue;
 
-        const size = (ENEMY_BEHAVIOR[type] || ENEMY_BEHAVIOR.basic1).size;
+        const size = ((ENEMY_BEHAVIOR[type] || ENEMY_BEHAVIOR.basic1).size) * scale;
         this.lockEffects.push({
           x: p.x,
           y: p.y,
@@ -440,7 +457,9 @@ export const SpawningMixin = {
           duration: 500,
           t: 0,
           enemyType: type,
-          triggerId: t.id
+          triggerId: t.id,
+          wave,
+          scale
         });
       }
     },

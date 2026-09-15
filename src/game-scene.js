@@ -484,6 +484,8 @@ export function createGameScene(ctx) {
       }
       this.fireClock -= dt;
       this.lasers = this.lasers.filter(l => (l.ttl -= dt) > 0);
+      // 重装机兵激光：变粗 → 保持 → 变细消失（伤害在发射瞬间单次结算，见 enemy-ai.js:heavyMechFireLaser）
+      this.updateEnemyLasers(dt);
 
       const l = ctx.state.level;
 
@@ -551,7 +553,9 @@ export function createGameScene(ctx) {
         // 反弹改件：撞墙时反射速度而非销毁
         if (b.ricochet) {
           const hitW = l.walls.find(w => hitWall(w, b.x, b.y, 3))
-            || this.bulletGateWalls().find(w => hitWall(w, b.x, b.y, 3));
+            || this.bulletGateWalls().find(w => hitWall(w, b.x, b.y, 3))
+            || this.campfireWalls().find(w => hitWall(w, b.x, b.y, 3))
+            || this.chestLockWalls().find(w => hitWall(w, b.x, b.y, 3));
           if (hitW) {
             b.x -= b.vx * dt / 1000;
             b.y -= b.vy * dt / 1000;
@@ -564,7 +568,7 @@ export function createGameScene(ctx) {
 
         // 连续碰撞：用「上一帧→当前帧」线段检测墙体，避免高速子弹单帧跨过整段墙造成隧穿
         // （minigun 子弹速度 9000px/s 时每帧位移 ≈150px，远超墙厚 30px，逐帧点判定必然漏检）
-        const wallAll = [...l.walls, ...this.bulletGateWalls()];
+        const wallAll = [...l.walls, ...this.bulletGateWalls(), ...this.campfireWalls(), ...this.chestLockWalls()];
         let hitWallNow = false;
         {
           const dxw = b.x - obx, dyw = b.y - oby;
@@ -704,6 +708,10 @@ export function createGameScene(ctx) {
         // stepBoss25T5 的 skill 状态会永远等不到 activeZone 进入 keep → 技能不结束、BOSS 卡死在 skill 态。
         if (e.type === 'boss-2-5t5') this.boss25t5ZonesTick(e, dt);
         this.resolveEnemyCollision(e);
+        // 卡墙自毁：顶住障碍且无位移满 ENEMY_STUCK_KILL_MS → 判定消灭（须在本帧碰撞解算之后，读 pushBack）。
+        // 生成在墙体/门外等玩家打不到的敌人若永久存活，waitForClear 波次链与 checkAsyncTriggerEvents 会死锁。
+        this.updateEnemyStuck(e, dt);
+        if (!e.alive) continue;
 
         const dist = Math.hypot(e.x - this.player.x, e.y - this.player.y);
 
@@ -747,8 +755,9 @@ export function createGameScene(ctx) {
 
         // 接触伤害：必须排除自己人 —— e.type !== 'boss-2-5t5'，否则玩家一碰到 BOSS 本体（e.r=80）
         // 就会走 damagePlayer + defeatEnemy 把 BOSS 直接判死。BOSS 的伤害走技能区域（boss25t5ZonesTick）。
+        // advanced2 / heavy-mech 是远程单位：伤害由弹幕/激光承担，接触不结算。
         if (this.state === 'playing' && e.type !== 'advanced2' && e.type !== 'boss-2-5t5'
-            && dist < e.r + this.player.r) {
+            && e.type !== 'heavy-mech' && dist < e.r + this.player.r) {
           this.damagePlayer(e.damage);
           this.defeatEnemy(e);
         }
@@ -760,7 +769,8 @@ export function createGameScene(ctx) {
         b.dist += Math.hypot(b.vx, b.vy) * dt / 1000;
 
         if (l.walls.some(w => hitWall(w, b.x, b.y, 3))
-          || this.activeGateWalls().some(w => hitWall(w, b.x, b.y, 3))) {
+          || this.activeGateWalls().some(w => hitWall(w, b.x, b.y, 3))
+          || this.chestLockWalls().some(w => hitWall(w, b.x, b.y, 3))) {
           return false;
         }
 
@@ -838,6 +848,7 @@ export function createGameScene(ctx) {
       this.updateRunItems(dt);
       if (!inputLocked) this.updateBattleItemsInput(dt);
       if (!inputLocked) this.updateIdolInteract(dt);
+      if (!inputLocked) this.updateCampfireInteract(dt);
       if (!inputLocked) this.updateIconInteract(dt);
       if (!inputLocked) this.updatePortalInteract(dt);
       this.updateGuideArrows(dt);

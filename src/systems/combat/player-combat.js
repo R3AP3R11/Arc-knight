@@ -9,6 +9,7 @@
  *   blockWithShield  —— 扇形护盾角度 + 距离判定，命中则扣盾并抖屏
  *   hitShield        —— 近身敌人撞盾：先结算击杀再走格挡
  *   switchWeapon     —— 按方向切换武器轮当前槽位
+ *   equipWeaponByType —— 按武器类型切到指定武器（火堆选卡后自动切换复用）
  *   drawHitFlash     —— 受击红色闪屏（挖去玩家周围圆形）
  *
  * 通过 Object.assign(EditorScene.prototype, PlayerCombatMixin) 混入，
@@ -18,6 +19,7 @@ import Phaser from 'phaser';
 import { PLAYER_ART, SHIELD, SHIELD_SHAKE_MS, SHIELD_SHAKE_INTENSITY, SHIELD_HIT_COLOR, HIT_FX_TTL } from '../constants.js';
 import { WEAPONS } from './weapons.js';
 import { playerIncomingDamage } from '../economy/damage.js';
+import { enterWeapon, leaveWeapon } from '../economy/weapon-buffs.js';
 import { pointInWall, hitWall } from './geometry.js';
 
 // ── 本模块私有常量 ──
@@ -85,23 +87,39 @@ export const PlayerCombatMixin = {
     },
 
   // ── 武器切换 ──
+    // 按方向在武器轮上移动一格，算出目标武器后交给 equipWeaponByType 执行实际切换。
     switchWeapon(dir) {
       const weapons = this.player.weapons;
       const n = weapons.length;
-      if (n <= 1) return;
-      const from = this.player.weaponIndex;
-      const to = (from + dir + n) % n;
-      this.player.weaponIndex = to;
-      const weaponType = weapons[to];
+      if (n <= 1) return;                               // 不足两把：无轮可转
+      const to = (this.player.weaponIndex + dir + n) % n;
+      this.equipWeaponByType(weapons[to]);
+    },
+
+    // 按武器类型切到指定武器（火堆选卡后自动切换复用同一套切换步骤）。
+    // 关闭条件（任一）→ 返回 false 且不改任何状态：无 weaponType / 未登记在 player.weapons /
+    // 已是当前武器 / WEAPONS 缺定义。leaveWeapon / enterWeapon 必须成对调用
+    // （按武器生效的属性强化靠它回退 / 重放，见 economy/weapon-buffs.js）。
+    equipWeaponByType(weaponType) {
+      if (!weaponType) return false;
+      const weapons = this.player.weapons || [];
+      const to = weapons.indexOf(weaponType);
+      if (to < 0) return false;                         // 该武器不在当前武器轮中
+      if (weaponType === this.player.weaponType) return false;   // 已是当前武器：无事可做
       const weapon = WEAPONS[weaponType];
-      if (!weapon) return;
+      if (!weapon) return false;                        // WEAPONS 缺定义：不切换
+      const from = this.player.weaponIndex;
+      leaveWeapon(this);                                // 切走旧武器：回退其火堆祝福
+      this.player.weaponIndex = to;
       this.player.weaponType = weaponType;
       this.player.weapon = weapon;
       this.player.scheme = weapon.scheme;
-      this.player.weaponArt = (weapon && weapon.appearance && Array.isArray(weapon.appearance.elements) && weapon.appearance.elements.length) ? weapon.appearance : null;
+      this.player.weaponArt = (weapon.appearance && Array.isArray(weapon.appearance.elements) && weapon.appearance.elements.length) ? weapon.appearance : null;
+      enterWeapon(this, weaponType);                    // 切到新武器：应用其火堆祝福
       this.player.weaponIntroAt = this.time?.now || 0;   // 出武器：重播本体出场动画
       this.wheelAnim = { from, to, t: 0, dur: 500 };
       this.syncUIState();
+      return true;
     },
 
   // ── 受击闪屏 ──

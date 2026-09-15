@@ -131,7 +131,7 @@ export function spawnLaser(scene, weaponType, ox, oy, angle, width, color) {
   const dx = Math.cos(angle), dy = Math.sin(angle);
   const startX = ox + dx * 10;
   const startY = oy + dy * 10;
-  const walls = [...scene.ctx.state.level.walls, ...scene.bulletGateWalls()];
+  const walls = [...scene.ctx.state.level.walls, ...scene.bulletGateWalls(), ...scene.chestLockWalls()];
   const { w: ww, h: wh } = scene.worldSize();
 
   let range;

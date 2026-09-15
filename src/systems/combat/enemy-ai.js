@@ -11,22 +11,52 @@
  *   findEnemyPath / resolveEnemyCollision —— 网格寻路 / 世界边界与障碍回推
  *   stepEnemy / stepAdvanced2           —— 通用行为机 / advanced2 专属行为机
  *   fireEnemyBullet / defeatEnemy       —— 发射敌方子弹 / 击杀结算与掉落
+ *   updateEnemyStuck                    —— 卡墙自毁（顶住障碍且无位移满时长 → 判定消灭）
  *
  * 通过 Object.assign(EditorScene.prototype, EnemyAiMixin) 混入，
  * 内部 this 恒为 EditorScene 实例，语义与原类内方法完全一致。
  */
 import Phaser from 'phaser';
-import { CELL, ENEMY_BEHAVIOR, MOTHERSHIP_SPAWN_TABLE, HIT_FX_TTL } from '../constants.js';
-import { toCell, resolveCircleAgainstWalls, rayWallDistance, pointInWall, mothershipBoundsR } from './geometry.js';
+import { CELL, ENEMY_BEHAVIOR, MOTHERSHIP_SPAWN_TABLE, HIT_FX_TTL, ENEMY_STUCK_KILL_MS, ENEMY_STUCK_WINDOW_MS, ENEMY_STUCK_WINDOW_MOVE_PX, ENEMY_STUCK_PUSH_EPS } from '../constants.js';
+import { toCell, resolveCircleAgainstWalls, rayWallDistance, rayToBounds, pointInWall, pointSegmentDistance, mothershipBoundsR } from './geometry.js';
 import { findPath, nearestWalkable } from '../../pathfinding.js';
-import { ENEMY_TYPES } from '../../state.js';
+import { ENEMY_TYPES, resolveEnemyStats } from '../../state.js';
 // 原型机-2-5T5：仅为「敌人初始化时归一化 e.bossCfg」而 import（纯 JS，无 Phaser 依赖）
 import { normalizeBoss25T5Config } from './boss25t5.js';
+// 重装机兵：数据契约与激光/瞄准表现常量（纯 JS，无 Phaser 依赖）
+import { HEAVY_MECH_LASER, normalizeHeavyMechConfig } from './heavy-mech.js';
 
 // ── 本模块私有常量 ──
 const PATH_REPATH_INTERVAL = 0.25;
 const PATH_WAYPOINT_RADIUS = CELL * 0.4;
 const ENEMY_BULLET_SPEED = 400;
+
+// 朝目标角旋转（走最短弧；在 step 内无法到达时按 step 推进）
+function rotateTowardAngle(cur, target, step) {
+  const d = Phaser.Math.Angle.Wrap(target - cur);
+  if (Math.abs(d) <= step) return target;
+  return cur + Math.sign(d) * step;
+}
+
+// 轴向射线的单位方向（近零分量归零）：±π / ±π/2 处 sin/cos 会得到 ±1e-16，
+// rayToBounds 在 dy<0 且 y0≈0 时会因此算出负距离（终点反向），先归零再求交。
+function rayDir(ang) {
+  return {
+    dx: Math.abs(Math.cos(ang)) < 1e-9 ? 0 : Math.cos(ang),
+    dy: Math.abs(Math.sin(ang)) < 1e-9 ? 0 : Math.sin(ang)
+  };
+}
+
+// 射线从 (ox,oy) 沿 ang 出发到「首个墙体或世界边界」的长度（夹非负）
+function aimRay(scene, ox, oy, ang, walls) {
+  const { dx, dy } = rayDir(ang);
+  const { w: ww, h: wh } = scene.worldSize();
+  const len = Math.max(0, Math.min(
+    rayWallDistance(ox, oy, dx, dy, walls),
+    rayToBounds(ox, oy, dx, dy, ww, wh)
+  ));
+  return { dx, dy, len };
+}
 
 export const EnemyAiMixin = {
   // ── 视野判定 ──
@@ -133,6 +163,12 @@ export const EnemyAiMixin = {
       // 原型机-2-5T5：专属状态机（内部自持 bossActive 待机判定，不走通用行为机）
       if (e.type === 'boss-2-5t5') {
         this.stepBoss25T5(e, dt, b, sec);
+        return;
+      }
+
+      // 重装机兵：专属状态机（头部追踪 + 瞄准-停顿-激光，不走通用行为机）
+      if (e.type === 'heavy-mech') {
+        this.stepHeavyMech(e, dt, sec);
         return;
       }
 
@@ -294,6 +330,122 @@ export const EnemyAiMixin = {
       this.hitEffects.push({ x: e.x, y: e.y, ttl: HIT_FX_TTL });
     },
 
+  // ── 重装机兵（远程激光）──
+    // 头部朝向 + 射击状态机：wait（冷却 / 朝玩家逼近）→ aim（瞄准线收拢）→ align（方向锁定 + 停顿）→ 发射激光
+    // 瞄准与发射期间原地不动；方向在「夹角收成一条线」的瞬间锁定，停顿期即为玩家的躲避窗口。
+    stepHeavyMech(e, dt, sec) {
+      if (e.hitFlashT > 0) e.hitFlashT = Math.max(0, e.hitFlashT - dt);
+      const p = this.player;
+      if (!p) return;
+      const cfg = e.mechCfg || (e.mechCfg = normalizeHeavyMechConfig(e.mech));
+      // 生成时头部（设计稿顶部的尖）朝向玩家：首帧按玩家方向初始化，之后按 rotateSpeed 追踪
+      if (e.headAngle == null) e.headAngle = Phaser.Math.Angle.Between(e.x, e.y, p.x, p.y);
+      e.firePhase = e.firePhase || 'wait';
+      e.fireTimer = e.fireTimer ?? cfg.fireInterval;
+      e.aimSpreadDeg = e.aimSpreadDeg ?? 0;
+
+      if (e.firePhase === 'align') {
+        // 方向已锁定（收敛瞬间写入 aimAngle）：头部与瞄准线保持不动
+        e.headAngle = e.aimAngle;
+      } else {
+        e.headAngle = rotateTowardAngle(
+          e.headAngle,
+          Phaser.Math.Angle.Between(e.x, e.y, p.x, p.y),
+          Phaser.Math.DegToRad(cfg.rotateSpeed) * sec
+        );
+      }
+
+      if (e.firePhase === 'wait') {
+        this.stepToward(e, cfg.moveSpeed, sec);
+        // 不在视野内不推进射击冷却：避免屏幕外无预警地放激光（进视野后才开始计时）
+        if (!this.isInView(e)) return;
+        e.fireTimer -= dt;
+        if (e.fireTimer <= 0) {
+          e.firePhase = 'aim';
+          e.aimSpreadDeg = HEAVY_MECH_LASER.spreadDeg;
+        }
+        return;
+      }
+
+      if (e.firePhase === 'aim') {
+        e.aimSpreadDeg = Math.max(0, e.aimSpreadDeg - cfg.aimSpeed * sec);
+        if (e.aimSpreadDeg <= 0) {
+          e.firePhase = 'align';
+          e.aimAngle = e.headAngle;
+          e.fireTimer = cfg.fireDelay;
+        }
+        this.heavyMechUpdateSight(e);
+        return;
+      }
+
+      e.fireTimer -= dt;
+      if (e.fireTimer <= 0) {
+        this.heavyMechFireLaser(e);
+        e.firePhase = 'wait';
+        e.fireTimer = cfg.fireInterval;
+      } else {
+        this.heavyMechUpdateSight(e);
+      }
+    },
+
+    // 瞄准线的两条端点（无限长，只被墙体 / 关卡边界截断）：仅 aim/align 相位每帧重算，写 e.sightLines。
+    // 与激光同为「射线到墙」口径（walls + bulletGateWalls + 上锁宝箱红环），区别只在目的：瞄准线不结算任何伤害。
+    heavyMechUpdateSight(e) {
+      const ctx = this.ctx;
+      const s = e.artScale || 1;
+      const head = e.headAngle ?? 0;
+      const ox = e.x + Math.cos(head) * HEAVY_MECH_LASER.sightStart * s;
+      const oy = e.y + Math.sin(head) * HEAVY_MECH_LASER.sightStart * s;
+      const walls = [...ctx.state.level.walls, ...this.bulletGateWalls(), ...this.chestLockWalls()];
+      const half = Phaser.Math.DegToRad((e.aimSpreadDeg ?? 0) / 2);
+      e.sightLines = [head - half, head + half].map(a => {
+        const { dx, dy, len } = aimRay(this, ox, oy, a, walls);
+        return { x0: ox, y0: oy, x1: ox + dx * len, y1: oy + dy * len };
+      });
+    },
+
+    // 发射激光：起止点在发射瞬间定死（起点 = 头顶尖前方 muzzleOffset，终点按墙裁剪），
+    // 伤害单次结算（束宽取满宽）；之后光束只做「变粗 → 保持 → 变细消失」的表现推进。
+    heavyMechFireLaser(e) {
+      const ctx = this.ctx;
+      const ang = e.aimAngle ?? e.headAngle ?? 0;
+      const s = e.artScale || 1;
+      const { dx, dy } = rayDir(ang);
+      const ox = e.x + dx * HEAVY_MECH_LASER.muzzleOffset * s;
+      const oy = e.y + dy * HEAVY_MECH_LASER.muzzleOffset * s;
+      const walls = [...ctx.state.level.walls, ...this.bulletGateWalls(), ...this.chestLockWalls()];
+      const { len } = aimRay(this, ox, oy, ang, walls);
+      const x1 = ox + dx * len, y1 = oy + dy * len;
+      const width = HEAVY_MECH_LASER.width * s;
+
+      const p = this.player;
+      if (p && pointSegmentDistance(p.x, p.y, ox, oy, x1, y1) < width / 2 + p.r) {
+        this.damagePlayer(e.damage || 0);
+      }
+
+      this.enemyLasers = this.enemyLasers || [];
+      this.enemyLasers.push({
+        ownerId: e.id, x0: ox, y0: oy, x1, y1,
+        t: 0, width: 0, maxWidth: width, color: HEAVY_MECH_LASER.color
+      });
+    },
+
+    // 激光表现推进（每帧一次；无敌人存活时也要跑，光束自身带 ttl）
+    updateEnemyLasers(dt) {
+      const list = this.enemyLasers;
+      if (!list || !list.length) return;
+      const { growMs, holdMs, fadeMs } = HEAVY_MECH_LASER;
+      const total = growMs + holdMs + fadeMs;
+      this.enemyLasers = list.filter(bs => {
+        bs.t += dt;
+        if (bs.t >= total) return false;
+        if (bs.t < growMs) bs.width = bs.maxWidth * (bs.t / growMs);
+        else if (bs.t < growMs + holdMs) bs.width = bs.maxWidth;
+        else bs.width = bs.maxWidth * (1 - (bs.t - growMs - holdMs) / fadeMs);
+        return true;
+      });
+    },
+
   // ── 开火与死亡 ──
     fireEnemyBullet(e, b) {
       const bx = e.x + Math.cos(e.orbitAngle) * e.orbitRadius;
@@ -349,25 +501,41 @@ export const EnemyAiMixin = {
           this.player.boss25t5Slow = false;
         }
       }
+      // 重装机兵死亡：清掉它发射后仍在表现中的激光（避免死亡后光束继续渐细残留）
+      if (e.type === 'heavy-mech' && this.enemyLasers?.length) {
+        this.enemyLasers = this.enemyLasers.filter(bs => bs.ownerId !== e.id);
+      }
     },
 
   // ── 回填：敌人初始化 / 位移碰撞回推 / 视线判定 ──
     initEnemy(e) {
     const ctx = this.ctx;
+      // 触发器波次召唤的敌人：数值三层回落（波次 > 关卡兜底 enemyDefaults > 全局默认）。
+      // wave 仅用于取数值，不留在运行时敌人对象上（故从 e 里剥掉）。
+      const { wave, ...spawn } = e;
       const def = ENEMY_TYPES[e.type] || ENEMY_TYPES.basic1;
       const b = ENEMY_BEHAVIOR[e.type] || ENEMY_BEHAVIOR.basic1;
       const player = ctx.state.level.spawn;
+      const stats = wave ? resolveEnemyStats(ctx.state.level, e.type, wave) : null;
+      // 尺寸倍率：美术（artScale）与碰撞半径（r）等比缩放
+      const scale = stats?.scale ?? 1;
       return {
-        ...e,
-        r: b.size / 2,
+        ...spawn,
+        r: (b.size / 2) * scale,
         alive: true,
-        hp: e.hp ?? def.hp,
-        maxHp: e.hp ?? def.hp,
+        hp: stats?.hp ?? e.hp ?? def.hp,
+        maxHp: stats?.hp ?? e.hp ?? def.hp,
         art: def.art ?? e.art,
-        artScale: def.artScale ?? e.artScale ?? 1,
+        artScale: (def.artScale ?? e.artScale ?? 1) * scale,
         spawnClock: 0,
         hitFlashT: 0,
-        damage: e.damage ?? def.damage,
+        stuckMs: 0,            // 卡墙累计时长（updateEnemyStuck 维护，达到阈值判定消灭）
+        stuckT: 0,             // 当前评估窗口已累计时长
+        stuckPush: false,      // 当前窗口内是否顶过障碍
+        stuckRefX: e.x,        // 当前窗口起点位置（算净位移）
+        stuckRefY: e.y,
+        pushBack: 0,           // 上一帧碰撞解算推回量（>0 = 顶住障碍）
+        damage: stats?.damage ?? e.damage ?? def.damage,
         attackRange: e.attackRange ?? b.attackRange,
         viewTimer: 0,
         engaged: false,
@@ -428,6 +596,18 @@ export const EnemyAiMixin = {
           skill4Cooldown: 0,
           zones: [],
           activeZoneId: null
+        } : {}),
+        // 重装机兵：契约字段显式初始化（与 stepHeavyMech 的 `??=` 兜底一一对应）。
+        // headAngle / fireTimer = null → 首帧分别取「玩家方向」与配置的射击间隔；
+        // sightLines 由 heavyMechUpdateSight 在 aim/align 相位每帧重算（无限长瞄准线，仅被墙截断）。
+        ...(e.type === 'heavy-mech' ? {
+          mechCfg: normalizeHeavyMechConfig(e.mech),
+          headAngle: null,
+          firePhase: 'wait',
+          fireTimer: null,
+          aimSpreadDeg: 0,
+          aimAngle: 0,
+          sightLines: null
         } : {})
       };
     },
@@ -435,6 +615,7 @@ export const EnemyAiMixin = {
     resolveMovementCollision(entity, r) {
     const ctx = this.ctx;
       const l = ctx.state.level;
+      const bx = entity.x, by = entity.y;   // 解算前位置（末尾算 pushBack 用）
       resolveCircleAgainstWalls(entity, r, l.walls);
 
       const gateWalls = this.activeGateWalls();
@@ -445,6 +626,16 @@ export const EnemyAiMixin = {
         .filter(v => v.visible !== false)
         .map(v => ({ x: v.x, y: v.y, w: v.w, h: v.h, shape: 'rect', rotation: 0 }));
       if (vendorWalls.length) resolveCircleAgainstWalls(entity, r, vendorWalls);
+
+      const campfires = this.editing ? (l.campfires || []) : (this.campfires || []);
+      const campfireWalls = campfires
+        .filter(v => v.visible !== false)
+        .map(v => ({ x: v.x, y: v.y, w: v.w, h: v.h, shape: 'rect', rotation: 0 }));
+      if (campfireWalls.length) resolveCircleAgainstWalls(entity, r, campfireWalls);
+
+      // 上锁宝箱的红色圆环（圆形墙）：挡玩家与敌人移动；解锁后该列表为空
+      const chestLockWalls = this.chestLockWalls ? this.chestLockWalls() : [];
+      if (chestLockWalls.length) resolveCircleAgainstWalls(entity, r, chestLockWalls);
 
       const idols = this.editing ? (l.idols || []) : (this.idols || []);
       const idolWalls = idols
@@ -468,6 +659,37 @@ export const EnemyAiMixin = {
             entity.x = b.x + min;
           }
         }
+      }
+
+      // 本帧碰撞解算把实体推回了多少（px）：>0 说明实体在「顶住障碍」，供 updateEnemyStuck 判定卡墙
+      entity.pushBack = Math.hypot(entity.x - bx, entity.y - by);
+    },
+
+    // 卡墙自毁：连续 ENEMY_STUCK_KILL_MS 都「顶住障碍且这一窗口内几乎没净位移」→ 判定消灭。
+    // 只对常规怪物生效（母舰 / 原型机-2-5T5 是关卡手摆的 BOSS，defeatEnemy 会触发击破运镜，不能自动杀）；
+    // 原地待机（advanced2 未激活的休眠自转、charge 停顿期）不顶障碍（pushBack≈0）不会累计，沿墙滑动的怪
+    // 一个窗口内净位移远超阈值也不会累计，避免误杀。由 game-scene.js 敌人循环每帧在 resolveEnemyCollision 之后调用。
+    updateEnemyStuck(e, dt) {
+      if (!e.alive) return;
+      const pushBack = e.pushBack || 0;
+      e.pushBack = 0;
+      if (e.frozen || e.type === 'mothership' || e.type === 'boss-2-5t5') {
+        e.stuckMs = 0; e.stuckT = 0; e.stuckPush = false;
+        e.stuckRefX = e.x; e.stuckRefY = e.y;
+        return;
+      }
+      e.stuckT = (e.stuckT || 0) + dt;
+      if (pushBack > ENEMY_STUCK_PUSH_EPS) e.stuckPush = true;
+      if (e.stuckT < ENEMY_STUCK_WINDOW_MS) return;
+      const moved = Math.hypot(e.x - (e.stuckRefX ?? e.x), e.y - (e.stuckRefY ?? e.y));
+      e.stuckMs = (e.stuckPush && moved < ENEMY_STUCK_WINDOW_MOVE_PX) ? (e.stuckMs || 0) + e.stuckT : 0;
+      e.stuckT = 0;
+      e.stuckPush = false;
+      e.stuckRefX = e.x;
+      e.stuckRefY = e.y;
+      if (e.stuckMs >= ENEMY_STUCK_KILL_MS) {
+        e.stuckMs = 0;
+        this.defeatEnemy(e);
       }
     },
 

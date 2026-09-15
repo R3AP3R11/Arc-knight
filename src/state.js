@@ -18,8 +18,10 @@ export function normalizeRoomMarker(value) {
 }
 
 import { normalizeRoomLayout } from './rooms.js';
+import { CHEST_SIZE, CHEST_LOCK_RING_THICKNESS } from './systems/constants.js';
 import { isKnownWeapon } from './systems/art/weapon-registry.js';
 import { normalizeBoss25T5Config } from './systems/combat/boss25t5.js';
+import { HEAVY_MECH_ART, normalizeHeavyMechConfig } from './systems/combat/heavy-mech.js';
 
 export const ENEMY_TYPES = {
   basic1: { name: '基础敌人1', hp: 30, damage: 10 },
@@ -28,7 +30,9 @@ export const ENEMY_TYPES = {
   advanced2: { name: '进阶敌人2', hp: 100, damage: 15 },
   mothership: { name: '母舰', hp: 1500, damage: 0, art: 'asset-1788764178616', artScale: 2 },
   // 原型机-2-5T5（Boss）：art 直接写字符串字面量，避免 state.js ↔ combat 模块的循环引用；artScale 由关卡/编辑器决定
-  'boss-2-5t5': { name: '原型机-2-5T5', hp: 1500, damage: 0, art: 'asset-1788964413981' }
+  'boss-2-5t5': { name: '原型机-2-5T5', hp: 1500, damage: 0, art: 'asset-1788964413981' },
+  // 重装机兵：远程激光（数据契约与行为见 combat/heavy-mech.js / enemy-ai.js 的 stepHeavyMech）
+  'heavy-mech': { name: '重装机兵', hp: 200, damage: 20, art: HEAVY_MECH_ART }
 };
 
 export const DEFAULT_DROPS = { gold: 1, exp: 1, diamond: 0 };
@@ -112,7 +116,9 @@ export function normalizeEnemy(enemy, index) {
             .filter(s => s.type)
           : [],
         name: (typeof enemy.boss.name === 'string' && enemy.boss.name) ? enemy.boss.name : ''
-      } : null
+      } : null,
+    // 重装机兵配置（移动/旋转/瞄准/开枪延迟/射击间隔）；其余敌人在 editor 里不显示该组字段
+    mech: type === 'heavy-mech' ? normalizeHeavyMechConfig(enemy?.mech) : null
   };
 }
 
@@ -135,8 +141,47 @@ export function normalizeDropRules(value) {
   return rules;
 }
 
-export function normalizeWave(w, def) {
+// 「未配置」判定：null / undefined / '' → null。
+// 不能用 Number() 直接判：Number(null) 与 Number('') 都是 0（有限数），会把「未配置」误判成「覆盖为 0」。
+function optionalNum(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+// 关卡级敌人默认数值（按类型）：触发器波次未配置时套用；都未配置则用 ENEMY_TYPES / ENEMY_BEHAVIOR 全局默认。
+// 字段：hp（>0）/ damage（≥0）/ scale（>0，尺寸倍率 = 美术与碰撞半径等比缩放）；未配置的键不落盘。
+export function normalizeEnemyDefaults(value) {
+  const out = {};
+  if (!value || typeof value !== 'object') return out;
+  for (const [type, def] of Object.entries(value)) {
+    if (!ENEMY_TYPES[type] || !def || typeof def !== 'object') continue;
+    const entry = {};
+    const hp = optionalNum(def.hp);
+    if (hp !== null && hp > 0) entry.hp = hp;
+    const damage = optionalNum(def.damage);
+    if (damage !== null && damage >= 0) entry.damage = damage;
+    const scale = optionalNum(def.scale);
+    if (scale !== null && scale > 0) entry.scale = scale;
+    if (Object.keys(entry).length) out[type] = entry;
+  }
+  return out;
+}
+
+// 敌人数值三层回落：波次覆盖 > 关卡兜底 enemyDefaults[type] > 全局默认。
+// 返回 { hp, damage, scale }，各字段为 null = 未配置（由 enemy-ai.js:initEnemy 用全局默认兜底）。
+export function resolveEnemyStats(level, type, wave) {
+  const d = level?.enemyDefaults?.[type] || {};
+  const pick = (a, b) => (a !== null && a !== undefined ? a : (b !== null && b !== undefined ? b : null));
   return {
+    hp: pick(wave?.hp, d.hp),
+    damage: pick(wave?.damage, d.damage),
+    scale: pick(wave?.scale, d.scale)
+  };
+}
+
+export function normalizeWave(w, def) {
+  const out = {
     enemyType: ENEMY_TYPES[w?.enemyType] ? w?.enemyType : (def?.enemyType || 'basic1'),
     mode: w?.mode === 'offscreen' ? 'offscreen'
       : w?.mode === 'inscreen' ? 'inscreen' : 'surround',
@@ -154,6 +199,14 @@ export function normalizeWave(w, def) {
     preDelay: Math.max(0, Number(w?.preDelay ?? 0) || 0),
     postDelay: Math.max(0, Number(w?.postDelay ?? def?.postDelay) || 1000)
   };
+  // 本波敌人数值覆盖（可选；留空 = 回落关卡兜底 → 全局默认）
+  const hp = optionalNum(w?.hp);
+  if (hp !== null && hp > 0) out.hp = hp;
+  const damage = optionalNum(w?.damage);
+  if (damage !== null && damage >= 0) out.damage = damage;
+  const scale = optionalNum(w?.scale);
+  if (scale !== null && scale > 0) out.scale = scale;
+  return out;
 }
 
 export function normalizeCrate(crate, index) {
@@ -208,6 +261,9 @@ export function normalizeChest(chest, index) {
     id: chest?.id || `chest-${index + 1}`,
     x: Number(chest?.x) || 0,
     y: Number(chest?.y) || 0,
+    // 尺寸：贴图按 max(w,h) 等比缩放（不变形）；同时是命中盒与上锁红环的包围盒
+    w: Math.max(20, Number(chest?.w) || CHEST_SIZE),
+    h: Math.max(20, Number(chest?.h) || CHEST_SIZE),
     // 出现方式：start=游戏开始即存在；trigger=触发器触发（清敌后出现）
     trigger: chest?.trigger === 'trigger' ? 'trigger' : 'start',
     triggerId: chest?.triggerId || '',
@@ -216,6 +272,13 @@ export function normalizeChest(chest, index) {
     ...guideFields(chest),
     rewards: normalizeRewardList(chest?.rewards)
   };
+}
+
+// 宝箱上锁红环半径：以宝箱 w/h 为包围盒取半对角线 + 环厚一半（环内缘刚好贴住宝箱角点，把宝箱包住）
+export function chestLockRadius(chest) {
+  const w = Math.max(20, Number(chest?.w) || CHEST_SIZE);
+  const h = Math.max(20, Number(chest?.h) || CHEST_SIZE);
+  return Math.hypot(w, h) / 2 + CHEST_LOCK_RING_THICKNESS / 2;
 }
 
 export function normalizePortal(portal, index) {
@@ -262,6 +325,32 @@ export function normalizeIdol(idol, index) {
   };
 }
 
+// 火堆祝福数值：null / undefined / 空串 / 非有限数 一律回落为 null（= 用祝福表默认值）。
+// 不能直接用 Number.isFinite(Number(v))——Number(null) 与 Number('') 都是 0，会把「用默认值」误判成「覆盖为 0」。
+function buffValueOrNull(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+export function normalizeCampfire(cf, index) {
+  return {
+    id: cf?.id || `campfire-${index + 1}`,
+    x: Number(cf?.x) || 0,
+    y: Number(cf?.y) || 0,
+    w: Math.max(20, Number(cf?.w) || 290),
+    h: Math.max(20, Number(cf?.h) || 290),
+    art: (typeof cf?.art === 'string' && cf.art) ? cf.art : 'asset-1789356238754',
+    artScale: (() => { const n = Number(cf?.artScale); return Number.isFinite(n) && n > 0 ? n : 1; })(),
+    interactRadius: Math.max(40, Number(cf?.interactRadius) || 150),
+    visible: cf?.visible !== false,
+    statBuffs: (Array.isArray(cf?.statBuffs) ? cf.statBuffs : []).map(e => (typeof e === 'string'
+      ? { id: e, name: '', value: null }
+      : { id: String(e?.id ?? ''), name: typeof e?.name === 'string' ? e.name : '', value: buffValueOrNull(e?.value) })).filter(e => e.id),
+    ...guideFields(cf, { stopAfterUse: true })
+  };
+}
+
 export function normalizeIcon(icon, index) {
   return {
     id: icon?.id || `icon-${index + 1}`,
@@ -278,7 +367,7 @@ export function normalizeIcon(icon, index) {
   };
 }
 
-export const EVENT_TYPES = ['complete', 'roomComplete', 'combat', 'spawnEnemy', 'switchLevel', 'spawnGate', 'removeGate', 'bossBattle', 'playCinematic'];
+export const EVENT_TYPES = ['complete', 'roomComplete', 'combat', 'spawnEnemy', 'switchLevel', 'spawnGate', 'removeGate', 'bossBattle', 'playCinematic', 'lockChest', 'unlockChest'];
 
 function normalizeSpawnWaves(s) {
   const def = {
@@ -341,6 +430,12 @@ function normalizeTriggerEvent(ev, trigger) {
     const cinematicId = typeof ev.cinematicId === 'string' ? ev.cinematicId : '';
     const focusTarget = typeof ev.focusTarget === 'string' && ev.focusTarget ? ev.focusTarget : '';
     return { type, when, cinematicId, focusTarget };
+  }
+
+  // lockChest（宝箱上锁）/ unlockChest（宝箱解锁）：作用于所选宝箱，空选择 = 不作用任何宝箱
+  if (type === 'lockChest' || type === 'unlockChest') {
+    const raw = Array.isArray(ev.chestIds) ? ev.chestIds : ev.chestId ? [ev.chestId] : [];
+    return { type, when, chestIds: [...new Set(raw.filter(v => typeof v === 'string' && v))] };
   }
 
   // spawnGate | removeGate
@@ -480,6 +575,7 @@ export const DEFAULT_LEVEL = {
   ],
   spawn: { x: 130, y: 300, scheme: 'default', hp: 100, maxHp: 100, level: 1, exp: 0, expToNext: 100, gold: 0, weapons: ['radial'] },
   dropRules: {},
+  enemyDefaults: {},
   triggers: [],
   cinematics: [],
   deathCinematic: DEFAULT_DEATH_CINEMATIC.id,
@@ -489,6 +585,7 @@ export const DEFAULT_LEVEL = {
   portals: [],
   vendors: [],
   idols: [],
+  campfires: [],
   icons: [],
   background: null,
   images: [],
@@ -629,9 +726,11 @@ export function normalizeLevel(value) {
     portals: (Array.isArray(data.portals) ? data.portals : []).map(normalizePortal),
     vendors: (Array.isArray(data.vendors) ? data.vendors : []).map(normalizeVendor),
     idols: (Array.isArray(data.idols) ? data.idols : []).map(normalizeIdol),
+    campfires: (Array.isArray(data.campfires) ? data.campfires : []).map(normalizeCampfire),
     icons: (Array.isArray(data.icons) ? data.icons : []).map(normalizeIcon),
     spawn: { ...clone(DEFAULT_LEVEL.spawn), ...(data.spawn || {}), id: data.spawn?.id || 'spawn', weapons: normalizeWeapons(data.spawn?.weapons) },
     dropRules: normalizeDropRules(data.dropRules),
+    enemyDefaults: normalizeEnemyDefaults(data.enemyDefaults),
     background: normalizeBackground(data.background),
     images: (Array.isArray(data.images) ? data.images : []).map(normalizeImage).filter(Boolean),
     gates: (Array.isArray(data.gates) ? data.gates : []).map(normalizeGate),

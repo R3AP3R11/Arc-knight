@@ -13,7 +13,7 @@ const ids = [
   'save', 'load', 'newLevel', 'copyLevel', 'deleteLevel',
   'export', 'import', 'game',
   'uiConfig', 'uiConfigPage', 'uiConfigBack', 'uiGraphSelect', 'uiNodeType',
-  'uiNodeAdd', 'uiConfigSave', 'uiNodeList', 'uiPreviewCanvas', 'levelUi', 'dropRulesEditor',
+  'uiNodeAdd', 'uiConfigSave', 'uiNodeList', 'uiPreviewCanvas', 'levelUi', 'enemyDefaultsEditor', 'dropRulesEditor',
   'roomPanel', 'roomCols', 'roomRows', 'roomThickness', 'roomWallColor', 'roomRoadWidth', 'roomRoadLength', 'roomGrid',
   'roomCellPopup', 'roomCellPopupTitle', 'roomCellPopupClose', 'roomCellSize', 'roomCellType', 'roomCellMarkerType', 'roomCellMarkerIcon',
   'pvLevel', 'pvExp', 'pvPoints', 'pvGold', 'pvWeapons', 'pvMods', 'pvPets',

@@ -10,6 +10,7 @@ import { renderGraph, nodeHidden } from '../../ui-layer.js';
 import { nodeRect } from '../../ui-interact.js';
 import { BINDINGS } from '../../ui-bindings.js';
 import { color } from './entity-art.js';
+import { drawCampfireOffer } from './campfire-art.js';
 
 // 战斗 HUD 设置菜单图标（/图标 文件夹，经 /icons/ 接口提供）
 export const ICON_SETTINGS = `/icons/${encodeURIComponent('设置.png')}`;
@@ -278,6 +279,9 @@ export const UiRuntimeMixin = {
       if (!this.idolOffer && this.idolOfferTexts) {
         for (const t of this.idolOfferTexts.values()) t.setVisible(false);
       }
+      if (!this.campfireOffer && this.campfireOfferTexts) {
+        for (const t of this.campfireOfferTexts.values()) t.setVisible(false);
+      }
       if (this.menuScreen !== 'saveSelect' && this.saveSelectTexts) {
         for (const t of this.saveSelectTexts.values()) t.setVisible(false);
       }
@@ -299,7 +303,7 @@ export const UiRuntimeMixin = {
 
       // hover / focus 交互状态：为当前数据页计算命中节点集
       const uph = this.uiPointer();
-      const activeGraph = this.idolOffer || this.settingsMode || this.menuScreen ? null
+      const activeGraph = this.idolOffer || this.campfireOffer || this.settingsMode || this.menuScreen ? null
         : this.isMenuLevel() ? ui.login
         : (this.state === 'end' || this.state === 'fail' || this.playerDeathFlow) ? null
         : (this.state === 'paused' || interfaceLevel) ? ui.interface
@@ -319,6 +323,11 @@ export const UiRuntimeMixin = {
       if (this.idolOffer) {
         this.hideHudOverlay();
         this.drawIdolOffer();
+        return;
+      }
+      if (this.campfireOffer) {
+        this.hideHudOverlay();
+        drawCampfireOffer(this);
         return;
       }
       if (this.settingsMode) {
@@ -584,8 +593,8 @@ export const UiRuntimeMixin = {
 
     onUIPointer(p) {
     const ctx = this.ctx;
-      // 神像弹窗离场动画进行中：不响应任何点击
-      if (this.idolOffer?.closing) return;
+      // 神像/火堆弹窗离场动画进行中，或火堆两层切换动画进行中：不响应任何点击
+      if (this.idolOffer?.closing || this.campfireOffer?.closing || this.campfireOffer?.switch) return;
       // 页面蒙层淡出进行中：不响应任何点击
       if (this.pageFade?.phase === 'out') return;
       const up = this.uiPointer();
@@ -609,6 +618,9 @@ export const UiRuntimeMixin = {
           else if (b.id && b.id.startsWith('buyVendor_')) { this.pressAnim(b.id); this.buyVendorItem(Number(b.id.slice(10))); }
           else if (b.id === 'vendorRoll') { this.pressAnim(b.id); this.rollVendorSlot(); }
           else if (b.id && b.id.startsWith('idolCard_')) { this.pressAnim(b.id); this.chooseIdolBuff(Number(b.id.slice(9))); }
+          else if (b.id === 'campfireCard_0') { this.pressAnim(b.id); this.campfireChooseHeal(); }
+          else if (b.id === 'campfireCard_1') { this.pressAnim(b.id); this.campfireChooseUpgrade(); }
+          else if (b.id && b.id.startsWith('campfireUpgrade_')) { this.pressAnim(b.id); this.campfirePickUpgrade(Number(b.id.slice(16))); }
           else if (b.id && b.id.startsWith('workshopCard_')) { this.pressAnim(b.id); this.toggleWorkshopWeapon(b.id.slice(13)); }
           else if (b.id && b.id.startsWith('workshopTab_')) { this.pressAnim(b.id); this.workshopTab = b.id.slice(12); this.drawUI(); }
           else if (b.id && b.id.startsWith('shopTab_')) { this.pressAnim(b.id); this.shopTab = b.id.slice(8); this.shopScroll = 0; this.shopScrollDrag = null; this.drawUI(); }
@@ -634,6 +646,11 @@ export const UiRuntimeMixin = {
       }
       // 神像弹窗：点击卡片以外的空白处触发离场动画（不消耗神像，可再次交互）
       if (this.idolOffer && !this.idolOffer.closing) this.idolOffer.closing = true;
+      // 火堆弹窗：第二层点空白回第一层；第一层点空白触发离场动画
+      if (this.campfireOffer && !this.campfireOffer.closing) {
+        if (this.campfireOffer.layer === 2) this.campfireBackToFirst();
+        else this.campfireOffer.closing = true;
+      }
     },
 
     // 按钮按下缩放动画：记录按下时间，绘制时按剩余时间缩小

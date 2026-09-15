@@ -23,6 +23,7 @@ import { ctx } from './context.js';
 import { pushUndo, undo, copySelected, pasteClipboard } from './history.js';
 import { applyRooms, renderRoomPanel, updateRoomNumber, updateRoomPanelSize, toggleRoomCell, openRoomCellPopup, closeRoomCellPopup, applyRoomMarker, applyRoomType } from './room-panel.js';
 import { bindDropRules } from './drop-rules-panel.js';
+import { bindEnemyDefaults } from './enemy-defaults-panel.js';
 import { bindPlayerPanels } from './player-panels.js';
 import { redraw, sync, setMode, restoreEditorSnapshot, selectLevel, refreshLevels, rememberLevel } from './level-flow.js';
 import { startTrial } from './save-flow.js';
@@ -176,6 +177,7 @@ export function bind() {
     saveDraftQuiet();
   };
 
+  bindEnemyDefaults();
   bindDropRules();
 
   // 多箱庭关卡面板交互

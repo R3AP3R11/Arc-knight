@@ -6,7 +6,7 @@
 
 import Phaser from 'phaser';
 import { MIN_WALL_SIZE } from '../../state.js';
-import { FONT_TECH, CHEST_SIZE, ROTATE_HANDLE_OFFSET, GATE_OUTER_COLOR, GATE_INNER_COLOR, GATE_OFFSET_RATIO } from '../constants.js';
+import { FONT_TECH, ROTATE_HANDLE_OFFSET, GATE_OUTER_COLOR, GATE_INNER_COLOR, GATE_OFFSET_RATIO } from '../constants.js';
 import { wallRotationRad, wallCorners, hitWall, hitTrigger } from '../combat/geometry.js';
 import { color, fillRotatedRoundedRect } from '../ui/entity-art.js';
 
@@ -218,7 +218,11 @@ export function pickTopEntity(l, x, y) {
 
   for (let i = (l.chests || []).length - 1; i >= 0; i--) {
     const ch = l.chests[i];
-    if (Math.hypot(ch.x - x, ch.y - y) <= Math.max(ch.openRadius, CHEST_SIZE / 2)) return { entity: ch, type: 'chest' };
+    // 命中 = 尺寸包围盒（w/h）或打开判定半径，两者取大，便于拖角缩放
+    if (hitBackground(ch, x, y)
+      || Math.hypot(ch.x - x, ch.y - y) <= Math.max(ch.openRadius, Math.hypot(ch.w || 0, ch.h || 0) / 2)) {
+      return { entity: ch, type: 'chest' };
+    }
   }
 
   for (let i = (l.portals || []).length - 1; i >= 0; i--) {
@@ -245,6 +249,11 @@ export function pickTopEntity(l, x, y) {
   for (let i = (l.idols || []).length - 1; i >= 0; i--) {
     const v = l.idols[i];
     if (hitBackground(v, x, y)) return { entity: v, type: 'idol' };
+  }
+
+  for (let i = (l.campfires || []).length - 1; i >= 0; i--) {
+    const cf = l.campfires[i];
+    if (hitBackground(cf, x, y)) return { entity: cf, type: 'campfire' };
   }
 
   for (let i = (l.icons || []).length - 1; i >= 0; i--) {

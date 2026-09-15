@@ -17,6 +17,7 @@ import { pushUndo } from './history.js';
 import { renderRoomPanel } from './room-panel.js';
 import { renderEntityProperties } from './entity-properties.js';
 import { renderDropRules } from './drop-rules-panel.js';
+import { renderEnemyDefaults } from './enemy-defaults-panel.js';
 import { renderPreviewPlayer, renderTrialPlayer } from './player-panels.js';
 
 const { state } = ctx;
@@ -50,6 +51,7 @@ export function sync() {
   renderFlows();
   dom.levelList.value = state.levelId;
   renderEntityProperties();
+  renderEnemyDefaults();
   renderDropRules();
   renderRoomPanel();
   renderPreviewPlayer();

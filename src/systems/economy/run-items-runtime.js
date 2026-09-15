@@ -12,6 +12,7 @@ import {
 import { preloadArtRefs } from '../ui/vendor-shop-art.js';
 import { WEAPONS } from '../combat/weapons.js';
 import { ensureWeaponDef } from '../art/weapon-store.js';
+import { enterWeapon, leaveWeapon } from './weapon-buffs.js';
 
 export const RunItemsMixin = {
     // ── 获得一件局内消耗品：即时生效类立刻结算；药水类进队列（同 id 叠加、满 4 瓶丢弃新获得的） ──
@@ -140,6 +141,7 @@ export const RunItemsMixin = {
         weaponType: p.weaponType, weapon: p.weapon, weaponArt: p.weaponArt,
         scheme: p.scheme, weaponIndex: p.weaponIndex, charge: p.charge
       };
+      leaveWeapon(this);                        // 切走主武器：回退其火堆祝福
       p.weaponType = t.id;
       p.weapon = rt;
       p.weaponArt = rt.appearance || null;
@@ -166,6 +168,7 @@ export const RunItemsMixin = {
         p.weaponIndex = s.weaponIndex;
         p.charge = s.charge;
         p.weaponIntroAt = this.time?.now || 0;   // 出武器：重播本体出场动画
+        enterWeapon(this, s.weaponType);          // 写回主武器：重新生效其火堆祝福
       }
       this.tempWeaponSaved = null;
       this.tempWeaponActive = false;

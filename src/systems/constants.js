@@ -1,7 +1,7 @@
 // ============================================================
 // 全局共享纯数据常量：视图尺寸、字体、贴图键、实体尺寸与玩家美术参数。
 // 分类：共享常量（无逻辑，仅数值 / 字符串 / 纯数据对象）
-// 主要导出：VIEW_W, VIEW_H, CELL, FONT_TECH(_SC), CRATE_*, BARREL_*, CHEST_*, PORTAL_*, VENDOR_*, IDOL_*, PLAYER_ART*, PLAYER_LEAN, SHIELD*, BULLET_DAMAGE, HIT_FX_TTL, ENEMY_RED, ENEMY_BEHAVIOR, GATE_*, ROTATE_HANDLE_OFFSET
+// 主要导出：VIEW_W, VIEW_H, CELL, FONT_TECH(_SC), CRATE_*, BARREL_*, CHEST_*, PORTAL_*, VENDOR_*, IDOL_*, PLAYER_ART*, PLAYER_LEAN, SHIELD*, BULLET_DAMAGE, HIT_FX_TTL, ENEMY_RED, ENEMY_BEHAVIOR, ENEMY_STUCK_*, GATE_*, ROTATE_HANDLE_OFFSET
 // ============================================================
 
 
@@ -27,6 +27,12 @@ export const CHEST_SIZE = 75;           // 宝箱显示尺寸（无碰撞体积�
 export const CHEST_OPEN_SCALE_CORRECTION = 1005 / 852; // 开启态内容更窄，按内容宽比补偿到与常态同宽
 export const CHEST_OPEN_FX_MS = 320;    // 开启金色十字星特效时长（更快）
 export const CHEST_SPAWN_FX_MS = 260;   // 出现金色十字星特效时长
+// 宝箱「上锁」红环：厚度 8px 的红色圆环包围宝箱，具碰撞体积（挡玩家/敌人移动 + 挡所有子弹）。
+// 半径由宝箱 w/h 推导（state.js:chestLockRadius = 半对角线 + 环厚/2），随宝箱尺寸联动。
+export const CHEST_LOCK_RING_COLOR = 0xff3b3b;
+export const CHEST_LOCK_RING_THICKNESS = 8;
+// 红环渐显（上锁 0→1）/ 渐隐（解锁 1→0）时长 ms。只作用于显示：碰撞随 locked 即时生效 / 失效。
+export const CHEST_LOCK_FADE_MS = 260;
 export const PORTAL_COLOR = 0x00ffff;   // 传送门主体色（青）
 export const PORTAL_ALPHA = 0.6;        // 传送门整体透明度（对应图标 opacity 60）
 export const PORTAL_LABEL = 'EVACUATION';
@@ -93,7 +99,10 @@ export const ENEMY_BEHAVIOR = {
   advanced2: { size: 40, attackRange: 500, fireInterval: 400, burstInterval: 3000, burstCount: 3, speed: 30, dormantSpin: 20, orbitMin: 30, orbitMax: 40, growDuration: 0.5, orbit: null, charge: null, spin: 0, onEnterOrbit: null },
   mothership: { size: 260, speed: 30, spawnInterval: 5000, spawnRadius: 220, orbit: null, charge: null, onEnterOrbit: null, spin: 0 },
   // 原型机-2-5T5（Boss）：不走通用行为机，行为在 systems/combat/boss25t5.js（size 用于碰撞半径 r=80）
-  'boss-2-5t5': { size: 160, orbit: null, charge: null, onEnterOrbit: null, spin: 0 }
+  'boss-2-5t5': { size: 160, orbit: null, charge: null, onEnterOrbit: null, spin: 0 },
+  // 重装机兵（远程激光）：不走通用行为机，行为在 systems/combat/enemy-ai.js:stepHeavyMech
+  // （size 用于碰撞/命中半径 r=50、生成点留白；数值走 enemy.mech，见 combat/heavy-mech.js）
+  'heavy-mech': { size: 100, orbit: null, charge: null, onEnterOrbit: null, spin: 0 }
 };
 
 // 母舰本体周身投放敌人：等概率随机抽取一组，按 count 逐个在母舰身周落点生成
@@ -103,6 +112,16 @@ export const MOTHERSHIP_SPAWN_TABLE = [
   { type: 'advanced1', count: 2 },
   { type: 'advanced2', count: 1 }
 ];
+
+// 敌人「卡墙」自毁判定：连续顶住障碍（墙体 / 门 / 木箱 / 油桶…）且几乎没净位移达到该时长 → 判定消灭。
+// 目的：生成在墙内 / 门外等玩家打不到的位置的敌人（canSpawnAt 只做视线判定、不做寻路判定）不能永久存活，
+// 否则波次链的 waitForClear（triggers.js:195 判据为「全场无存活敌人」）与 checkAsyncTriggerEvents 的
+// 「本触发器已无存活敌人」条件永远不成立 → 后续波次 / 门 / 宝箱永不出现（真实踩过：Level1-Scene2 trigger-178）。
+// 判定按「窗口」评估而不是逐帧：被门/墙顶住的怪常在本帧内小幅来回抖动（沿墙/寻路路点反复），逐帧看速度会一直被重置。
+export const ENEMY_STUCK_KILL_MS = 5000;          // 累计时长达到此值 → 判定消灭
+export const ENEMY_STUCK_WINDOW_MS = 1000;        // 评估窗口长度（每窗口只看净位移，抖动不算移动）
+export const ENEMY_STUCK_WINDOW_MOVE_PX = 15;     // 窗口内净位移 < 此值视为「没挪动」（= 平均 < 15px/s；正常敌人都 ≥ 30px/s）
+export const ENEMY_STUCK_PUSH_EPS = 0.1;          // 窗口内碰撞解算推回超过此值（px）才算「顶住障碍」（排除原地待机的怪）
 
 // ── 编辑器手柄与闸门（Gate）外观 ──
 export const ROTATE_HANDLE_OFFSET = 28;

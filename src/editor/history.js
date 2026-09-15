@@ -45,6 +45,7 @@ export function entityKind(l, entity) {
   if (l.gates.includes(entity)) return 'gates';
   if (l.vendors.includes(entity)) return 'vendors';
   if (l.idols.includes(entity)) return 'idols';
+  if ((l.campfires || []).includes(entity)) return 'campfires';
   if ((l.icons || []).includes(entity)) return 'icons';
   if ((l.portals || []).includes(entity)) return 'portals';
   return '';
@@ -56,7 +57,7 @@ let clipboard = null;
 const COPY_ID_PREFIX = {
   walls: 'wall', enemies: 'enemy', triggers: 'trigger', crates: 'crate',
   barrels: 'barrel', chests: 'chest', images: 'image', spawnZones: 'spawnzone',
-  gates: 'gate', vendors: 'vendor', idols: 'idol', icons: 'icon', portals: 'portal'
+  gates: 'gate', vendors: 'vendor', idols: 'idol', campfires: 'campfire', icons: 'icon', portals: 'portal'
 };
 
 export function copySelected() {

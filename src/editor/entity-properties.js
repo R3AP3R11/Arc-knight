@@ -14,6 +14,8 @@ import { getArtChoices } from '../systems/art/design-store.js';
 import { getWeaponDef } from '../systems/art/weapon-store.js';
 import { weaponCatalog } from '../player-data.js';
 import { loadInnerShop, getPotionList } from '../systems/economy/inner-shop.js';
+import { IDOL_BUFFS } from '../systems/economy/buffs.js';
+import { normalizeHeavyMechConfig } from '../systems/combat/heavy-mech.js';
 
 const { state } = ctx;
 
@@ -48,6 +50,115 @@ export function updateWall(field, value) {
   ctx.hooks.redraw();
 }
 
+// ── 休息火堆「可抽基础属性强化」行编辑器 ──
+// 契约：entity.statBuffs = [{ id, name, value }]
+//   id    = IDOL_BUFFS 的祝福 id
+//   name  = 显示名称（'' = 用表默认 name）
+//   value = 数值（null = 用表默认 value）
+// 空数组 = 全部祝福、全用表默认（面板打开时按「全部勾选 + 表默认」呈现）
+const STAT_LABELS = {
+  attackPower: '攻击力',
+  critRate: '暴击率',
+  dodgeRate: '闪避率',
+  moveSpeed: '移动速度',
+  maxHp: '生命上限',
+  damageReduction: '受到伤害'
+};
+const OP_LABELS = { add: '加法', mul: '乘法', set: '设置' };
+
+// 带符号百分比文本：15 → "+15%"，-10 → "-10%"
+function fmtSignedPct(n) {
+  const v = Number(n.toFixed(1));
+  return `${v >= 0 ? '+' : ''}${v}%`;
+}
+
+// 该祝福 stats 首条 spec（口径与默认值都取自它）
+function firstStat(buff) {
+  const [key, spec] = Object.entries(buff.stats || {})[0] || [];
+  return key && spec ? { key, spec } : null;
+}
+
+// 表默认数值（stats 首条的 value；无 stats → null）
+function buffTableValue(buff) {
+  const s = firstStat(buff);
+  return s ? Number(s.spec.value) : null;
+}
+
+// 口径只读小字，例：攻击力（乘法，1.15 = +15%）/ 暴击率（加法，0.1 = +10%）
+function buffSpecText(buff) {
+  const s = firstStat(buff);
+  if (!s) return '';
+  const label = STAT_LABELS[s.key] || s.key;
+  const op = OP_LABELS[s.spec.op] || s.spec.op || '';
+  const v = Number(s.spec.value);
+  const expr = s.spec.op === 'mul' ? `${v} = ${fmtSignedPct((v - 1) * 100)}`
+    : Math.abs(v) < 1 ? `${v} = ${fmtSignedPct(v * 100)}`
+      : `${v}`;
+  return op ? `${label}（${op}，${expr}）` : `${label}（${expr}）`;
+}
+
+// 火堆基础属性强化行编辑器：每行 = 勾选启用 + 名称 + 数值；空数组 = 全部勾选 + 表默认
+function renderCampfireStatBuffs(entity, dom) {
+  const configured = Array.isArray(entity.statBuffs) ? entity.statBuffs : [];
+  const useAllDefault = configured.length === 0;
+  // 兼容旧数据（statBuffs 曾为 string[]）：字符串项按其 id 视作「已启用 + 用表默认」
+  const byId = new Map(configured
+    .map(b => [typeof b === 'string' ? b : (b && b.id), b])
+    .filter(([id]) => !!id));
+
+  const editor = document.createElement('div');
+  editor.className = 'campfire-buffs';
+  editor.innerHTML = `
+    <h3>基础属性强化配置</h3>
+    <p class="hint">勾选 = 该祝福可从火堆抽出；名称/数值等于表默认（或留空）时按表默认处理</p>
+    <div class="campfire-buff-list">
+      ${IDOL_BUFFS.map(buff => {
+        const cfg = byId.get(buff.id);
+        const checked = useAllDefault || !!cfg;
+        const nameVal = (cfg && cfg.name) || buff.name;
+        const tableValue = buffTableValue(buff);
+        const valueVal = cfg && cfg.value != null ? cfg.value : (tableValue == null ? '' : tableValue);
+        const spec = buffSpecText(buff);
+        return `
+      <div class="campfire-buff-row" data-buff-id="${buff.id}">
+        <label class="cb-enable"><input type="checkbox" data-buff-enable ${checked ? 'checked' : ''}/>${buff.name}</label>
+        <span class="cb-desc">${buff.desc || ''}</span>
+        <div class="cb-fields">
+          <label>名称<input type="text" data-buff-k="name" value="${nameVal}"/></label>
+          <label>数值<input type="number" step="any" data-buff-k="value" value="${valueVal}"/></label>
+        </div>
+        ${spec ? `<div class="cb-spec">${spec}</div>` : ''}
+      </div>`;
+      }).join('')}
+    </div>`;
+  dom.entityFields.appendChild(editor);
+
+  // 勾选行 → [{ id, name, value }]；名称/数值等于表默认（留空同样）时回退为 ''/null
+  const collect = () => {
+    const list = [];
+    editor.querySelectorAll('.campfire-buff-row').forEach(row => {
+      if (!row.querySelector('input[data-buff-enable]').checked) return;
+      const buff = IDOL_BUFFS.find(b => b.id === row.dataset.buffId);
+      if (!buff) return;
+      const name = row.querySelector('input[data-buff-k="name"]').value;
+      const raw = row.querySelector('input[data-buff-k="value"]').value.trim();
+      const num = raw === '' ? NaN : Number(raw);
+      list.push({
+        id: buff.id,
+        name: name === buff.name ? '' : name,
+        value: Number.isFinite(num) && num !== buffTableValue(buff) ? num : null
+      });
+    });
+    return list;
+  };
+
+  editor.addEventListener('focusin', () => pushUndo());
+  editor.addEventListener('input', () => {
+    entity.statBuffs = collect();
+    saveDraft(state.levelId, state.level).catch(() => setStatus(dom, '保存失败', true));
+  });
+}
+
 // ── 属性面板渲染 ──
 export function renderEntityProperties() {
   const dom = ctx.dom;
@@ -67,6 +178,7 @@ export function renderEntityProperties() {
     : l.gates.includes(entity) ? '能量门'
     : l.vendors.includes(entity) ? '售货机'
     : l.idols.includes(entity) ? '神像'
+    : (l.campfires || []).includes(entity) ? '休息火堆'
     : (l.icons || []).includes(entity) ? '可交互图标'
     : (l.portals || []).includes(entity) ? '传送门' : '';
 
@@ -92,7 +204,9 @@ export function renderEntityProperties() {
     ['spawnGate', '生成能量门'],
     ['removeGate', '消除能量门'],
     ['bossBattle', 'BOSS战斗'],
-    ['playCinematic', '播放运镜']
+    ['playCinematic', '播放运镜'],
+    ['lockChest', '宝箱上锁'],
+    ['unlockChest', '宝箱解锁']
   ];
   const gateOptions = state.level.gates.map((g, i) => [g.id, `${i + 1}. ${g.id}`]);
   const artOptions = [['', '（默认美术）'], ...getArtChoices().map(c => [c.id, c.name])];
@@ -106,7 +220,6 @@ export function renderEntityProperties() {
       ...(withStop ? [['guideStopAfterUse', '是否交互后停止指引', 'boolean']] : [])
     ] : [])
   ];
-
   let fields;
   if (entity === l.spawn) {
     fields = [
@@ -240,6 +353,17 @@ export function renderEntityProperties() {
         ['boss.cutsceneId', '被击败运镜 id', 'text']
       );
     }
+    // 重装机兵：远程激光单位，数值走 mech.* 配置对象（[组名] 前缀便于辨认），artScale 用顶层字段
+    if (entity.type === 'heavy-mech') {
+      fields.push(
+        ['artScale', '大小', 'number'],
+        ['mech.moveSpeed', '移动-速度(px/s)', 'number'],
+        ['mech.rotateSpeed', '瞄准-旋转速度(°/s)', 'number'],
+        ['mech.aimSpeed', '瞄准-瞄准速度(°/s)', 'number'],
+        ['mech.fireDelay', '激光-开枪延迟(ms)', 'number'],
+        ['mech.fireInterval', '激光-射击间隔(ms)', 'number']
+      );
+    }
   } else if (l.triggers.includes(entity)) {
     fields = [
       ['x', 'X 坐标', 'number'],
@@ -335,6 +459,19 @@ export function renderEntityProperties() {
       ['visible', '可见', 'boolean'],
       ...guideRows(entity, true)
     ];
+  } else if ((l.campfires || []).includes(entity)) {
+    // 休息火堆：编号(id)由下方公共分支 fields.unshift(['id','编号','text']) 统一补上
+    fields = [
+      ['x', 'X 坐标', 'number'],
+      ['y', 'Y 坐标', 'number'],
+      ['w', '宽度', 'number'],
+      ['h', '高度', 'number'],
+      ['art', '画板美术方案', 'select', artOptions],
+      ['artScale', '大小倍率', 'number'],
+      ['interactRadius', '交互半径', 'number'],
+      ['visible', '游戏中显示', 'boolean'],
+      ...guideRows(entity, true)
+    ];
   } else if ((l.icons || []).includes(entity)) {
     const iconSrcOptions = [
       ['', '（无）'],
@@ -393,6 +530,8 @@ export function renderEntityProperties() {
     fields = [
       ['x', 'X 坐标', 'number'],
       ['y', 'Y 坐标', 'number'],
+      ['w', '宽度', 'number'],
+      ['h', '高度', 'number'],
       ['trigger', '出现方式', 'select', [
         ['start', '游戏开始即存在'],
         ['trigger', '触发器触发（清敌后出现）']
@@ -500,6 +639,11 @@ export function renderEntityProperties() {
       saveDraft(state.levelId, state.level).catch(() => setStatus(dom, '保存失败', true));
     });
 
+    const lockHint = document.createElement('p');
+    lockHint.className = 'hint';
+    lockHint.textContent = '上锁/解锁由触发器事件「宝箱上锁 / 宝箱解锁」控制：上锁的宝箱被红色圆环包围，不可开启，并阻挡玩家/敌人移动与所有子弹。';
+    dom.entityFields.appendChild(lockHint);
+
     bindEntityFieldInputs(entity);
     return;
   } else {
@@ -531,12 +675,6 @@ export function renderEntityProperties() {
         `<option value="${v}" ${value === v ? 'selected' : ''}>${name}</option>`).join('');
       return `<label>${label}<select data-entity-field="${key}">${opts}</select></label>`;
     }
-    if (inputType === 'multiselect') {
-      const arr = Array.isArray(value) ? value : [];
-      const opts = options.map(([v, name]) =>
-        `<label class="ms-item"><input type="checkbox" data-ms="${key}" value="${v}" ${arr.includes(v) ? 'checked' : ''}/>${name}</label>`).join('');
-      return `<div class="field-multiselect"><span class="ms-title">${label}</span><div class="ms-list">${opts}</div></div>`;
-    }
     if (inputType === 'boolean') {
       return `<label>${label}<input data-entity-field="${key}" type="checkbox" ${value ? 'checked' : ''}></label>`;
     }
@@ -547,6 +685,9 @@ export function renderEntityProperties() {
   }).join('');
 
   bindEntityFieldInputs(entity);
+
+  // 休息火堆：可抽基础属性强化行编辑器（勾选启用 + 名称输入 + 数值输入；空数组 = 全部祝福全用表默认）
+  if ((l.campfires || []).includes(entity)) renderCampfireStatBuffs(entity, dom);
 
   // 母舰：被击败运镜 id 的说明 hint
   if (l.enemies.includes(entity) && entity.type === 'mothership') {
@@ -624,20 +765,20 @@ export function bindEntityFieldInputs(entity) {
         saveDraft(state.levelId, state.level).catch(() => setStatus(dom, '保存失败', true));
         return;
       }
-      if (input.dataset.ms !== undefined) {
-        const values = [...dom.entityFields.querySelectorAll(`input[data-ms="${input.dataset.ms}"]:checked`)].map(i => i.value);
-        setNested(entity, input.dataset.ms, values);
-        return;
-      }
       const value = input.type === 'checkbox' ? input.checked
         : input.type === 'number' ? Number(input.value) : input.value;
-      setNested(entity, field, value);
+      // 宝箱尺寸：最小 20（与 state.js:normalizeChest 一致），防拖成 0 后贴图与上锁红环退化
+      setNested(entity, field, (field === 'w' || field === 'h') && input.type === 'number' && state.level.chests.includes(entity)
+        ? Math.max(20, value || 20)
+        : value);
       if (field === 'type') {
         const def = ENEMY_TYPES[value];
         if (def) {
           entity.hp = def.hp;
           entity.damage = def.damage;
         }
+        // 重装机兵：切类型时补全 mech.* 配置默认值，否则面板上这几个字段为空
+        if (value === 'heavy-mech') entity.mech = normalizeHeavyMechConfig(entity.mech);
       }
       if (field === 'scheme') entity.weaponType = SCHEME_WEAPONS[value];
       // 指引开关联动：勾选后才显示距离/图标等字段，需重渲染面板

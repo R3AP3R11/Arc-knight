@@ -1,6 +1,6 @@
 ---
 name: level-design
-description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌人波次、刷怪点与可达性、宝箱传送门售货机（局内商店）神像等交互物、关卡开场与通关切换流程与局内态清零、玩家被击败/死亡运镜失败流程，以及 data/levels/*.json schema 时读这份。触发词：售货机 / 局内商店 / 局内态 / vendors / F 键交互 / 药水掉落 / 掉落规则 / potionId / 运镜 / 过场运镜 / 死亡运镜 / 玩家被击败 / 运镜预览。
+description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌人波次、刷怪点与可达性、宝箱传送门售货机（局内商店）神像休息火堆等交互物、关卡开场与通关切换流程与局内态清零、玩家被击败/死亡运镜失败流程，以及 data/levels/*.json schema 时读这份。触发词：售货机 / 局内商店 / 局内态 / vendors / F 键交互 / 药水掉落 / 掉落规则 / potionId / 休息火堆 / 火堆 / 生命回复 / 杰作升级 / 运镜 / 过场运镜 / 死亡运镜 / 玩家被击败 / 运镜预览。
 ---
 
 # 关卡设计 开发指南
@@ -17,7 +17,7 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 | 触发器点火、事件派发、波次定时链、门开合 | 敌人 AI 追击/环绕/开火 → combat skill |
 | 生成点求解（屏幕外/屏幕内/召唤阵顶点）+ 可达性校验 | 敌人移动碰撞、子弹命中判定 → combat skill |
 | 召唤阵与锁定框特效的推进与绘制 | HUD / 菜单页 / 商店页绘制 → ui skill |
-| 宝箱出现与开箱、传送门撤离、售货机与神像 F 键交互 | 宝箱掉落物数值、神像祝福数值 → economy-numbers skill |
+| 宝箱出现与开箱、传送门撤离、售货机 / 神像 / 休息火堆 F 键交互 | 宝箱掉落物数值、神像·火堆祝福数值 → economy-numbers skill |
 | 多箱庭房间布局生成（墙体 + 世界尺寸自适应） | 编辑器拖拽/框选/旋转手柄 → engine-editor skill |
 | 关卡开场演出、通关结算、淡入淡出切关 | 存档写盘细节 `persistSave` → economy-numbers skill |
 | 编辑器的房间面板 / 触发器事件面板 / 关卡选择面板 | 编辑器实体属性通用表单 → engine-editor skill |
@@ -28,10 +28,10 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 - 房间布局 `roomLayout`：行列数、每格房间尺寸、墙厚、道路宽/长、墙色（房间面板可视化点选）
 - 墙体 `walls[]`（矩形/圆/弧、旋转、颜色、可见性）
 - 出生点 `spawn`（坐标 + 初始武器 + 等级/血量）
-- 触发器 `triggers[]`：矩形/圆形范围、`once`、`cooldown`、事件列表（8 种事件类型，含 `bossBattle` 触发 Boss 战）
+- 触发器 `triggers[]`：矩形/圆形范围、`once`、`cooldown`、事件列表（11 种事件类型，含 `bossBattle` 触发 Boss 战、`lockChest`/`unlockChest` 宝箱上锁与解锁）
 - 敌人波次 `events[].spawn.waves[]`：类型/数量/生成方式/前后延迟/等待清理/召唤阵形状
 - 生成区域 `spawnZones[]`（屏幕内随机生成的矩形范围）
-- 交互物：`chests[]`、`portals[]`、`vendors[]`、`idols[]`、`icons[]`、`gates[]`
+- 交互物：`chests[]`、`portals[]`、`vendors[]`、`idols[]`、`icons[]`、`gates[]`、`campfires[]`（休息火堆）
 - 可破坏物：`crates[]`、`barrels[]`
 - 静态美术：`background`（图片或 wormhole 特效）、`images[]`
 - 关卡内预置敌人 `enemies[]`、掉落规则 `dropRules`（数值详见 economy-numbers skill）
@@ -40,24 +40,27 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 
 | 文件路径 | 职责 | 关键导出 | 行数 |
 | --- | --- | --- | --- |
-| `src/systems/level/spawning.js` | 生成点求解 + 可达性校验 + 召唤阵/锁定框特效 | `SpawningMixin`（17 方法） | 398 |
-| `src/systems/level/triggers.js` | 触发器点火 / 事件派发 / 波次定时链 / 门开合（含 `bulletGateWalls` 挡子弹门） | `TriggersMixin`（13 方法，含 `autoRoomGates`） | 300 |
-| `src/systems/level/interactables.js` | 宝箱、传送门、售货机、神像、图标交互；`openIdolOffer` 按 `IDOL_OFFER_COUNT` 取 n 张并预载 icon 画板资产；vendor/icon 首次按 F 置运行时 `guideUsed`（指引停止用）；`updateVendorInteract` 按 F 经 `this.openVendorShop(nearest)` 打开局内商店页 | `InteractablesMixin`（16 方法） | 251 |
-| `src/systems/level/level-flow.js` | `restart` 关卡构建、开场演出、结算、切关淡出、未知房间揭示（`updateRoomReveal`/`roomRevealAlpha`）、**玩家被击败失败流程 `triggerPlayerDefeat`（幂等，见 §4⑨）**；**`restart` 是局内态唯一清零点**：清零 `runItems`/`runTimedWeapons`/`vendorActive` + `runEffects`/`tempWeaponActive`/`tempWeaponSaved`/`potionWheel`/`potionKeyHold`（:147-153）+ `playerDeathFlow=null`（:100）+ `hideCinematicFade?.()`，`this.player` 加 `itemShields:[]`（:273），末尾 `if(!this.editing) this.preloadRunItemArt()`（:297）+ `potionWheelText?.setVisible(false)`（:298）（旧 `vendorBought` 已删） | `LevelFlowMixin`（12 方法）`triggerPlayerDefeat` | 411 |
+| `src/systems/level/spawning.js` | 生成点求解 + 可达性校验 + 召唤阵/锁定框特效；**波次弹道数值随 `wave` 透传到 `initEnemy`（`waveScale()` 私有函数统一取尺寸倍率，生成点校验 `canSpawnAt(x,y,type,minDist,scale)` 与召唤阵/锁定框尺寸同口径），见 §3.5.1** | `SpawningMixin`（17 方法） | 467 |
+| `src/systems/level/triggers.js` | 触发器点火 / 事件派发 / 波次定时链 / 门开合（含 `bulletGateWalls` 挡子弹门）；`dispatchTriggerEvent` 含 **`lockChest`/`unlockChest`** → 转交 `interactables.js:setChestsLocked` | `TriggersMixin`（13 方法，含 `autoRoomGates`） | 308 |
+| `src/systems/level/interactables.js` | 宝箱、传送门、售货机、神像、图标、**休息火堆**交互；`openIdolOffer` 按 `IDOL_OFFER_COUNT` 取 n 张并预载 icon 画板资产；vendor/icon 首次按 F 置运行时 `guideUsed`（指引停止用）；`updateVendorInteract` 按 F 经 `this.openVendorShop(nearest)` 打开局内商店页；**宝箱上锁/解锁 `setChestsLocked`/`chestLockWalls`（上锁红环碰撞体，见 §3.14）**；**火堆 8 方法** `updateCampfireInteract`/`campfireWalls`/`openCampfireOffer`/`closeCampfireOffer`/`campfireChooseHeal`/`campfireChooseUpgrade`/`campfireBackToFirst`/`campfirePickUpgrade`（详见 §3.13、§4⑩） | `InteractablesMixin`（26 方法） | 380 |
+| `src/systems/level/level-flow.js` | `restart` 关卡构建、开场演出、结算、切关淡出、未知房间揭示（`updateRoomReveal`/`roomRevealAlpha`）、**玩家被击败失败流程 `triggerPlayerDefeat`（幂等，见 §4⑨）**；**`restart` 是局内态唯一清零点**：清零 `runItems`/`runTimedWeapons`/`vendorActive` + `runEffects`/`tempWeaponActive`/`tempWeaponSaved`/`potionWheel`/`potionKeyHold`（:147-153）+ `playerDeathFlow=null`（:100）+ `hideCinematicFade?.()`，**火堆副本 `this.campfires=(l.campfires||[]).map(v=>({...v,used:false}))` + `campfireNearest`/`campfireTipT`/`campfireOffer` 初始化（:152-155）**，`obstacles` 加入火堆矩形（:179），**宝箱副本带 `locked:false`（:125，上锁态仅当局，见 §3.14）**，`this.player` 加 `itemShields:[]`（:271）+ **火堆局内态 `weaponBuffs:{}`/`tempMods:{}`/`buffedWeapon:null`（:272-274）**，末尾 `if(!this.editing) this.preloadRunItemArt()`（:298）+ `potionWheelText?.setVisible(false)`（:299）（旧 `vendorBought` 已删） | `LevelFlowMixin`（12 方法）`triggerPlayerDefeat` | 421 |
 | `src/rooms.js` | 多箱庭房间布局生成 + 通道开口几何计算 + 尺寸常量 | `generateRoomLayout`、`normalizeRoomLayout`、`spawnInRooms`、`clampRoomSize`、`roomPassagesForPoint`（触发器所在房间各通道开口）、`isGateOnPassage`（判定门是否在通道上）、13 个常量 | 213 |
-| `src/state.js` | 关卡 JSON schema 权威定义（所有 `normalize*`） | `normalizeLevel`（`state.js:586`，含顶层死亡运镜注入）、`normalizeTrigger`、`normalizeTriggerEvent`（`playCinematic` 含 `focusTarget`）、`normalizeWave`、`normalizeChest`、`normalizePortal`、`normalizeCinematic`（含 `timeScale`/`focus`/`blackHoldMs` + 关键帧 `vignette`/`letterbox`/`tint`/`tintColor`/`flash`/`flashColor`/`desat`，见 §3.12）、模块私有 `clampUnit`/`normalizeHexColor`、`EVENT_TYPES`、`DROP_ITEMS`（含 `potion:'药水'`）、`normalizeDropRules`/`normalizeRewardList`（含 `potionId`）、`MINIMAP_MARKER_TYPES/LABELS`、`ROOM_TYPES/ROOM_TYPE_LABELS`、`normalizeRoomMarker`、`DEFAULT_LEVEL`（`state.js:468`，`deathCinematic` 默认 = `DEFAULT_DEATH_CINEMATIC.id`）、**`DEFAULT_DEATH_CINEMATIC`**（`state.js:454`，默认「玩家被击败运镜」，`normalizeLevel` 注入所有关卡，见 §4⑨） | 663 |
+| `src/state.js` | 关卡 JSON schema 权威定义（所有 `normalize*`） | `normalizeLevel`（`state.js:603`，含顶层死亡运镜注入 + `campfires` 映射 :649）、`normalizeTrigger`、`normalizeTriggerEvent`（`playCinematic` 含 `focusTarget`）、`normalizeWave`、`normalizeChest`（含 `w`/`h` 尺寸）、`chestLockRadius`（上锁红环半径，见 §3.14）、`normalizePortal`、**`normalizeCampfire`（`state.js:273`，休息火堆，见 §3.13）**、`normalizeCinematic`（含 `timeScale`/`focus`/`blackHoldMs` + 关键帧 `vignette`/`letterbox`/`tint`/`tintColor`/`flash`/`flashColor`/`desat`，见 §3.12）、模块私有 `clampUnit`/`normalizeHexColor`、`EVENT_TYPES`（**11 种**，含 `lockChest`/`unlockChest`）、`DROP_ITEMS`（含 `potion:'药水'`）、`normalizeDropRules`/`normalizeRewardList`（含 `potionId`）、`MINIMAP_MARKER_TYPES/LABELS`、`ROOM_TYPES/ROOM_TYPE_LABELS`、`normalizeRoomMarker`、**`normalizeEnemyDefaults`（关卡级敌人兜底数值，按类型 `{hp,damage,scale}`，未配置的键不落盘）+ `resolveEnemyStats(level,type,wave)`（波次 > 关卡兜底 > 全局默认 的三层回落，见 §3.5.1）**、`DEFAULT_LEVEL`（`state.js:484`，`campfires: []`（:508）、`deathCinematic` 默认 = `DEFAULT_DEATH_CINEMATIC.id`）、**`DEFAULT_DEATH_CINEMATIC`**（`state.js:470`，默认「玩家被击败运镜」，`normalizeLevel` 注入所有关卡，见 §4⑨） | 762 |
 | `src/systems/economy/run-items-runtime.js` | `RunItemsMixin`：局内药水队列 / 限时武器 / 限时加成 的入队、取用、每帧推进（到期回退）、图标预载 | `RunItemsMixin`（14 方法）`updateRunItems` `addRunItem` `preloadRunItemArt` | 210 |
 | `src/systems/economy/run-items.js` | 局内消耗品纯逻辑（药水队列增删合并、上限、限时武器/限时加成数据结构，无 Phaser） | `potionQueueAdd` 等 | 63 |
+| `src/systems/economy/campfire.js` | 休息火堆纯逻辑：升级候选抽取 `rollCampfireUpgrades` / 生效 `applyCampfireOption` / 回血 `campfireHeal`（`resolveBuffConfigs`(158) 把 `statBuffs` 转成 `[{id,name,value}]` 并过滤出 `IDOL_BUFFS` 子集，空数组回退整表；其 value 判空与 `state.js:buffValueOrNull` **必须同步**，见 §7；无 Phaser） | `rollCampfireUpgrades` `applyCampfireOption` `campfireHeal` | 162 |
+| `src/systems/ui/campfire-art.js` | 休息火堆二选一弹窗绘制（第一层 2 卡：回血 / 升级；第二层 3 个强化按钮） | `drawCampfireOffer` | 171 |
 | `src/systems/ui/battle-items.js` | `BattleItemsMixin`：战斗内数字键 4/5 交互（4 短按用队列首瓶药水 / 长按 ≥`POTION_HOLD_MS` 呼出轮盘；5 使用或取消限时武器）+ 轮盘/HUD 绘制 | `BattleItemsMixin` `updateBattleItemsInput` | 138 |
 | `src/systems/ui/battle-items-art.js` | 局内消耗品 / 限时武器美术方案（图标）加载与绘制 | — | 205 |
 | `src/systems/economy/drops.js` | 掉落物生成 / 磁吸 / 拾取：`spawnDrops` 规则循环含 `item==='potion'` 分支（`resolveDropPotionId(rule.potionId)` 解析具体药水 id）→ `spawnDropItems(...,potionId)` 挂 id；`updateDrops` 磁吸含 `gold/diamond/potion`；`collectDrop` 的 `type==='potion'` → `this.addRunItem(d.potionId,1)`；掉落物世界图标绘制在 `world-render.js` 的 `this.drops.forEach`（30 世界单位，图标未就绪退化白点并 `resolveArtRef` 补拉） | `spawnDrops` `spawnDropItems` `updateDrops` `collectDrop` | 143 |
 | `src/pathfinding.js` | 网格构建 + A* 寻路（生成点可达性依赖） | `buildGrid`、`findPath`、`nearestWalkable` | 105 |
 | `src/editor/room-panel.js` | 多箱庭房间面板：方格点选、尺寸弹窗、墙体重生成 | `applyRooms`、`renderRoomPanel`、`toggleRoomCell`、`updateRoomNumber` | 124 |
-| `src/editor/trigger-panel.js` | 触发器事件列表编辑器（事件类型/时机/波次表单 + 能量门自动生成开关） | `renderTriggerEvents` | 292 |
+| `src/editor/trigger-panel.js` | 触发器事件列表编辑器（事件类型/时机/波次表单 + **每波敌人数值覆盖 `hp`/`damage`/`scale`（留空 = 未配置，`applyWaveStat` 删除该键）+ 波数** + 能量门自动生成开关） | `renderTriggerEvents` | 370 |
+| `src/editor/enemy-defaults-panel.js` | **关卡级「敌人默认数值」兜底面板**（按 `ENEMY_TYPES` 出 7 组 血量/伤害/尺寸倍率，留空 = 未配置；侧栏 `#enemyDefaultsEditor`，契约见 §3.5.1） | `renderEnemyDefaults` `bindEnemyDefaults` | 75 |
 | `src/editor/level-flow.js` | 关卡加载/切换/模式切换/试玩快照恢复 | `selectLevel`、`switchToLevel`、`setMode`、`restoreEditorSnapshot`、`redraw`、`fadeAndSwitch`、`startGame` | 222 |
 | `src/systems/editor/editor-input.js` | 放置工具（trigger/gate/chest/portal/spawnzone…）建实体 | `EditorInputMixin`：`pointerDown`(12)、`pointerMove`(191) | 259 |
-| `src/systems/constants.js` | `CELL`、`CHEST_*_FX_MS`、`GATE_SPAWN_MS`、`ENEMY_BEHAVIOR` | 见第 5 章 | 83 |
-| `src/game-scene.js` | 场景装配：25 个 Mixin `Object.assign`(:902)、`update` 主循环；含 `InnerShopMixin`（紧跟 `ProgressionMixin`），`updateVendorInteract(dt)` → `updateVendorSlot()` → `updateRunItems(dt)` → `updateBattleItemsInput(dt)`；`addKeys` 注册 `NUMPAD4/NUMPAD5/DIGIT4/DIGIT5`（小键盘与主键盘数字键都响应） | `createGameScene` | 912 |
+| `src/systems/constants.js` | `CELL`、`CHEST_*_FX_MS`、`CHEST_LOCK_RING_*`（上锁红环）、`GATE_SPAWN_MS`、`ENEMY_BEHAVIOR` | 见第 5 章 | 130 |
+| `src/game-scene.js` | 场景装配：25 个 Mixin `Object.assign`(:902)、`update` 主循环；含 `InnerShopMixin`（紧跟 `ProgressionMixin`），每帧交互调度 `updateVendorInteract(dt)`(836) → `updateVendorSlot()`(837) → `updateRunItems(dt)`(839) → `updateBattleItemsInput(dt)`(840) → `updateIdolInteract(dt)`(841) → **`updateCampfireInteract(dt)`(842)** → `updateIconInteract(dt)`(843) → `updatePortalInteract(dt)`(844)（均在 `!inputLocked` 下）；子弹墙判定并入 `this.campfireWalls()`(:555/:568)；`addKeys` 注册 `NUMPAD4/NUMPAD5/DIGIT4/DIGIT5`（小键盘与主键盘数字键都响应） | `createGameScene` | 924 |
 | `src/api.js` | 关卡读写 HTTP（`/api/levels/:id`） | `loadLevel`、`saveDraft`(=`saveFormal`) | 40 |
 | `data/levels/*.json` | 16 个关卡数据文件（含 `login`、`newbee`、`knight-home`） | — | — |
 
@@ -67,11 +70,13 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 | --- | --- |
 | 加/改一种触发器事件类型 | `src/state.js:219` `EVENT_TYPES` + `normalizeTriggerEvent`(242) + `triggers.js:36` `dispatchTriggerEvent` + `trigger-panel.js:17` 参数表单 |
 | 改波次字段（新增波次参数） | `src/state.js:94` `normalizeWave` + `trigger-panel.js:31-79` 表单 + `triggers.js:111` `runTriggerWave` 消费处 |
+| 改触发器召唤敌人的数值（血量/伤害/尺寸倍率） | 波次覆盖：`state.js:normalizeWave`（`hp`/`damage`/`scale` 可选，留空不落盘）+ `trigger-panel.js` 每波三项输入（`applyWaveStat`）+ `spawning.js:waveScale`/`canSpawnAt` 同口径 + `enemy-ai.js:initEnemy` 消费；关卡兜底：`state.js:normalizeEnemyDefaults`/`DEFAULT_LEVEL.enemyDefaults`/`normalizeLevel` + `src/editor/enemy-defaults-panel.js` + `level-flow.js:sync`。契约见 §3.5.1 |
 | 改屏幕内随机刷怪范围/安全半径逻辑 | `spawning.js:355` `spawnInScreen` |
 | 改屏幕外环形刷怪逻辑 | `spawning.js:32` `sampleRingPoint` + `spawning.js:44` `spawnOffscreen` |
 | 改召唤阵形状/动画时长 | `spawning.js:171` `createSpawnEffect`（默认值）+ `spawning.js:296` `drawSpawnEffects`（绘制） |
 | 敌人卡墙 / 刷在玩家打不到的位置 | `spawning.js:107` `canSpawnAt`、`spawning.js:67` `isReachableWalkable`、`pathfinding.js:1` `buildGrid` 的 `inflate` |
 | 加一种交互物（如祭坛） | `state.js` 新增 `normalizeXxx` + `normalizeLevel`(438) 挂载 + `interactables.js` 加 `updateXxxInteract` + `game-scene.js:486` 附近注册调用 + `editor-input.js:150` 附近加放置工具 |
+| 加/改休息火堆（回血 + 杰作升级二选一） | `state.js:273 normalizeCampfire` + `DEFAULT_LEVEL.campfires`(:508) + `normalizeLevel` 映射(:649) + `level-flow.js:152 restart` 运行时副本 + `interactables.js:256` 交互/弹窗 + `economy/campfire.js` 数值 + `ui/campfire-art.js` 绘制 + 编辑器 `editor-input.js:174` 工具 / `entity-properties.js:342` 面板；全清单见 §6.8、数据契约 §3.13、流程 §4⑩、坑 §7 |
 | 改宝箱/传送门出现时机 | `state.js:149/163` 的 `trigger` 字段 + `level-flow.js:119/125`（`spawned` 初值）+ `triggers.js:183` `spawnChestsForTrigger` |
 | 改门（gate）开合动画时长 | `constants.js:79` `GATE_SPAWN_MS` + `game-scene.js:150-159` 推进段 |
 | 改房间尺寸/道路范围上下限 | `src/rooms.js:2-16` 常量 + `editor/bindings.js:200-216` 面板绑定 |
@@ -80,6 +85,7 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 | 改切关淡入淡出时长 | `level-flow.js:22` `SWITCH_FADE_MS`（场景内）/ `editor/level-flow.js:113` `FADE_MS`（DOM 黑屏） |
 | 新增一个关卡文件 | `data/levels/<id>.json` + 编辑器「新建关卡」按钮（`editor/bindings.js:252`） |
 | 改售货机 F 键交互 / 局内商店落点 | `interactables.js:225 updateVendorInteract`（按 F → `this.openVendorShop(nearest)`）；商品池/老虎机种类由表格驱动（`tools/export-tables.mjs` → `data/inner-shop.json`），页面绘制与交互见 ui-interaction skill（`screens.js:drawVendorShop` / `economy/inner-shop-runtime.js`，详见 economy-numbers skill） |
+| 加/改宝箱尺寸、上锁红环 | 尺寸：`state.js:212 normalizeChest` 的 `w`/`h` + `world-render.js:syncChestSprites` 缩放 + 编辑器 `entity-properties.js` 宝箱分支（w/h + 四角手柄）。上锁：`state.js:chestLockRadius` + `interactables.js:setChestsLocked`/`chestLockWalls` + 事件 `lockChest`/`unlockChest`；**4 个碰撞消费点**（移动/子弹/反弹/激光）与画环落点见 §3.14 |
 | 加药水掉落 / 宝箱奖药水（potionId） | `state.js:37 DROP_ITEMS`(potion) + `normalizeDropRules`(121)/`normalizeRewardList`(182) 的 `potionId`；编辑器面板在 engine-editor skill（`drop-rules-panel.js`/`entity-properties.js`）；运行时消费 `economy/drops.js:spawnDrops`。数据契约见 §3.11 |
 | 改局内药水/限时武器按键或轮盘 | `ui/battle-items.js:updateBattleItemsInput`（数字键 4/5）+ `game-scene.js:addKeys` 键码注册 + `ui/battle-items-art.js` 绘制；局内态字段与清零见 §3.10 |
 | 通关后解锁/结算规则 | `level-flow.js:269` `settleVictory` |
@@ -101,17 +107,19 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 | `cinematics[]` | 数组 | `[]`（缺省时 `normalizeLevel` 注入默认死亡运镜） | 运镜（过场动画）定义 `CinematicDef`，见 §3.12；**关卡未自带同 id 时，`normalizeLevel` 会补入一份 `DEFAULT_DEATH_CINEMATIC` 归一化副本**（关卡自带同 id 则以关卡数据为准） | `state.js:617` |
 | `deathCinematic` | string | `DEFAULT_DEATH_CINEMATIC.id`（`'cine-1789288387998'`） | 玩家被击败时播放的运镜 id（对应 `cinematics[].id`）。**`normalizeLevel` 把空串/缺字段回落成默认死亡运镜 → 全部 16 个关卡 JSON 一字未改也默认都有玩家被击败运镜；副作用：无法用空串关闭（要关需另加显式开关字段）**，见 §4⑨；`normalizeLevel` 必须显式回传，否则落盘→读回即丢 | `state.js:626` |
 | `walls[]` | 数组 | 见 3.2 | 静态墙体（同时喂寻路网格） | `state.js:452` |
-| `enemies[]` | 数组 | 默认 3 只示例 | 预置敌人（进关即存在），`normalizeEnemy`(59) | `state.js:465` |
+| `enemies[]` | 数组 | 默认 3 只示例 | 预置敌人（进关即存在），`normalizeEnemy`(59)。字段：`id/x/y/type/art/artScale/hp/damage/cutsceneId/drops` + 按类型的配置对象（母舰 `boss`、`boss-2-5t5` 全量 `boss.*`、**`heavy-mech` 的 `mech`**） | `state.js:465` |
 | `spawn` | 对象 | 见 3.3 | 玩家出生点 + 局内初始参数 | `state.js:474` |
 | `dropRules` | 对象 | `{}` | 按敌人类型的掉落规则：`dropRules[敌人类型] = [{item,count,chance,potionId?}]`，`item`∈ gold/exp/charge/diamond/**potion**（potion 见 §3.11；数值详见 economy-numbers skill） | `state.js:579` |
+| `enemyDefaults` | 对象 | `{}` | **关卡级敌人兜底数值**（按敌人类型）：`enemyDefaults[类型] = { hp?, damage?, scale? }`（`scale` = 尺寸倍率，美术与碰撞体等比缩放）。触发器波次未配置时套用，两者都未配置才用全局 `ENEMY_TYPES`/`ENEMY_BEHAVIOR` 默认。未配置的键**不落盘**（`normalizeEnemyDefaults` 只保留 `hp>0` / `damage>=0` / `scale>0`）；面板见 §3.5.1 | `state.js:normalizeEnemyDefaults` |
 | `triggers[]` | 数组 | `[]` | 触发器，见 3.4 | `state.js:466` |
 | `crates[]` | 数组 | `[]` | 木箱：固定 `w/h=50`、`hp=1` | `normalizeCrate`(115) |
 | `barrels[]` | 数组 | `[]` | 油桶：`r=30`、`hp=1`、`explodeRadius max(30,v)` 默认 150 | `normalizeBarrel`(126) |
-| `chests[]` | 数组 | `[]` | 宝箱，见 3.6 | `normalizeChest`(149) |
+| `chests[]` | 数组 | `[]` | 宝箱（含 `w`/`h` 尺寸 + 上锁红环），见 3.6 / §3.14 | `normalizeChest`(212) |
 | `portals[]` | 数组 | `[]` | 传送门（撤离点），见 3.6 | `normalizePortal`(163) |
 | `vendors[]` | 数组 | `[]` | 售货机，见 3.6 | `normalizeVendor`(180) |
 | `idols[]` | 数组 | `[]` | 神像，见 3.6 | `normalizeIdol`(192) |
 | `icons[]` | 数组 | `[]` | 可交互图标（家园入口用），见 3.6 | `normalizeIcon`(204) |
+| `campfires[]` | 数组 | `[]` | 休息火堆（靠近按 F 二选一：回血 / 杰作升级），见 3.13 | `normalizeCampfire`(273) |
 | `gates[]` | 数组 | `[]` | 能量门（战斗封路），见 3.7 | `normalizeGate`(409) |
 | `spawnZones[]` | 数组 | `[]` | 屏幕内随机刷怪矩形区域，见 3.7 | `normalizeSpawnZone`(426) |
 | `background` | 对象/null | `null` | 单张背景图或 `fx:'wormhole'` 特效背景（20+ 参数，见 `state.js:353`） | `normalizeBackground`(353) |
@@ -159,7 +167,7 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 
 注意：含 `switchLevel` 事件的触发器**强制单次**（`triggers.js:215`）。
 
-### 3.5 trigger.events[] 事件类型（9 种，`EVENT_TYPES` @ `state.js:219`）
+### 3.5 trigger.events[] 事件类型（11 种，`EVENT_TYPES` @ `state.js:316`）
 
 所有事件共有 `when` 字段：
 
@@ -179,6 +187,8 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 | `removeGate` | `gateIds[]`（同上兜底）；`auto:true` 时自动消除触发器所在箱庭房间各通道的门 | 关门（`closing=true`，动画后 `active=false`） | `triggers.js:43` |
 | `bossBattle` | `bossId`（可选，母舰 enemy id；缺省取首个待机母舰） | 激活预置母舰 Boss（`bossActive=true` + 亮血条 + 开始移动/召唤） | `triggers.js:49` → `startBossBattle` |
 | `playCinematic` | `cinematicId`（运镜动画 id，对应 `state.level.cinematics[{id}]`）、`focusTarget`（可选，`'boss'`=镜头中心锁定 BOSS 死亡位置） | 播放一段运镜（过场）动画：按关键帧插值驱动相机 `zoom/scrollX/scrollY/rotation` + 全屏蒙层 alpha；若配 `focusTarget:'boss'` 则镜头中心动态锁定 BOSS 被击败坐标；运镜可带 `timeScale` 慢动作 | `triggers.js` → `this.playCutsceneById(cinematicId, { focusTarget })` → `EditorCameraMixin.playCutscene`（见 engine-editor） |
+| `lockChest` | `chestIds[]`（多选目标宝箱 `id`；**空 = 不作用任何宝箱**，面板会提示） | 把所选宝箱置运行时 `locked=true`：**不可开启**，且被厚度 8px 的红色圆环包围（半径 `state.js:chestLockRadius` = 宝箱半对角线 + 4），圆环具碰撞体积——挡玩家/敌人移动 + 挡所有子弹（含激光） | `triggers.js:dispatchTriggerEvent` → `interactables.js:setChestsLocked`（见 §3.14） |
+| `unlockChest` | 同 `lockChest` | 把所选宝箱置 `locked=false`：红环消失、恢复可开启。**解锁方式用事件自带的 `when`**：`enter`=进入即解锁、`enemiesCleared`=击败本触发器召唤的敌人后解锁（当前需求即此） | 同上 |
 
 **多箱庭能量门自动模式**：`spawnGate`/`removeGate` 事件加 `auto:true` 后，运行时 `setGatesActive` 走 `autoRoomGates`（`triggers.js`）——用 `roomPassagesForPoint`（`rooms.js`）算触发器所在箱庭房间各通道开口，经 `isGateOnPassage` 复用已在通道上的门；`spawnGate` 时通道若无门则**运行时新建**一扇（id `gate-<triggerId>-<edge>`）并启用，`removeGate` 时关闭。编辑器触发器事件面板勾选「自动（触发器所在箱庭通道的门）」会在编辑态**一次性生成**缺失门实体、写入 `gateIds` 并落盘（`trigger-panel.js` `autoGenerateGateEvent`），让门成为可见可微调的关卡内容；两者几何一致，已用 `Level1-Scene1` 验证（trigger-1-1→gate-1-1/gate-1-2、trigger-1-2→gate-1-3、trigger-1787751836609→gate-1787751706661）。
 
@@ -217,12 +227,12 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 
 | 字段 | 默认 | 范围 / 说明 | 生效的 `mode` |
 | --- | --- | --- | --- |
-| `enemyType` | `'basic1'` | 必须是 `ENEMY_TYPES` 之一：`basic1/basic2/advanced1/advanced2` | 全部 |
+| `enemyType` | `'basic1'` | 必须是 `ENEMY_TYPES` 之一：`basic1/basic2/advanced1/advanced2/mothership/boss-2-5t5/heavy-mech` | 全部 |
 | `mode` | `'surround'` | `'surround'` 召唤阵 / `'offscreen'` 屏幕外环 / `'inscreen'` 区域内随机 | — |
 | `count` | `max(1,v)` 默认 5 | 本波数量；surround-polygon 时数量由 `sides` 决定，surround-circle 由 `circleCount` 决定 | offscreen / inscreen / surround-circle |
 | `playerMinRadius` | `max(0,v)` 默认 200 | 距玩家最小距离；第一轮取点失败后退化为 20 | inscreen |
 | `zoneId` | `''` | 指向 `spawnZones[].id`；空则用触发器自身矩形 | inscreen |
-| `waitForClear` | `false` | 场上还有存活敌人则每 120ms 重试，直到清空才生成本波 | 全部 |
+| `waitForClear` | `false` | **本触发器召唤的**敌人（`e.triggerId === t.id`）还有存活则每 120ms 重试，直到清空才生成本波 | 全部 |
 | `shape` | `'polygon'`（或 `'circle'`） | 召唤阵形状 | surround |
 | `sides` | `max(3,v)` 默认 6 | 多边形边数 = 生成敌人数 | surround-polygon |
 | `radius` | `max(20,v)` 默认 120 | 召唤阵半径（顶点距玩家） | surround |
@@ -232,6 +242,13 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 | `fadeDuration` | `max(1,v)` 默认 500 | 阵型消散时长 ms | surround |
 | `preDelay` | `max(0,v)` 默认 0 | 本波生成前等待 ms | 全部 |
 | `postDelay` | `max(0,v)` 默认 1000 | 本波生成后等待 ms（与下一波 `preDelay` 相加） | 全部 |
+| `hp` | **无默认（可省略）** | **本波血量覆盖**（`>0` 才落盘，留空 = 未配置） | 全部 |
+| `damage` | 同上 | **本波伤害覆盖**（`>=0`，`0` 是合法的显式覆盖） | 全部 |
+| `scale` | 同上 | **本波尺寸倍率**（`>0`，同时缩放 `artScale` 与碰撞半径 `e.r`） | 全部 |
+
+**敌人数值三层回落（`state.js:resolveEnemyStats(level,type,wave)`）**：① 波次的 `hp`/`damage`/`scale` → ② 关卡级 `level.enemyDefaults[类型]` → ③ 全局 `ENEMY_TYPES[type]`（hp/damage）+ `ENEMY_BEHAVIOR[type].size`（碰撞半径）+ `artScale` 默认 1。回落只在 `enemy-ai.js:initEnemy` 里做一次：`initEnemy` 从 `e.wave` 调 `resolveEnemyStats`，得 `r = size/2 × scale`、`artScale = (def.artScale ?? e.artScale ?? 1) × scale`、`hp = stats.hp ?? e.hp ?? def.hp`、`damage = stats.damage ?? e.damage ?? def.damage`；`wave` 字段会被剥掉、不留在运行时敌人对象上。**关卡预置敌人（`l.enemies[]`，不带 `wave`）不读 `enemyDefaults`**（它们走 `normalizeEnemy` 的逐实体字段 + 编辑器敌人面板）。
+生成侧同口径：`spawning.js` 的 `waveScale()` 把尺寸倍率透传给 `canSpawnAt`（5 参 `scale`）、`findClearSpawnNearPlayer`、召唤阵顶点生成与锁定框尺寸；`spawnOffscreen(t, wave)` 已改为收整个波次对象（原 `(t, count, enemyType)`）；`spawnInScreen`/`createSpawnEffect` 把 `wave` 挂到 `lockEffects`/`spawnEffects` 上，落地时再交给 `initEnemy`。
+编辑器配置入口两处：**触发器事件面板**每波的「血量/伤害/尺寸倍率」（留空 = 未配置，`trigger-panel.js:applyWaveStat` 会 `delete` 该键）+ 侧栏「敌人默认数值（本关卡兜底）」面板（`#enemyDefaultsEditor`，`enemy-defaults-panel.js`，同样留空即未配置）。
 
 三种 `mode` 的落地路径：`surround` → `createSpawnEffect`(spawning.js:171) 入队召唤阵，`draw` 阶段按进度 `spawnAtVertex`(203) 逐顶点生成、敌人 `frozen=true`，`hold` 500ms 后解冻；`offscreen` → `spawnOffscreen`(44) 视口外环取点，最多 60 次尝试、每 12 次外扩一档；`inscreen` → `spawnInScreen`(355) 区域内随机取点，先落 `lockEffects` 四角锁定框（500ms）再生成敌人。
 
@@ -239,7 +256,7 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 
 | 实体 | 关键字段（默认值） | 交互 | normalize |
 | --- | --- | --- | --- |
-| `chests[]` | `trigger`：`'start'`（进关即有）/`'trigger'`；`triggerId`；`openRadius max(20,v)=50`；`rewards[]`（`item`∈gold/exp/charge/diamond/**potion**、`count`、`chance` 0-100，`count<=0` 会被过滤；`item==='potion'` 时附 `potionId`，见 §3.11）；指引字段组 | 走近 `openRadius` 内**自动**开箱（`updateChests` 78） | `state.js:217` |
+| `chests[]` | `w`/`h`（尺寸，`max(20,v)` 默认 **75/75**，贴图按 `max(w,h)` 等比缩放；同时是命中盒与红环包围盒）；`trigger`：`'start'`（进关即有）/`'trigger'`；`triggerId`；`openRadius max(20,v)=50`；`rewards[]`（`item`∈gold/exp/charge/diamond/**potion**、`count`、`chance` 0-100，`count<=0` 会被过滤；`item==='potion'` 时附 `potionId`，见 §3.11）；指引字段组 | 走近 `openRadius` 内**自动**开箱（`updateChests` 82）；**上锁时不可开箱**（见 §3.14） | `state.js:212` |
 | `portals[]` | `w max(30,v)=120`、`h max(20,v)=60`、`rotation=0`、`trigger`/`triggerId`、`interactRadius max(40,v)=90`、`visible`；指引字段组 | 按 F 撤离 → `usePortal` → `state='end'` + `settleVictory` | `state.js:182` |
 | `vendors[]` | `w=130`、`h=96`、`interactRadius max(30,v)=120`、`visible`；指引字段组（**商品与老虎机结果不在此包配**，由策划表控制，见 §3.6.1） | 按 F 经 `this.openVendorShop(nearest)` 打开 `vendor` 局内商店页 | `state.js:200` |
 | `idols[]` | `w=h=110`、`interactRadius max(40,v)=130`、`visible`；指引字段组 | 按 F 弹 3 张祝福卡，选 1 生效并 `used=true`（不可再用）；**点空白关闭不消耗**，可再交互 | `state.js:213` |
@@ -326,6 +343,8 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 | `potionWheel` / `potionKeyHold` | 对象\|null | 药水选择轮盘状态 / 数字键 4 按住状态 |
 | `potionWheelText` | Phaser.Text\|null | 轮盘名称文本（独立 Phaser 对象，重开需额外 `setVisible(false)`） |
 | `player.itemShields` | `[{hp,maxHp}]` | 局内即时护盾，按顺序吸收伤害（挂 `this.player`，**非** `state.player`） |
+| `enemyLasers` | `[{ownerId,x0,y0,x1,y1,t,width,maxWidth,color}]` | **重装机兵激光光束**（`restart` 置 `[]`）；起止点发射瞬间定死、`updateEnemyLasers` 每帧推进宽度与存活，渲染见 `ui-interaction` |
+| `chests[].locked` / `lockFx` / `lockAlpha` | bool / 对象\|null / 0~1（每个宝箱一组） | 宝箱上锁态 + 红环渐显渐隐计时与显示 alpha（仅当局；`restart` 重建副本时置 `locked:false`/`lockFx:null`/`lockAlpha:0`，由 `lockChest`/`unlockChest` 事件改写），见 §3.14 |
 
 ### 3.11 「药水」掉落种类（关卡级掉落规则 + 宝箱奖励，`potionId`）
 
@@ -362,6 +381,50 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 - 模块私有工具 `clampUnit(value, fallback)`（0~1 钳制）、`normalizeHexColor(value, fallback)`（颜色规整），**不导出**，只在 `normalizeCinematic` 内用。
 - 编辑器（`src/editor/cinematics-board.js`）与播放器（`src/systems/editor/editor-camera.js`）的字段一致性要求见 engine-editor skill；`docs/cinematic-preview.html` 是离线预览页。
 - **默认「玩家被击败运镜」**：`state.js:DEFAULT_DEATH_CINEMATIC`（`state.js:454`，逐字搬运 `data/levels/Level1-Scene1.json` 的 `cine-1789288387998`：3 关键帧 t0 zoom1 alpha0 / t2000 zoom5 pan40,40 rot-16 / t4450 zoom**1000** alpha1，`durationMs 4450`、`timeScale 0.2`、`focus:'none'`、`blackHoldMs 0`）。`normalizeLevel`（`state.js:586`）取 `deathId = data.deathCinematic || DEFAULT_DEATH_CINEMATIC.id`，并在 `cinematics` 的 IIFE 里：若列表无同 id 则 push 一份 `normalizeCinematic(clone(DEFAULT_DEATH_CINEMATIC))`，最后 `deathCinematic: deathId`。**→ 所有关卡（16 个 JSON 一字未改）经 `normalizeLevel` 后默认都拥有玩家被击败运镜；关卡自带同 id 的运镜（如 `level-1.json` 的 4 帧变体 t4000 zoom10 / t4450 zoom100）以关卡为准**。副作用：`deathCinematic` 存空串会被回落成默认值，即**无法用空串关闭死亡运镜**（要真正关闭需另加显式开关字段）。
+
+### 3.13 休息火堆 `campfires[]`（`normalizeCampfire` @ `state.js:273`）
+
+关卡级一次性交互物：走近按 F 弹二选一（回血 / 杰作升级）。纯逻辑在 `economy/campfire.js`，弹窗绘制在 `ui/campfire-art.js`。
+
+| 字段 | 默认 / 范围 | 说明 |
+| --- | --- | --- |
+| `id` | `campfire-<i+1>` | 缺省自动补号 |
+| `x`,`y` | 0 | 中心坐标 |
+| `w`,`h` | `max(20,v)`，默认 290 / 290 | 火堆矩形尺寸（**同时进寻路障碍与挡子弹**，`restart` obstacles + `campfireWalls`） |
+| `art` | `'asset-1789356238754'` | 世界层绘制用设计稿资产 id（`world-render.js:250`，未加载退化白环占位） |
+| `artScale` | >0，默认 1 | 美术缩放 |
+| `interactRadius` | `max(40,v)`，默认 150 | 交互半径；**实际生效 = `max(interactRadius, 半对角线 + p.r + 40)`**（同 §3.6） |
+| `visible` | `true` | `false` 时不画 / 不碰撞 / 不可交互 |
+| `statBuffs` | `[{ id, name, value }]`，默认 `[]` | 杰作升级可抽的祝福 id 子集（对应 `IDOL_BUFFS[].id`）**及其可选数值覆盖**。归一化 `normalizeCampfire`(`state.js:284`) 逐项转换：`id` 转字符串、`name` 非字符串回落 `''`（空则用祝福表内建名）、`value` 走私有 `buffValueOrNull`(`state.js:267`)——`null`/缺省 = **用祝福表默认值**，数字 = **覆盖该祝福数值**；末尾 `.filter(e => e.id)` 丢弃无 id 项。**空数组语义 = 全部祝福可抽且全用表默认**（`resolveBuffConfigs` 遇空数组回退整张 `IDOL_BUFFS`）。**旧数据兼容**：元素写成纯字符串时按 `{ id: 该字符串, name: '', value: null }` 处理 |
+| 指引字段组 | `guide` / `guideRange` / `guideIcon` / `guideStopAfterUse` | 同 §3.6（`guideFields`，`stopAfterUse:true`） |
+
+运行时结构（`level-flow.js:restart` 生成副本 + `interactables.js` 消费，全部仅当局）：
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `this.campfires` | `campfire[]`（每项多一个 `used`，可带 `options`） | `(l.campfires||[]).map(v=>({...v, used:false}))`；`used=true` 后不可再交互 |
+| `cf.options` | `[{ kind, weaponType, weaponIndex, weaponName, entries }]`（3 条） | **挂火堆实例**的杰作升级候选，**本局固定**：首次进第二层由 `rollCampfireUpgrades(this, cf, { weapons, weaponIndex, player })` 生成后写回 `cf.options`，弹窗侧 `offer.options` 与它**同一引用**；退出弹窗再进 / 回第一层再进 / 层 1↔2 切换都复用**不重抽**。`level-flow.js:restart` 用 `(l.campfires||[]).map(v=>({...v,used:false}))` 重建实例 → **重开关卡自动重抽**（这正是预期；仅本局固定，不写关卡 JSON、不写存档） |
+| `this.campfireNearest` / `this.campfireTipT` | 对象\|null / 0~1 | 最近可交互火堆 / 靠近提示渐显进度（`+dt/180`） |
+| `this.campfireOffer` | `{ cf, layer:1\|2, options?, closing?, switch? }` \| null | 当前弹窗：`layer:1`=二选一、`layer:2`=3 强化按钮；`options`（= `cf.options` **同一引用**，已生成则复用不重抽）；`closing:true` 走离场动画后 `closeCampfireOffer`（置 `campfireOffer=null`）；`switch:{from,startT}`=层 1↔2 切层动画起点（`campfireChooseUpgrade`/`campfireBackToFirst` 在改 `layer` **之前**写入，绘制端按 `this.time.now - startT` 做滑出/滑入，见 §4⑩） |
+| `this.player.weaponBuffs` / `tempMods` / `buffedWeapon` | `{}` / `{}` / string\|null | 火堆祝福累积的武器加成 / 局内通用改件 / 当前已生效祝福的武器 id（`restart` 重置，见 §3.10） |
+
+### 3.14 宝箱上锁 / 解锁（`chest.locked`，仅当局）
+
+由触发器事件 `lockChest` / `unlockChest` 驱动（见 §3.5）。**该状态只在运行时**：`normalizeChest` 不落盘 `locked`，关卡 JSON 里没有这个字段；`level-flow.js:restart` 每次重建宝箱副本时置 `locked:false`。
+
+| 项 | 说明 |
+| --- | --- |
+| 字段 | `chest.locked`（bool，运行时；由 `interactables.js:setChestsLocked(chestIds, locked)` 改写）+ `chest.lockFx`（`{t, kind:'lock'\|'unlock'}` 渐显/渐隐计时）+ `chest.lockAlpha`（当前显示 alpha，0=不画） |
+| 上锁效果 | ① 不可开启：`openChest` / `updateChests` 遇 `chest.locked` 直接跳过（openRadius 再大也开不了）；② 世界层画厚度 **8px** 红环（`world-render.js:draw` 的运行时分支，半径 `chestLockRadius(c)`，alpha = `lockAlpha × roomRevealAlpha`）；③ `chestLockWalls()` 产出圆形墙喂碰撞 |
+| 显示动画（渐显/渐隐） | **只作用于显示，碰撞随 `locked` 即时生效 / 失效**。上锁 → `lockFx={t:(1-a)·CHEST_LOCK_FADE_MS, kind:'lock'}`，每帧 `alpha = p = 1 - t/fade`（0→1）；解锁 → `t = a·CHEST_LOCK_FADE_MS, kind:'unlock'`，`alpha = 1-p`（1→0），`t<=0` 清 `lockFx` 并回落 `lockAlpha = locked?1:0`。**从当前 alpha 接着走**（`a` = 起始 `lockAlpha`）：`a=0` 上锁 / `a=1` 解锁时与整段动画等价；「渐显没走完就解锁」也不突跳。**状态未变（重复上锁 / 重复解锁）直接跳过，不重播动画**。推进点在 `interactables.js:updateChests(dt)`（每帧，与宝箱 `fx` 同一循环），不需要新增每帧调度；`restart` 置 `lockFx:null, lockAlpha:0` |
+| 红环几何 | `chestLockRadius(c) = hypot(w,h)/2 + CHEST_LOCK_RING_THICKNESS/2`（环内缘刚好贴住宝箱角点，把宝箱包住）；碰撞体 `{x,y, w: r*2, thickness: 8, shape:'circle'}` —— 射线外缘 = `r + 4`，与视觉环外缘一致 |
+| 碰撞消费点 | 移动：`enemy-ai.js:resolveMovementCollision`（玩家与敌人共用）；子弹：`game-scene.js` 的 `wallAll` 连撞 + `ricochet` 反弹链 + 敌弹 filter；激光：`weapons.js:spawnLaser`、`enemy-ai.js:heavyMechUpdateSight`/`heavyMechFireLaser` |
+| 圆形墙语义 | `geometry.js:resolveCircleAgainstWalls` 对 `shape:'circle'` **永远把实体推到圆外**（不像 arc 可留在内圈）→ 玩家/敌人进不了环内；若上锁瞬间玩家恰在环内，会被立即推出 |
+| 解锁 | `setChestsLocked(ids, false)` → `locked=false` → `chestLockWalls()` 立刻返回空 → 环消失、恢复可开启；无其它待清理状态 |
+| 空选择 | `chestIds: []` **不作用于任何宝箱**（面板提示「未勾选任何宝箱时，该事件不作用于任何宝箱」）；引用不存在的宝箱 id 静默忽略 |
+| 时机 | 解锁「方式」直接复用事件自带的 `when`：`enter`=进入即解锁，`enemiesCleared`=击败本触发器召唤的敌人后解锁（走 `checkAsyncTriggerEvents`，与 `removeGate` 同一套等待条件） |
+
+已知限制：红环**不进寻路网格**（`restart` 时 `buildGrid` 构建，而锁态是运行期动态的），敌人只能靠移动碰撞被挡开、会沿环滑动；如需 A* 绕行需在锁态变化时重建网格（当前未做）。
 
 ## 4. 关键流程
 
@@ -416,6 +479,19 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 
 `game-scene.js`：`create()` 初始化 `this.playerDeathFlow=null`；`update()` 里 `deathSim = state==='fail' && !!playerDeathFlow`、`inputLocked = deathSim || !!playerDeathFlow || (cinematicInputLocked?.() ?? false)`；早退条件改 `if (state !== 'playing' && !deathSim)`（让世界继续按慢放 dt 跑）；gate 掉方向键/开火/护盾/`toggleGrowth`/各 `updateXxxInteract`/`checkAsyncTriggerEvents`。`ui-runtime.js:drawUI` 新增 `else if (this.playerDeathFlow) hideHudOverlay()` 分支（**放在 `state==='end'||'fail'` 结算分支之前**），`activeGraph` 计算也排除它。`enemy-ai.js:defeatEnemy` 的 BOSS 击破运镜 `if (!this.playerDeathFlow)` 抑制（否则顶掉死亡运镜 → `playerDeathFlow` 卡死，见 engine-editor 坑 49）。`restart()` 清 `playerDeathFlow=null` + `hideCinematicFade?.()`。
 
+**⑩ 休息火堆交互链路（F → 第一层 → 第二层 → 生效 → 消耗）**
+
+`game-scene.js:842 updateCampfireInteract(dt)`（`interactables.js:256`）：遍历 `this.campfires`，跳过 `used` / `visible===false`，`reach = max(interactRadius||150, 半对角线 + p.r + 40)` → 记 `campfireNearest` + `campfireTipT` 渐显（`world-overlay.js:174` 画提示）→ 按 F（`Phaser.Input.Keyboard.JustDown`）→ `openCampfireOffer(cf)`(290)：`this.campfireOffer={cf, layer:1}`、预取「生命值回满图标」+「杰作升级图标」、`state playing→paused` + `syncUIState()`。
+
+- **第一层 2 卡**（`ui/campfire-art.js:drawCampfireOffer`，`ui-runtime.js:328` 调用）：左「生命回复 / 回复100%生命值」，右「杰作升级！ / 强力升级你的武器..暂时」。
+- **选回血** → `campfireChooseHeal()`(310)：`campfireHeal(this)` 回满血 + `offer.cf.used=true` + `offer.closing=true`。
+- **选升级** → `campfireChooseUpgrade()`(319)：**先写切层动画起点 `offer.switch = { from: offer.layer, startT: this.time.now }` 再置 `offer.layer=2`**；随后 `if (!offer.cf.options) offer.cf.options = rollCampfireUpgrades(this, offer.cf, { weapons, weaponIndex, player })` 生成 3 条候选，再 `offer.options = offer.cf.options`（**同一引用**）——**结果挂火堆实例 `cf.options`**，退出弹窗再进 / 回第一层再进 / 层 1↔2 切换都复用**不重抽**（只有 `level-flow.js:restart` 重建实例时才重抽）。第二层点武器强化按钮 → `campfirePickUpgrade(index)`(345)：先 `const ok = applyCampfireOption(this, option); if (!ok) return;`（**未生效不再消耗火堆**——改件已拥有 / 该武器通用槽已满）→ 生效后 `this.equipWeaponByType(option.weaponType)` **自动切换到该武器**（`player-combat.js:103`：依次 `leaveWeapon` → 写 `weaponIndex`/`weaponType`/`weapon`/`scheme`/`weaponArt` → `enterWeapon` → `weaponIntroAt` → `wheelAnim` → `syncUIState`；`leaveWeapon`/`enterWeapon` 是既定成对不变量。关闭条件——无 `weaponType` / 不在 `player.weapons` / 已是当前武器 / `WEAPONS[weaponType]` 缺定义 → 返回 false 且不改任何状态）→ `offer.cf.used=true` + `offer.closing=true`（`entries` 为空的按钮不可选）。
+- **点空白**（`ui-runtime.js:650 onUIPointer`）：`layer===2` → `campfireBackToFirst()`(332)：**同样先写 `offer.switch={from:offer.layer,startT:this.time.now}` 再置 `offer.layer=1`**，回第一层（`options` 保留）；`layer===1` → `closing=true` 关闭（**不消耗**，可再次按 F）。
+- **两层切层动画**：`campfireChooseUpgrade`/`campfireBackToFirst` 在改 `offer.layer` **之前**写入 `offer.switch = { from, startT }`，绘制端（`ui/campfire-art.js` / `ui-runtime.js`，实现见 ui-interaction skill）据此用 `this.time.now - startT` 做滑出/滑入过渡；**层 1↔2 切换期间不消耗火堆**——只有真正生效（回血落地 / 升级落地 `campfirePickUpgrade`）才 `cf.used=true` + `closing=true`。
+- **消耗/一次性**：任一路径生效即 `cf.used=true`，之后 `updateCampfireInteract` 不再选中它；升级卡若 `applyCampfireOption` **未生效则不消耗、不切武器**，可重选；未消耗时点空白关闭可重复交互（结果复用 `cf.options` 不重抽）。
+- **离场动画**：`closing=true` → `ui-runtime.js` 播卡牌离场后 `closeCampfireOffer()`(302) 置 `campfireOffer=null` + `prevState playing` 恢复 → `state='playing'`。
+- **碰撞**：`campfireWalls()`(282) 返回 `visible!==false` 火堆的矩形（`{x,y,w,h,shape:'rect',rotation:0}`），供子弹阻挡（`game-scene.js:555/568`）+ 敌人移动碰撞（`enemy-ai.js:449`）；`restart` 时火堆矩形并入 `obstacles` 进寻路网格（`level-flow.js:179`）。
+
 ## 5. 关键常量与数值
 
 | 常量名 | 所在文件 | 当前值 | 含义 | 调它影响什么 |
@@ -439,7 +515,11 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 | `holdDuration`（召唤阵定格） | `src/systems/level/spawning.js:191` | 500 | 阵型画完后敌人 `frozen` 保持时长 | 敌人解冻开始行动的延迟 |
 | 锁定框 `duration` | `src/systems/level/spawning.js:390` | 500 | 屏幕内生成的四角锁定框动画时长 | 玩家的预警时间；期间 `checkAsyncTriggerEvents` 会等待 |
 | `waitForClear` 轮询间隔 | `src/systems/level/triggers.js:140` | 120 ms | 等待清场时的重试节奏 | 清场后下一波的响应延迟 |
-| `CHEST_SPAWN_FX_MS` / `CHEST_OPEN_FX_MS` | `src/systems/constants.js:25/24` | 260 / 320 | 宝箱（含传送门复用）出现 / 开启十字星特效时长 | 特效手感 |
+| `ENEMY_STUCK_KILL_MS` | `src/systems/constants.js:110` | 5000 ms | 敌人「顶住障碍且窗口内无净位移」累计满此值 → 判定消灭（卡墙/门外残留怪的兜底自毁，防 `waitForClear` 死锁；详见 combat skill §5/坑 59） | 残留怪阻塞波次的最长时长 |
+| `CHEST_SPAWN_FX_MS` / `CHEST_OPEN_FX_MS` | `src/systems/constants.js:29/28` | 260 / 320 | 宝箱（含传送门复用）出现 / 开启十字星特效时长 | 特效手感 |
+| `CHEST_SIZE` | `src/systems/constants.js:26` | 75 | 宝箱默认尺寸（= `normalizeChest` 的 `w`/`h` 缺省值） | 新放置宝箱的大小；已有宝箱以关卡 JSON 的 `w`/`h` 为准 |
+| `CHEST_LOCK_RING_COLOR` / `CHEST_LOCK_RING_THICKNESS` | `src/systems/constants.js:32/33` | `0xff3b3b` / `8` | 宝箱上锁红环的颜色 / 厚度(px) | 环的外观与碰撞厚度（`chestLockRadius` 含 `thickness/2`，改厚度会一并改半径） |
+| `CHEST_LOCK_FADE_MS` | `src/systems/constants.js:35` | 260 | 上锁红环渐显（0→1）/ 解锁渐隐（1→0）时长 ms | 环出现/消失的手感；**只影响显示**，碰撞随 `locked` 即时生效/失效 |
 | `GATE_SPAWN_MS` | `src/systems/constants.js:79` | 500 | 门开/关动画时长 | 封路生效的过渡时间 |
 | `SWITCH_FADE_MS` | `src/systems/level/level-flow.js:22` | 500 | 场景内切关淡出/淡入时长 | 切关黑屏节奏（单侧 0.5s） |
 | `FADE_MS` | `src/editor/level-flow.js:113` | 350 | DOM 黑屏切换时长 | 菜单/存档跳转的黑屏 |
@@ -467,6 +547,8 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 7. 验证：`npx vite build` → `node server.js` → 编辑器给某触发器加该事件 → 试玩确认派发。
 
 > **已落地实例 `playCinematic`（播放运镜）**：新增事件类型的最佳参考。涉及 4 处同步：① `state.js:EVENT_TYPES` 加 `'playCinematic'` + `normalizeTriggerEvent` 加分支保留 `cinematicId`；② `triggers.js:dispatchTriggerEvent` 加 `this.playCutsceneById(ev.cinematicId)`（方法本体在 `EditorCameraMixin`，见 engine-editor）；③ `trigger-panel.js:triggerEventParamsHtml` 加「运镜动画」下拉（options 取 `state.level.cinematics`）；④ `entity-properties.js:eventTypeOptions` 加 `['playCinematic','播放运镜']`。运镜数据本身是**关卡级**字段 `state.level.cinematics`（`CinematicDef` 数组），在运镜编辑器（`cinematics-board.js`，engine-editor 分类）里配，触发器用 `cinematicId` 引用。**新增事件类型若有动画/数据携带，务必同时加 `DEFAULT_LEVEL` 对应默认数组 + `normalizeLevel` 归一**，否则导入即丢。
+
+> **已落地实例 `lockChest` / `unlockChest`（宝箱上锁 / 解锁）**：**多选字段类**事件的参考（不需要新增关卡级数组，因为锁态是运行时字段）。4 处同步：① `state.js:EVENT_TYPES` 加两个类型 + `normalizeTriggerEvent` 加分支保留 `chestIds`（非字符串/空值过滤 + 去重）；② `triggers.js:dispatchTriggerEvent` 加两个分支转交 `this.setChestsLocked(ev.chestIds, true/false)`；③ `trigger-panel.js:triggerEventParamsHtml` 加「目标宝箱多选」表单（`data-ms="events.${i}.chestIds"`）+ `change` 分支的 `delete ev.chestIds` / 新类型初始化 `ev.chestIds = []`；④ `entity-properties.js:eventTypeOptions` 加 `['lockChest','宝箱上锁']`/`['unlockChest','宝箱解锁']`。**`data-ms` 多选写回已通用化**（`trigger-panel.js` 取 `el.dataset.ms.split('.').pop()` 作字段名），新增多选字段不必再改那段 handler。碰撞/渲染侧落点见 §3.14。
 
 ### 6.2 新增一种交互物（例：`shrines`）
 
@@ -510,6 +592,7 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 3. 加一种 `mode`（例如 `'ambush'`）：`state.js:97-98` 的 `mode` 归一化三元表达式要加分支（否则回落 `surround`）→ `triggers.js:118-126 fire()` 加分派 → `spawning.js` 加取点函数（务必复用 `canSpawnAt`(107) 校验并用 `findClearSpawnNearPlayer`(118) 兜底）→ `trigger-panel.js:43` 的 mode 下拉加选项、按需在 50-79 行加该 mode 专属字段。
 4. 改「等待清理」判定口径：`triggers.js:137 enemiesCleared` 目前是「场上任何存活敌人」，若要改成「仅本触发器召唤的敌人」，加 `e.triggerId === t.id` 条件——注意这会改变多触发器叠加时的节奏。
 5. 验证：用 `data/levels/Level1-Scene1.json`（3 触发器 × 多波、含 `inscreen`+`offscreen`+`surround` 三种 mode）复现。
+6. **给波次再加一个「数值覆盖」类字段（照 `hp`/`damage`/`scale` 范式，本次已落地）**：① `state.js:normalizeWave` 里用私有 `optionalNum(v)`（**必须显式判 `null`/`undefined`/`''` → 未配置，不能直接用 `Number()`**，`Number(null)===0`）并**只在有值时挂键**（未配置不落盘）；② `state.js:resolveEnemyStats` 加进回落链（波次 > `level.enemyDefaults[type]` > 全局）；③ `enemy-ai.js:initEnemy` 消费（`stats.xxx ?? e.xxx ?? def.xxx`）；④ 生成侧若该字段影响生成点校验/尺寸，`spawning.js` 的 `waveScale`/`canSpawnAt(…, scale)` 同步；⑤ `trigger-panel.js` 加每波输入 + `applyWaveStat`（留空 = `delete` 键）；⑥ 需要关卡级兜底就同时改 `normalizeEnemyDefaults` + `DEFAULT_LEVEL.enemyDefaults` + `normalizeLevel` + `src/editor/enemy-defaults-panel.js`。**改完必跑 §8 的 `initEnemy` 契约自检**（Phaser 在 node 里加载失败，需临时 loader 桩，见 §8）。
 
 ### 6.5 在关卡里放一台售货机（局内商店）
 
@@ -535,6 +618,24 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 4. **数据样例**：`data/levels/level-1.json` 的 `cine-1789288387998`「玩家被击败运镜」（`durationMs 3400` / `timeScale 1` / `focus 'player'` / `blackHoldMs 500` / 6 关键帧带全部新字段），`Level1-Scene1.json` 追加同一条 + 顶层 `deathCinematic`。
 5. **验证**：试玩 → 被打死（或走 `boss25t5KillPlayer` / 母舰贴身秒杀）→ 应播死亡运镜 → 黑幕保持 `blackHoldMs` → 结算页出现；黑幕期间按 F/4/5/ESC **不应**打开菜单页（`playerDeathFlow` 输入锁，见 §4⑨ + engine-editor 坑 50）。
 
+### 6.8 新增可交互实体（照休息火堆范式）
+
+休息火堆是「关卡级 + 占位碰撞 + F 键弹窗 + 局内态」的完整样板。照此顺序改（**漏任何一处都会「配了没反应 / 跨关残留 / 敌人卡墙 / 子弹穿模」**，6 处硬性同步见 §7）。
+
+1. **schema**：`state.js` 加 `normalizeXxx(v, i)`（照 `normalizeCampfire`(273)：id 兜底、坐标、`w/h` 下限、`art`/`artScale`、`interactRadius`、`visible`、业务字段如 `statBuffs`、`...guideFields(v,{stopAfterUse:true})`）。**归一化契约**：`statBuffs` 由 `string[]` 升级为 `[{ id, name, value }]`（`id` 转字符串、`name` 非字符串回落 `''`、`value` 走 `buffValueOrNull`、`.filter(e => e.id)` 丢无 id 项；纯字符串元素按 `{id:该串,name:'',value:null}` 兼容）。**数组内对象元素必须用显式 `null` 判断回落，不要依赖 `Number()` 转换**——火堆把该判断抽成私有 `buffValueOrNull`(`state.js:267`)，`null`/`undefined`/`''`/非有限数 → `null`（= 用表默认），**绝不能**写成 `Number.isFinite(Number(v)) ? Number(v) : null`（`Number(null)`/`Number('')` 都是 0，会把「未配置」误判成「覆盖为 0」，详见 §7）。
+2. **默认骨架**：`state.js:DEFAULT_LEVEL`(:484) 加 `xxx: []`（火堆在 :508）。
+3. **挂载**：`state.js:normalizeLevel`(:603) 加 `xxx: (Array.isArray(data.xxx)?data.xxx:[]).map(normalizeXxx)`（火堆在 :649）——**缺映射导入即丢**。
+4. **运行时副本 + 局内态清零**：`level-flow.js:restart`(:152) 加 `this.xxx=(l.xxx||[]).map(v=>({...v,used:false}))` + `this.xxxNearest=null; this.xxxTipT=0; this.xxxOffer=null;`（一次性再加 `used:false`）——**这一处最常漏**。
+5. **寻路障碍**：`restart` 的 `obstacles`(:175) 并入实体矩形 `{x,y,w,h}`（火堆 :179）——否则敌人穿模 / 卡墙。
+6. **交互**：`interactables.js` 加 `updateXxxInteract(dt)`（照 `updateCampfireInteract`(256)：`editing||state!=='playing'` 先清空；`reach=max(interactRadius,halfDiag+p.r+40)`；`JustDown(this.keys.F)`）+ 弹窗开关 / `choose` / `closing` 方法；占位实体另加 `xxxWalls()`（照 `campfireWalls`(282)）。
+7. **编辑器：放置工具**：`editor-input.js:174` 加 `tool==='xxx'` 分支（建实体 + 默认尺寸）+ `:127` 删除分支；`editor-geometry.js:250 pickTopEntity` 加命中分支；工具按钮列表（`index.html`/`ui.js`）补按钮。
+8. **编辑器：属性面板**：`editor/entity-properties.js:342` 加 `(l.xxx||[]).includes(entity)` 分支（标题 + 字段行）；`editor/history.js:48/60` 加实体→集合名映射（否则撤销/复制失效）。
+9. **世界层绘制**：`ui/world-render.js` 加绘制（照火堆 :250 按 `art` 等比铺满 + 未加载白环占位）+ 预载 `art`(:28)；提示浮层加在 `ui/world-overlay.js`(:174 + guide 实体列表 :438)。
+10. **每帧调度**：`game-scene.js` `update()`(:842) 在 `!inputLocked` 下调用 `updateXxxInteract(dt)`。
+11. **占位碰撞（可选）**：实体要挡子弹/挡移动时，`game-scene.js:555/568` 并入 `this.xxxWalls()`；敌人移动碰撞 `enemy-ai.js:449` 并入。
+12. **弹窗绘制（可选）**：照 `ui/campfire-art.js` 新建 `xxx-art.js`，在 `ui-runtime.js` 的 `drawUI`(:328) 与 `onUIPointer`(:621) 接线。
+13. **「本局固定的随机结果」挂实体实例，别挂 offer / 场景临时变量**：需要「同一实体本局随机一次、之后固定」的结果（如火堆升级候选），挂**实体实例字段**（`cf.options`）——写 `if (!cf.options) cf.options = rollXxx(...)`，再让弹窗引用它（`offer.options = cf.options` 同一引用）。`offer`（`campfireOffer`）关闭即 `null`，挂它上面的随机结果**丢失并重抽**；挂 `state.player` 会写存档、挂 `ctx.state.level.<实体>` 会被 `saveDraft` 落盘污染。随 `restart` 重建实体副本时才重抽（见 §3.13 / §7）。
+
 ## 7. 坑与约束
 
 - **Mixin 装配顺序与同名覆盖**：`src/game-scene.js:559` 一次 `Object.assign(EditorScene.prototype, …19 个 Mixin)`，后者覆盖前者。本分类的四个 Mixin 顺序为 `SpawningMixin → TriggersMixin → InteractablesMixin → LevelFlowMixin`（在 `DestructiblesMixin` 之后、`HudMixin` 之前）。新增方法前先确认方法名在其他 Mixin 中不存在，否则会静默覆盖。
@@ -543,6 +644,7 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 - **`t.spawn` 是回写的临时字段**：`triggerSpawnEnemy`(triggers.js:107) 把事件里的 `spawn` 赋给 `t.spawn`，因为 `runTriggerWave`/`spawnInScreen`/`createSpawnEffect` 仍从 `t.spawn` 读波次。这意味着**同一触发器只能有一个生效的 `spawnEnemy` 事件**，配两个后者会覆盖前者的波次上下文。
 - **波次中止与残留清理时机**：`stopTriggerSpawn`(triggers.js:155) 只在「玩家离开 + `spawn.stopOnExit`」时调用（`triggers.js:211`）。它做四件事：移除当前 timer、按 `triggerId` 过滤 `waveEvents`、清同 id 的 `spawnEffects`（并把其中 `frozen` 的敌人解冻，否则会永久冻在场上）、清同 id 的 `lockEffects`。自己加中止路径时必须复用它，别只 `remove` timer。另外已生成的敌人**不会**被回收。
 - **异步事件的三重等待条件**：`checkAsyncTriggerEvents`(triggers.js:174-180) 必须同时满足「无未生成波次」「无本触发器的存活敌人」「无本触发器的 `lockEffects`」。如果波次用了 `waitForClear` 且场上有别的触发器召唤的敌人，本触发器的波次会一直等 → 异步事件（如 `removeGate`）永不触发，表现为「门打不开」。
+- **「勾了 `waitForClear` 的波次再也不生成」= 判据把「不该算的敌人」算进去了**（真实踩过：`Level1-Scene2` trigger-178「1/2 波清完，3/4 波不出」）。**旧实现**（已修）判据是**全场** `!this.enemies.some(e => e.alive)` → 只要场上有**任何**存活敌人就不放行，后续波次连 `time.delayedCall` 都不会挂（表现完全像「波次链坏了」，实测 60s 内第 3/4 波从不 fire）。**最典型的坑是关卡手摆的敌人**：`level-flow.js:293 restart` 会把 `l.enemies` 全部 `initEnemy` 进场（`alive:true`），本类关卡的「待机 BOSS」就是这么进场的 —— `Level1-Scene2` 手摆 `boss-2-5t5`、`Level1-Scene1` 手摆 `mothership`，它们在别的房间待机、`triggerId` 为空、整局都不会死 → **这两个关卡的全部 9 处 `waitForClear` 波次全部永久卡死**（before/after 实测：修前 60s 第 3/4 波 0 次 fire，修后 15.0s/16.0s 正常 fire）。**现在的判据**：`!this.enemies.some(e => e.alive && e.triggerId === t.id)`（`triggers.js:195`，与 `checkAsyncTriggerEvents` 同规则）—— 只等**本触发器自己召唤的**怪。**排查口诀**：① 先看「没生成的波是不是勾了 `waitForClear`」；② 再数场上存活敌人（含待机 BOSS、别的触发器召唤的、卡墙/门外的）—— 它们都会拦住它；③ 顺便注意 `inscreen` 波 + 远离玩家的 `spawnzone` 生成 `advanced2`：`ENEMY_BEHAVIOR.advanced2.attackRange = 500`，>500px 时只原地自转（`stepAdvanced2` 未激活分支直接 `return`）→ 玩家不走近就永远不死，会拦住同触发器的后续波次（用 `surround` 或把 zone 移到玩家附近）；④ 生成在墙内/门外的怪（`canSpawnAt` 只做视线判定、不做寻路判定；门甚至不进寻路网格）有兜底自毁：连续「顶住障碍且窗口内几乎无净位移」满 `ENEMY_STUCK_KILL_MS(5000)`（`enemy-ai.js:updateEnemyStuck`，详见 combat skill 坑 59；覆盖不到远处休眠的 `advanced2`）。
 - **试玩快照机制不能污染编辑器数据**：`redraw`(editor/level-flow.js:63) 只在 `state.mode==='editor'` 时落盘；游戏内 `switchLevel` 会直接改 `state.level`/`state.levelId`，退出必须走 `restoreEditorSnapshot`(160) 还原。新增「进入游戏态」入口时，务必先 `await saveDraft` 再存 `ctx.editorSnapshot`（照 `bindings.js:222` / `save-flow.js:76`），否则玩家会丢编辑内容。试玩存档写 `data/test-players/`，与正式档隔离（`state.saveStore`）。
 - **生成点必须过可达性校验**：`canSpawnAt`(spawning.js:107) 检查「世界边界内（留敌人半径）+ 不在墙内 + 与玩家连线 `hasLOS` 通畅 + 可选最小玩家距离」。绕过它直接 push 敌人 → 敌人卡墙或玩家打不到。注意 `canSpawnAt` 用的是视线判定，**不是**寻路判定；真要保证能走到得用 `isReachableWalkable`(67)（`findPath` A*）或 `nearestReachablePoint`(85) 兜底。`this.grid` 在 `restart` 里由 `buildGrid` 生成，编辑器改墙后未 `restart` 时 grid 是旧的。**`canSpawnAt` 现追加了「整圆穿墙排除」**（圆心+半径上 8 采样点任一 `pointInWall` 即 false，spawning.js:154），小敌人(r≈15-24)影响可忽略；母舰因其**风筝形 Hitbox**（`geometry.js:mothershipBoundsR`，包围半径≈180×artScale≈360）显著变严，故走 `spawning.js:spawnMothership` 专用生成（整圆不穿墙+三档兜底，防卡墙/波次空转），经既有波次 `mode:'offscreen'` 触发。
 - **门参与碰撞但编辑器态不参与**：`activeGateWalls`(triggers.js:87) 在 `this.editing` 时返回 `[]`，且门**不进寻路网格**（`buildGrid` 只吃 `walls` + `crates` + `barrels`）。所以门关闭时敌人寻路仍会尝试穿门位置，只是被移动碰撞挡住。自动模式下运行时新建的门（未落盘）会进 `this.gates`，随 `restart` 重建而清空；要长期保留需在编辑器面板用「自动生成」落盘。
@@ -553,6 +655,9 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 - **房间墙重生成只认 `room:true`**：`applyRooms`(room-panel.js:23) 用 `l.walls.filter(w => !w.room)` 保留手工墙。手工加的墙千万别带 `room:true`，否则下次改房间面板会被删。
 - **`spawnInScreen` 依赖 `ctx.state.level.spawnZones`**：`zoneId` 找不到对应 zone 时静默回落到触发器自身矩形（`spawning.js:362`）。删 spawnZone 后波次里的 `zoneId` 不会自动清，表现为刷怪范围突然变小。
 - **触发器矩形贴着刚关闭的门 → `inscreen` 第一波生成 0 只**（真实踩过：`Level1-Scene2` trigger-1788792207315）。现象：配了 2 波（`inscreen` + `zoneId` + `waitForClear:true`），但第一波一只怪都不出，第二波却正常。根因：该触发器同时带 `spawnGate(auto)` 且位于多箱庭房间入口，事件列表里 `spawnGate` 排在 `spawnEnemy` 前，进场即激活房间通道的门；玩家进触发器瞬间站在矩形左缘（≈门厚度包络内，门 `h*1.42` 如左门旋转后 x∈[2298,2362]），且波次 `preDelay:0` 的 `time.delayedCall(0)` **同帧**触发 → `spawnInScreen` 此刻 `canSpawnAt → hasLOS`（`enemy-ai.js:399` 含 `activeGateWalls()`）从生成区任意点到玩家的连线都命中那扇门（玩家贴门时门在射线 t<1 处被命中）→ 两轮取点全失败 → `spawnInScreen` 直接 `continue` 丢弃（无 `findClearSpawnNearPlayer` 兜底）→ 0 个 lockEffect。第二波因 `postDelay` 后玩家已被 `resolveMovementCollision`（`enemy-ai.js:360` 含门）推出门体积、LOS 恢复才正常。**关键**：只有「同帧」且玩家正好卡在门体积内才会触发（实测玩家 x<2362 时 0/10，x>2362 后 10/10，边界极脆）。**正确做法**：①代码层已修——`hasLOS` 现在会跳过「包含任一端点」的门（门贴玩家时不算隔断视线，`enemy-ai.js:399`）；②数据层给此类「入口触发器 + inscreen 首波」补 `preDelay`（≥100ms，让玩家被推出门）或把触发器矩形左缘右移到明显越过门厚度，且勿把触发器矩形左缘压在门体积内。
+- **宝箱上锁红环有 4 个「必须一起改」的消费点，漏一个就「挡不住」**（真实结构，见 §3.14）：① 移动（`enemy-ai.js:resolveMovementCollision`，玩家/敌人共用）；② 玩家子弹连撞 `wallAll` + `ricochet` 反弹链；③ 敌弹 filter；④ 玩家激光 `weapons.js:spawnLaser` 与重装机兵瞄准线/激光。**只加 `wallAll` 会出现「子弹被挡、激光穿过」**这类半成品表现。另注：**红环不进寻路网格**（锁态是运行时动态的，`buildGrid` 只在 `restart` 跑），敌人靠移动碰撞沿环滑动，不绕行——这是当前已知限制而非 bug。
+- **`chestIds: []`（面板未勾选）等于「什么都不做」，不是「作用于本触发器绑定的宝箱」**。不要把门的 `setGatesActive` 那种「找不到就取最近一扇」的隐式兜底搬到宝箱上（那是「门乱开」坑的来源）；宝箱上锁必须显式勾选。
+- **`resolveCircleAgainstWalls` 对 `shape:'circle'` 永远向外推**（`geometry.js`）：所以「圆形墙」= 一个实心禁区，实体永远进不去、上锁瞬间在环内的实体会被弹出，而不是「可站在环上」。想让实体留在环内必须用 `shape:'arc'`（arc 会按距离选内/外缘）。
 - **交互半径会被实体尺寸抬高**：`max(interactRadius, halfDiag + p.r + 40)`。把神像/图标做得很大时，`interactRadius` 配再小也没用。
 - **菜单关与家园关的特殊分支**：`isMenuLevel()`（`ui==='login'`）跳过开场演出、相机固定 `(0,0)`；`isHubLevel()`（`levelId==='knight-home'`）禁用开火与护盾（`game-scene.js:225/228`）。新增此类关卡要同步这两个判定（`src/systems/ui/ui-runtime.js:165/186/191`）。
 - **大地图 + `camera.mode:'center'` + 空场 + `showGridInPlay:false` ⇒ 玩家报「上下不能移动」（真实踩过：`Boss2-Test`）**。现象：某一关「按上/下键角色完全不动，按左/右却正常」，触发某个事件（如 BOSS 战）后又「正常」了，极像输入或碰撞 bug。**根因不是移动逻辑**：`center` 相机每帧把玩家钉在屏幕正中（`editor-camera.js:107-108`），玩家移动时**只有世界元素在屏幕上滑动**才能被看出；若场地里没有参照物（背景纯黑、网格关闭、上/下墙离出生点 ~1000px 在视口外），而画面内唯一的墙恰好是**比视口还高的竖直长条**（`h:2030` vs 视口 1080），那么纵向滑动该长条**看起来毫无变化**、横向滑动却非常明显 → 玩家以为自己只能左右走。事件触发后一个明显物体（BOSS）进入画面 → 纵向移动变得可见 → 「恢复正常」。**判据**：症状与「哪个关卡 / 玩家站在地图哪个位置」强相关，而不是与按键/时间相关，就先怀疑视野参照物。**正确做法**：①给关卡开 `showGridInPlay: true`（网格 30px、`gridColor` 深色，随相机滚动，是最省事的全屏参照）②或把地图缩到接近视口（真实战斗关多为 `1920×1080`，相机被边界钳住时角色本体会在屏幕上直接移动）③或在场地内放可见参照物（`Level1-Scene1` 就是 63 面墙 + 3 张图）。**别去改移动代码**——那段逻辑（`game-scene.js:214-238`）是左右对称的。
@@ -566,12 +671,18 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 - **药水只支持「关卡级掉落规则」与「宝箱奖励」两个面板**：敌人个体 `e.drops` 没有药水字段（`{gold,exp,diamond}`），不要以为配了 `e.drops` 就能掉药水；两个面板的药水下拉选项来自运行时的 `/api/inner-shop`，见 engine-editor skill。
 - **`deathCinematic` 必须在 `normalizeLevel` 里显式回传，否则静默丢弃**（同 `cutsceneId` 坑）：`state.js:626`（`deathCinematic: deathId`）是唯一回传点，`DEFAULT_LEVEL`（`:485`）的默认值只是骨架。**注意现已改为「默认注入」** —— `normalizeLevel` 会把空串/缺字段回落成 `DEFAULT_DEATH_CINEMATIC.id`，即所有关卡默认都有玩家被击败运镜、且**无法用空串关闭**（要关需显式开关字段）。编辑器勾选 `#cinematicDeathFlag` 后保存，若 `normalizeLevel` 漏回传，重开即丢且**全链路无报错**。
 - **死亡运镜会被后播放的运镜顶掉且不回调旧 `onComplete`**：`playCutscene` 覆盖正在播放的运镜时只 `cinematicTimer.remove()`、旧 `onComplete` 永不触发 → 母舰贴身秒杀 → BOSS 击破运镜顶掉死亡运镜 → `playerDeathFlow` 卡死、结算页永不出现。修法见 §4⑨ 与 engine-editor 坑 49-50（`enemy-ai.js:defeatEnemy` 加 `if (!this.playerDeathFlow)` 抑制；输入锁不只依赖 `cinematicInputLocked()`）。`playCinematic` 触发器事件同理会顶掉死亡运镜，故死亡演出期间 `game-scene.update` 会 gate 掉 `checkAsyncTriggerEvents()`。
+- **新增关卡级实体必须同时改 6 处，漏 `restart` 会让局内态跨关卡残留**（火堆范式）：① `state.js:DEFAULT_LEVEL` 加默认数组；② `state.js` 加 `normalizeXxx`；③ `state.js:normalizeLevel` 挂载映射（漏则导入即丢）；④ `level-flow.js:restart` 生成运行时副本 + 初始化 `xxxNearest`/`xxxTipT`/`xxxOffer`（+一次性 `used`）；⑤ `restart` 的 `obstacles` 并入实体矩形（寻路）；⑥ 编辑器放置工具（`editor-input.js`）+ 属性面板（`entity-properties.js`）+ `history.js` 实体→集合名映射。**漏第 ④ 处**：上一关的 `used`/`nearest`/`offer` 会残留到下一关（表现为火堆「已用过」、幽灵弹窗、`nearest` 指向已销毁对象）—— `restart` 是局内态唯一清零点（见 §3.10 + 上文「局内态一律挂场景对象」条）；漏第 ⑤ 处：敌人穿模 / 卡墙；漏第 ⑥ 处：编辑器放不出来 / 撤销失效。完整清单见 §6.8。
+- **随机结果挂 `offer` 会在关弹窗时丢失、必须挂实体实例**：`closeCampfireOffer`(interactables.js:302) 把 `campfireOffer` 置 `null`，挂在 `offer`（或任何场景临时变量）上的随机结果随弹窗关闭一并丢失 → 下次再弹会**重抽**，表现为「同一火堆反复进出结果每次都变」。正确做法挂**实体实例**（火堆 `cf.options`，见 §3.13 与 §6.8 第 13 条），随 `restart` 重建实例才重抽；也别挂 `state.player`（会写存档）或 `ctx.state.level.<实体>`（会被 `saveDraft` 落盘污染）。
+- **`Number(null) === 0` 陷阱：火堆祝福 `statBuffs[].value` 的「未配置」判定**（真实踩过）。**现象**：某条火堆祝福只想引用祝福表默认值、`value` 留空（缺省 / `null` / 旧数据写成 `''`），进局后该词条却显示 `+0%`，且属性被真正设成 0。**根因**：回落判断写成 `Number.isFinite(Number(v)) ? Number(v) : null` —— `Number(null)` 与 `Number('')` 都等于 `0`（是有限数），于是「未配置 = 用表默认」被误判成「显式覆盖为 0」。**正确做法**：先显式判空（`v === null || v === undefined || v === ''` → `null`），再做 `Number.isFinite(Number(v))` 校验；火堆已抽成私有函数 `buffValueOrNull(v)`（`state.js:267`，定义在 `normalizeCampfire` 之前）。**两处必须同步维护**：`state.js:normalizeCampfire`（:284 归一化落盘）+ `economy/campfire.js:resolveBuffConfigs`（:158 运行时抽池：逐项转换后 `.filter(e => e.id && known.has(e.id))` 过滤掉 `IDOL_BUFFS` 里不存在的 id）各有一份同款判空逻辑，**只改一处会出现「落盘正确、运行期抽出的仍是 0」**。- **「留空 = 未配置」的判空必须显式判 `null`/`undefined`/`''`，不能用 `Number(v)` 直接判**（与火堆 `statBuffs[].value` 同源坑，本次触发器敌人数值又踩一次）。`Number(null)` 与 `Number('')` 都等于 `0`（有限数），若写成 `Number.isFinite(Number(v)) ? Number(v) : null`，则「留空 = 用关卡兜底/全局默认」会被误判成「覆盖为 0」→ 敌人 0 血 / 0 伤害 / 尺寸 0。`state.js` 已抽成私有 `optionalNum(v)`（`normalizeWave` 与 `normalizeEnemyDefaults` 共用），**面板侧也要对称**：`trigger-panel.js:applyWaveStat` 与 `enemy-defaults-panel.js` 在 `value.trim() === ''` 时 `delete` 键（而不是写 0），只有显式输入才落盘（`hp`/`scale` 需 `>0`、`damage` 允许 `0`）。
+- **尺寸倍率 `scale` 必须「美术 + 碰撞体」同口径，且 4 处生成点校验一起改**（漏一处就出现「怪变大了却卡在墙里 / 生成警告框比怪小」）。生效点：`enemy-ai.js:initEnemy` 的 `r = size/2 × scale` 与 `artScale = (def.artScale ?? e.artScale ?? 1) × scale`（**碰撞半径在 `initEnemy` 里算，不是渲染时算**，渲染端只读 `e.artScale`，见 combat skill）；生成侧 `spawning.js:canSpawnAt(x,y,type,minDist,scale)`（含整圆穿墙采样与母舰包围半径）、`findClearSpawnNearPlayer(type,scale)`、召唤阵 `spawnAtVertex`、锁定框 `size × scale`。**别只改渲染的 `artScale`** —— 那会造成「看起来变大、实际还是原碰撞体」，玩家打不中/怪穿墙。
+- **波次数值要传到「落地那一刻」，中间隔着召唤阵/锁定框**：`surround` 走 `createSpawnEffect` → `spawnEffects[].wave`，`inscreen` 走 `spawnInScreen` → `lockEffects[].wave`，都由 `initEnemy({..., wave})` 消费；**新增生成模式时必须同样把 `wave`（而非只传 `enemyType`/`count`）挂上去**，否则该模式下所有数值覆盖静默失效（表现为「面板配了没用」）。`spawnOffscreen` 的签名已从 `(t, count, enemyType)` 改为 `(t, wave)`，新调用点别再用旧签名。
 
 ## 8. 验证方式
 
-- 构建：`npx vite build`（Vite 6 + Phaser 4，纯 ESM，只做打包不跑测试）；基线 **90 modules**（接线前 86；+4 = 两个新运行时模块 + 因接线才进依赖图的 `run-items.js`/`battle-items-art.js`）。装配 mixin 由 23 → **25**（`RunItemsMixin`、`BattleItemsMixin` 紧随 `InnerShopMixin`）。
-- 单测：`node --test test/`。基线 **20 tests / 19 pass / 1 fail**；唯一 fail 为 `test/player-api.test.js` 旧 schema `mods` 字段被 `normalizePlayer` 丢弃（属既有的 schema 迁移不一致，非本改动引入）。测试只覆盖玩家存档，**关卡 schema 无自动化测试**，改 `normalize*` 必须手动回归。mixin 同名自检基线：**方法数 285 / 冲突 2**（均为 `if`/`for` 关键字相关的假阳性）。
+- 构建：`npx vite build`（Vite 6 + Phaser 4，纯 ESM，只做打包不跑测试）；基线 **98 modules**（实测：本轮 +1 = `src/editor/enemy-defaults-panel.js` 关卡级敌人兜底面板；此前 97。含 `economy/campfire.js` / `economy/weapon-buffs.js` / `ui/campfire-art.js` / `combat/heavy-mech.js` / `ui/heavy-mech-art.js` 等新增模块）。装配 mixin 保持 **25**（`setChestsLocked`/`chestLockWalls` 并入 `InteractablesMixin`，不新增 mixin；装配后方法数 **303** / 真实冲突 0）。
+- 单测：`node --test test/`。基线 **20 tests / 19 pass / 1 fail**（本次不变）；唯一 fail 为 `test/player-api.test.js` 旧 schema `mods` 字段被 `normalizePlayer` 丢弃（属既有的 schema 迁移不一致，非本改动引入）。测试只覆盖玩家存档，**关卡 schema 无自动化测试**，改 `normalize*` 必须手动回归。mixin 同名自检基线：**方法数 303（本轮 301 + 2 = 宝箱上锁 `setChestsLocked`/`chestLockWalls`，属关卡设计分类）/ 真实冲突 0**（关键字同名假阳性不计入真实冲突）。
 - 起服：`node server.js`（默认端口 5173，可 `PORT=5174 node server.js`）。关卡读写走 `GET/POST /api/levels/:id`，直接落 `data/levels/*.json`。
+- **触发器敌人数值三层回落自检（改了 `normalizeWave`/`normalizeEnemyDefaults`/`resolveEnemyStats`/`initEnemy`/`spawning.js` 的 scale 口径时必跑）**：`initEnemy` 需要 Phaser（node 下 `import('phaser')` 直接 `Unexpected token 'export'`），故用临时 loader 桩跑一次真代码：`.tmp-verify/loader.mjs`（`resolve` 钩子把 `phaser` 映射到桩）+ `phaser-stub.mjs`（提供 `Math.Angle.Between/Wrap`、`Math.Clamp` 等）+ `check.mjs`（`register(loader)` 后 `import` `enemy-ai.js`，用 `EnemyAiMixin.initEnemy.call({ctx:{state:{level}}}, spawn)` 逐条断言）。断言口径：波次覆盖生效、`wave` 不残留在敌人对象上（`'wave' in e === false`）、`hp:500/damage:5/scale:2` 的关卡兜底生效、`damage:0` 是显式覆盖、`scale:0.5` 使 `r` 减半、无兜底类型回落全局、**关卡预置敌人（无 `wave`）不受 `enemyDefaults` 影响**、母舰 `artScale` 仍为 2、重装机兵 `mechCfg` 默认补全。**跑完删掉 `.tmp-verify/`**（临时脚本不进仓）。
 - 手动复现路径：
 
 | 要验的东西 | 用哪个关卡 | 怎么看 |
@@ -588,3 +699,7 @@ description: 改关卡结构（房间/墙体/世界尺寸）、触发器与敌�
 | 局内药水（掉落→拾取→数字键 4 使用/轮盘） | 任意配了 `dropRules[类型].item='potion'` 或宝箱 `rewards` 含 `potion` 的关卡 | 击杀掉药水 / 开箱拾取 → 队列 +1；短按 4 用首瓶、长按 4 呼轮盘选瓶；重开关卡应清零 |
 | 局内限时武器（数字键 5） | 售货机买限时武器后 | 按 5 启用（滚轮被禁，见 engine-editor 坑）→ 再按 5 取消；重开关卡清零 |
 | 死亡运镜（玩家被击败） | 配了顶层 `deathCinematic` 的关卡（如 `level-1.json` / `Level1-Scene1.json`） | 被打死 → 播死亡运镜（`focus:'player'`）→ 黑幕保持 `blackHoldMs` → 结算页出现；黑幕期间按 F/4/5/ESC **不应**打开菜单页（§4⑨） |
+| 休息火堆（回血 / 杰作升级二选一） | 任意放了 `campfires` 的战斗关（编辑器「休息火堆」工具放置） | 走近按 F 弹第一层 2 卡（左回血 / 右升级）→ 选回血回满血 / 选升级进第二层 3 强化按钮 → 任一生效后火堆 `used` 不可再用；点空白（第二层→第一层 / 第一层关闭不消耗）；**退出弹窗再进、回第一层再进结果不变（`cf.options` 本局固定不重抽）；点升级卡应自动切到该卡片标注的武器（改件/属性仍绑该武器）、`applyCampfireOption` 未生效则不消耗不切武器**；重开关卡应清零并重抽 |
+| 宝箱尺寸（编辑器改大小） | 任意有宝箱的关卡 | 选中宝箱 → 右侧面板「宽度/高度」改值 → 贴图按 `max(w,h)` 等比缩放（不变形）；拖四角手柄同样改 w/h（最小 20） |
+| 触发器召唤敌人的血量/伤害/尺寸（三层回落） | 任一战斗关（如 `Level1-Scene2` 的 `trigger-178`，4 波含 `inscreen`/`offscreen`/`surround`） | ① 侧栏「敌人默认数值」给 `advanced2` 填 血量 500 / 伤害 5 / 尺寸倍率 2 → 试玩清到该波：**怪比默认大一圈（美术与碰撞体同步）、伤害按 5 结算**；② 该波自己的「第N波血量/伤害/尺寸倍率」再填值 → **波次覆盖关卡兜底**；③ 三项都留空且关卡兜底也空 → **回落全局默认**（`basic1` 30 血 / 10 伤 / ×1）；④ 填好的输入**清空**后保存重载，JSON 里不残留该键（`hp` 等被 `delete`、normalize 也不补） |
+| 宝箱上锁 / 解锁（红环 + 渐显渐隐） | 任一关卡：放 2 个宝箱 + 1 个触发器，事件列表加「宝箱上锁」（时机=进入即触发，勾选宝箱 A）+「宝箱解锁」（时机=击败本触发器召唤的敌人后，勾选宝箱 A），并给该触发器配 1 波敌人 | 进触发器 → 宝箱 A **红环约 260ms 渐显**（`CHEST_LOCK_FADE_MS`）后被 8px 环包围：**走不进环内、身体被挡；往环上打子弹被挡（含激光）；靠近 openRadius 内也不开箱**；宝箱 B（未勾选）可正常开。清完该触发器召唤的敌人 → **碰撞立即解除（可立刻穿过）、环约 260ms 渐隐**后消失 → 宝箱 A 可开箱。重开关卡红环应清零（不再有锁态）。未勾选任何宝箱的事件应完全不生效；同一触发器重复上锁/解锁不应让环闪烁重播 |

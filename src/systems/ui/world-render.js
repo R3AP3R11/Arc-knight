@@ -1,21 +1,22 @@
 /**
- * 文件职责：世界层渲染与精灵同步（背景图 / 桶 / 售货机 / 神像 / 图标 / 传送门 / 宝箱 / 主渲染 draw）
+ * 文件职责：世界层渲染与精灵同步（背景图 / 桶 / 售货机 / 神像 / 休息火堆 / 图标 / 传送门 / 宝箱 / 主渲染 draw）
  * 归属分类：UI交互
- * 主要导出：WorldRenderMixin（12 个方法）
+ * 主要导出：WorldRenderMixin（14 个方法）
  * 依赖：systems/constants.js、systems/combat/geometry.js、systems/ui/entity-art.js、systems/editor/editor-geometry.js、state.js
  */
 import Phaser from 'phaser';
-import { CELL, FONT_TECH, BARREL_TEX_KEY, CHEST_CLOSED_KEY, CHEST_OPEN_KEY, CHEST_SIZE, CHEST_OPEN_SCALE_CORRECTION, PORTAL_ALPHA, PORTAL_LABEL, VENDOR_TEX_KEY, IDOL_TEX_KEY, ROTATE_HANDLE_OFFSET, HIT_FX_TTL, HIT_FX_RADIUS } from '../constants.js';
+import { CELL, FONT_TECH, BARREL_TEX_KEY, CHEST_CLOSED_KEY, CHEST_OPEN_KEY, CHEST_OPEN_SCALE_CORRECTION, CHEST_LOCK_RING_COLOR, CHEST_LOCK_RING_THICKNESS, PORTAL_ALPHA, PORTAL_LABEL, VENDOR_TEX_KEY, IDOL_TEX_KEY, ROTATE_HANDLE_OFFSET, HIT_FX_TTL, HIT_FX_RADIUS } from '../constants.js';
 import { wallCorners, wallRotationRad } from '../combat/geometry.js';
 import { color, drawCrate, drawCrateDebris, drawPortalShape, drawWormhole, drawEnemyShape, drawDropDiamond, drawWallShape, drawShieldArc, drawItemShields, drawPlayer } from './entity-art.js';
 import { drawGates } from '../editor/editor-geometry.js';
 import { drawBoss25T5Zones, drawBoss25T5Vortices } from './boss25t5-art.js';
+import { drawHeavyMechBeams } from './heavy-mech-art.js';
 import { WEAPONS } from '../combat/weapons.js';
-import { DEFAULT_WALL_COLOR } from '../../state.js';
-import { ensureDesigns } from '../art/design-store.js';
+import { DEFAULT_WALL_COLOR, ENEMY_TYPES, chestLockRadius } from '../../state.js';
+import { ensureDesigns, getDesign, ensureDesign } from '../art/design-store.js';
 import { findConsumable, getItemArt } from '../economy/inner-shop.js';
 import { getArtRef, resolveArtRef } from './vendor-shop-art.js';
-import { drawDesignCentered } from '../art/asset-render.js';
+import { drawDesignCentered, renderAssetFit } from '../art/asset-render.js';
 
 export const WorldRenderMixin = {
     // 按需加载玩家 / 敌人引用的画板设计稿（幂等，缓存命中后零成本）
@@ -23,8 +24,15 @@ export const WorldRenderMixin = {
       const ids = [];
       if (this.player?.art) ids.push(this.player.art);
       const enemies = this.editing ? (this.ctx.state.level.enemies || []) : (this.enemies || []);
-      for (const e of enemies) if (e?.art) ids.push(e.art);
+      // 敌人未显式指定画板美术方案时按类型默认美术预载（母舰 / 原型机-2-5T5 / 重装机兵
+      // 的关卡条目 art 常为空串，运行期由 initEnemy 用 ENEMY_TYPES 默认值补上）
+      for (const e of enemies) {
+        const id = e?.art || ENEMY_TYPES[e?.type]?.art;
+        if (id) ids.push(id);
+      }
       for (const pet of (this.pets || [])) if (pet?.art) ids.push(pet.art);
+      const campfires = this.editing ? (this.ctx.state.level.campfires || []) : (this.campfires || []);
+      for (const cf of campfires) if (cf?.art) ids.push(cf.art);
       if (!ids.length) return;
       if (!this._artReq) this._artReq = new Set();
       const fresh = ids.filter(id => !this._artReq.has(id));
@@ -245,6 +253,27 @@ export const WorldRenderMixin = {
       }
     },
 
+    // 休息火堆世界层绘制：按 campfire.art 设计稿等比铺满配置尺寸；未加载时白色圆环占位。
+    // 采用 roomRevealAlpha 作为可见性/占位透明度门控（renderAssetFit 无 alpha 参数，未知房间未揭示时不绘制）。
+    drawCampfires(g) {
+    const ctx = this.ctx;
+      const campfires = this.editing ? (ctx.state.level.campfires || []) : (this.campfires || []);
+      const t = (this.time?.now || 0) / 1000;
+      for (const cf of campfires) {
+        if (!this.editing && cf.visible === false) continue;
+        const ra = this.roomRevealAlpha(cf.x, cf.y);
+        if (ra <= 0) continue;
+        const design = cf.art ? getDesign(cf.art) : null;
+        if (design) {
+          renderAssetFit(g, design, cf.x, cf.y, Math.min(cf.w, cf.h) * (cf.artScale || 1), 0, t);
+        } else {
+          if (cf.art) ensureDesign(cf.art);
+          g.lineStyle(3, 0xffffff, ra);
+          g.strokeCircle(cf.x, cf.y, Math.max(10, Math.min(cf.w || 290, cf.h || 290) / 2));
+        }
+      }
+    },
+
     syncIconSprites() {
     const ctx = this.ctx;
       const icons = this.editing ? (ctx.state.level.icons || []) : (this.icons || []);
@@ -353,7 +382,8 @@ export const WorldRenderMixin = {
         const tw = img.frame?.width || 1254;
         // 开启态内容在画布内留白更多，按内容宽比补偿，使开启/常态视觉同宽
         const correction = opened ? CHEST_OPEN_SCALE_CORRECTION : 1;
-        img.setScale(CHEST_SIZE / tw * correction);
+        // 尺寸按 w/h 中较大边等比缩放（不变形；宝箱 w/h 默认同为 75 = 原 CHEST_SIZE）
+        img.setScale(Math.max(c.w || 0, c.h || 0, 1) / tw * correction);
         const ra = this.roomRevealAlpha(c.x, c.y);
         img.setAlpha(ra);
         img.setVisible(ra > 0);
@@ -443,16 +473,36 @@ export const WorldRenderMixin = {
       this.syncChestSprites();
       this.syncVendorSprites();
       this.syncIdolSprites();
+      this.drawCampfires(g);
       this.syncIconSprites();
       this.drawIcons(g);
       this.syncPortalSprites();
       const chests = this.editing ? (l.chests || []) : (this.chests || []).filter(c => c.spawned);
       if (this.editing) {
         chests.forEach(c => {
-          if (ctx.state.selected === c) {
-            g.lineStyle(2, 0xffe083);
-            g.strokeCircle(c.x, c.y, c.openRadius);
+          if (ctx.state.selected !== c) return;
+          g.lineStyle(2, 0xffe083);
+          g.strokeCircle(c.x, c.y, c.openRadius);
+          // 尺寸包围盒 + 四角缩放手柄（拖动手柄改 w/h，见 editor-input.js 的 resize 分支）
+          const corners = wallCorners(c);
+          g.beginPath();
+          g.moveTo(corners[0].x, corners[0].y);
+          for (let i = 1; i < 4; i++) g.lineTo(corners[i].x, corners[i].y);
+          g.closePath();
+          g.strokePath();
+          for (const hc of corners) {
+            g.fillStyle(0xffffff);
+            g.fillRect(hc.x - 5, hc.y - 5, 10, 10);
           }
+        });
+      } else {
+        // 上锁宝箱的红环（厚度 8px）：半径随宝箱 w/h 推导；碰撞体见 interactables.js:chestLockWalls。
+        // alpha 走 lockAlpha（上锁渐显 0→1 / 解锁渐隐 1→0，由 updateChests 每帧推进），渐隐完毕为 0 即不画
+        chests.forEach(c => {
+          const alpha = (typeof c.lockAlpha === 'number' ? c.lockAlpha : (c.locked ? 1 : 0)) * this.roomRevealAlpha(c.x, c.y);
+          if (alpha <= 0) return;
+          g.lineStyle(CHEST_LOCK_RING_THICKNESS, CHEST_LOCK_RING_COLOR, alpha);
+          g.strokeCircle(c.x, c.y, chestLockRadius(c));
         });
       }
       this.drawChestEffects(g);
@@ -608,9 +658,11 @@ export const WorldRenderMixin = {
           this.drawHubUI(g);
           this.drawVendorUI(g);
           this.drawIdolUI(g);
+          this.drawCampfireUI(g);
           this.drawIconUI(g);
           this.drawPortalUI(g);
           this.drawGuideArrows(g);
+          drawHeavyMechBeams(g, this.enemyLasers);
           this.lasers.forEach(l => {
             g.lineStyle(l.width, color(l.color), 0.9);
             g.lineBetween(l.x0, l.y0, l.x1, l.y1);
@@ -675,6 +727,23 @@ export const WorldRenderMixin = {
         }
         g.lineStyle(1, 0xffd54f, 0.5);
         g.strokeCircle(v.x, v.y, v.interactRadius || 130);
+      }
+
+      if (this.editing && ctx.state.selected && (l.campfires || []).includes(ctx.state.selected)) {
+        const v = ctx.state.selected;
+        g.lineStyle(2, 0x6fd3ff);
+        g.strokeRect(v.x - v.w / 2, v.y - v.h / 2, v.w, v.h);
+        for (const [hx, hy] of [
+          [v.x - v.w / 2, v.y - v.h / 2],
+          [v.x + v.w / 2, v.y - v.h / 2],
+          [v.x - v.w / 2, v.y + v.h / 2],
+          [v.x + v.w / 2, v.y + v.h / 2]
+        ]) {
+          g.fillStyle(0xffffff);
+          g.fillRect(hx - 5, hy - 5, 10, 10);
+        }
+        g.lineStyle(1, 0xffd54f, 0.5);
+        g.strokeCircle(v.x, v.y, v.interactRadius || 150);
       }
 
       if (this.editing && ctx.state.selected && (l.vendors || []).includes(ctx.state.selected)) {

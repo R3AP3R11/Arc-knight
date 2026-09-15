@@ -28,7 +28,8 @@ function triggerEventParamsHtml(ev, i, options) {
     let html = `
         <label class="te-check"><input type="checkbox" data-event-i="${i}" data-event-field="spawn.stopOnExit" ${spawn.stopOnExit ? 'checked' : ''}/>离开触发器后停止生成</label>
         <label class="te-check"><input type="checkbox" data-event-i="${i}" data-event-field="spawn.resumeOnReturn" ${spawn.resumeOnReturn !== false ? 'checked' : ''}/>离开后重新进入：继续进度</label>
-        <label>波数<input data-event-i="${i}" data-event-wavecount="${i}" type="number" min="1" value="${waves.length}"/></label>`;
+        <label>波数<input data-event-i="${i}" data-event-wavecount="${i}" type="number" min="1" value="${waves.length}"/></label>
+        <p class="hint">血量/伤害/尺寸倍率留空 = 用侧栏「敌人默认数值」的关卡兜底值，都未配置则用全局默认；尺寸倍率同时放大美术与碰撞体。</p>`;
 
     for (let w = 0; w < waves.length; w++) {
       const wave = waves[w] || {};
@@ -78,6 +79,10 @@ function triggerEventParamsHtml(ev, i, options) {
       } else {
         html += `<label>第${no}波数量<input data-event-i="${i}" data-event-field="spawn.waves.${w}.count" type="number" value="${wave.count ?? 5}"/></label>`;
       }
+      html += `
+          <label>第${no}波血量<input data-event-i="${i}" data-event-field="spawn.waves.${w}.hp" type="number" min="1" placeholder="关卡兜底" value="${wave.hp ?? ''}"/></label>
+          <label>第${no}波伤害<input data-event-i="${i}" data-event-field="spawn.waves.${w}.damage" type="number" min="0" placeholder="关卡兜底" value="${wave.damage ?? ''}"/></label>
+          <label>第${no}波尺寸倍率<input data-event-i="${i}" data-event-field="spawn.waves.${w}.scale" type="number" min="0" step="0.1" placeholder="关卡兜底" value="${wave.scale ?? ''}"/></label>`;
     }
     return html;
   }
@@ -124,6 +129,21 @@ function triggerEventParamsHtml(ev, i, options) {
           </select>
         </label>
         <p class="hint">选「BOSS」后镜头中心在运镜期间动态锁定到 BOSS 死亡坐标（视口左上角 paX/paY 被换算为中心）。</p>`;
+  }
+
+  if (type === 'lockChest' || type === 'unlockChest') {
+    const arr = Array.isArray(ev.chestIds) ? ev.chestIds : (ev.chestIds = []);
+    // 目标宝箱列表从当前关卡宝箱实时生成（新增/删除宝箱后重渲染即可看到）
+    const chestOpts = (state.level.chests || []).map((c, ci) => [c.id, `${ci + 1}. ${c.id}`]);
+    if (!chestOpts.length) return '<p class="hint">当前关卡没有宝箱，请先放置宝箱</p>';
+    return `
+        <p class="hint" style="margin-top:2px">${type === 'lockChest'
+          ? '上锁：所选宝箱被红色圆环包围，不可开启，且阻挡玩家/敌人移动与所有子弹。'
+          : '解锁：移除所选宝箱的红色圆环，恢复可开启。'}</p>
+        <div class="field-multiselect"><span class="ms-title">目标宝箱（多选）</span><div class="ms-list">
+        ${chestOpts.map(([v, name]) => `<label class="ms-item"><input type="checkbox" data-event-i="${i}" data-ms="events.${i}.chestIds" value="${v}" ${arr.includes(v) ? 'checked' : ''}/>${name}</label>`).join('')}
+      </div></div>
+        <p class="hint">未勾选任何宝箱时，该事件不作用于任何宝箱。</p>`;
   }
 
   return '<p class="hint">该事件无参数</p>';
@@ -174,6 +194,31 @@ export function renderTriggerEvents(entity, options) {
 
   const list = wrap.querySelector('.trigger-event-list');
   const saveQuiet = () => saveDraft(state.levelId, state.level).catch(() => setStatus(dom, '保存失败', true));
+
+  // 波次敌人数值覆盖（spawn.waves.N.hp|damage|scale）：留空 = 未配置（删除该键 → 回落关卡兜底 → 全局默认）
+  const applyWaveStat = (ev, field, rawValue) => {
+    const m = /^spawn\.waves\.(\d+)\.(hp|damage|scale)$/.exec(field || '');
+    if (!m) return false;
+    const wave = ev?.spawn?.waves?.[Number(m[1])];
+    if (!wave) return true;
+    const key = m[2];
+    const raw = String(rawValue ?? '').trim();
+    if (raw === '') {
+      delete wave[key];
+      return true;
+    }
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return true;
+    if (key === 'damage') {
+      if (n >= 0) wave.damage = n;
+      else delete wave.damage;
+    } else if (n > 0) {
+      wave[key] = n;
+    } else {
+      delete wave[key];
+    }
+    return true;
+  };
 
   const render = () => {
     const events = entity.events || (entity.events = []);
@@ -243,6 +288,7 @@ export function renderTriggerEvents(entity, options) {
       delete ev.gateIds;
       delete ev.cinematicId;
       delete ev.focusTarget;
+      delete ev.chestIds;
       if (ev.type === 'spawnEnemy') {
         ev.spawn = { stopOnExit: false, resumeOnReturn: true, waves: [] };
       } else if (ev.type === 'switchLevel') {
@@ -254,6 +300,8 @@ export function renderTriggerEvents(entity, options) {
       } else if (ev.type === 'playCinematic') {
         ev.cinematicId = '';
         ev.focusTarget = '';
+      } else if (ev.type === 'lockChest' || ev.type === 'unlockChest') {
+        ev.chestIds = [];
       }
       render();
       saveQuiet();
@@ -277,13 +325,16 @@ export function renderTriggerEvents(entity, options) {
       const i = Number(el.dataset.eventI);
       const ev = entity.events[i];
       if (!ev) return;
-      ev.gateIds = [...list.querySelectorAll(`input[data-ms="events.${i}.gateIds"]:checked`)].map(x => x.value);
+      // 多选字段名取 data-ms 末段（gateIds / chestIds …），新增多选字段无需再改这里
+      const key = el.dataset.ms.split('.').pop();
+      ev[key] = [...list.querySelectorAll(`input[data-ms="${el.dataset.ms}"]:checked`)].map(x => x.value);
       saveQuiet();
       return;
     }
     const field = el.dataset.eventField;
     const i = Number(el.dataset.eventI);
     if (!field || !Number.isInteger(i) || !entity.events[i]) return;
+    if (applyWaveStat(entity.events[i], field, el.value)) { saveQuiet(); return; }
     const value = el.type === 'checkbox' ? el.checked
       : el.type === 'number' ? Number(el.value) : el.value;
     setNested(entity.events[i], field, value);
@@ -308,6 +359,7 @@ export function renderTriggerEvents(entity, options) {
     const field = el.dataset.eventField;
     const i = Number(el.dataset.eventI);
     if (!field || !Number.isInteger(i) || !entity.events[i]) return;
+    if (applyWaveStat(entity.events[i], field, el.value)) { saveQuiet(); return; }
     const value = el.type === 'checkbox' ? el.checked
       : el.type === 'number' ? Number(el.value) : el.value;
     setNested(entity.events[i], field, value);

@@ -110,6 +110,7 @@
               <button data-tool="gate" class="tool">能量门</button>
               <button data-tool="vendor" class="tool">售货机</button>
               <button data-tool="idol" class="tool">神像</button>
+              <button data-tool="campfire" class="tool">休息火堆</button>
               <button data-tool="icon" class="tool">可交互图标</button>
               <button data-tool="portal" class="tool">传送门</button>
               <button data-tool="spawnzone" class="tool">生成区域</button>
@@ -139,6 +140,9 @@
             <option value="deadzone">软跟随（死区）</option>
             <option value="center">玩家始终居中</option>
           </select></label>
+          <h2>敌人默认数值（本关卡兜底）</h2>
+          <p class="hint">按敌人类型配置本关卡兜底的血量/伤害/尺寸倍率。触发器波次未配置时套用这里的值；波次与这里都未配置则用全局默认。留空 = 未配置。尺寸倍率同时放大美术与碰撞体。</p>
+          <div id="enemyDefaultsEditor"></div>
           <h2>敌人掉落配置</h2>
           <p class="hint">按敌人类型统一配置本关卡爆率，每条规则独立判定；未配置时沿用敌人个体掉落数值。</p>
           <div id="dropRulesEditor"></div>

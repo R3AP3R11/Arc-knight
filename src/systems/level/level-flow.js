@@ -91,6 +91,7 @@ export const LevelFlowMixin = {
       this.hideCinematicFade?.();
       this.bullets = [];
       this.lasers = [];
+      this.enemyLasers = [];   // 重装机兵激光光束（局内表现态，随重开清零）
       this.orbitHit = new Map();
       if (this.player) this.player.orbit = null;
       this.enemyBullets = [];
@@ -125,6 +126,9 @@ export const LevelFlowMixin = {
         ...c,
         spawned: c.trigger === 'start',
         opened: false,
+        locked: false,      // 上锁态（仅当局；由触发器 lockChest/unlockChest 事件改写）
+        lockFx: null,       // 上锁红环的渐显/渐隐计时（{t, kind}，见 interactables.js:updateChests）
+        lockAlpha: 0,       // 红环当前显示透明度（0=不画）
         fx: null
       }));
       this.portals = (l.portals || []).map(p => ({
@@ -149,6 +153,10 @@ export const LevelFlowMixin = {
       this.idolNearest = null;
       this.idolTipT = 0;
       this.idolOffer = null;
+      this.campfires = (l.campfires || []).map(v => ({ ...v, used: false }));
+      this.campfireNearest = null;
+      this.campfireTipT = 0;
+      this.campfireOffer = null;
       this.icons = (l.icons || []).map(v => ({ ...v }));
       this.iconNearest = null;
       this.iconTipT = 0;
@@ -171,7 +179,8 @@ export const LevelFlowMixin = {
       const obstacles = [
         ...l.walls,
         ...(l.crates || []),
-        ...(l.barrels || []).map(b => ({ x: b.x, y: b.y, w: b.r * 2, h: b.r * 2 }))
+        ...(l.barrels || []).map(b => ({ x: b.x, y: b.y, w: b.r * 2, h: b.r * 2 })),
+        ...(l.campfires || []).map(cf => ({ x: cf.x, y: cf.y, w: cf.w, h: cf.h }))
       ];
       this.grid = buildGrid({ width: l.world.width, height: l.world.height }, obstacles, CELL, PATH_INFLATE);
       // 数据源：游戏预览用临时数据，试玩/正式游戏用真实存档（试玩为测试存档）
@@ -264,6 +273,9 @@ export const LevelFlowMixin = {
         maxShield,
         shieldBroken: false,
         itemShields: [],            // 局内即时护盾（按顺序吸收伤害；仅当局，不写存档）
+        weaponBuffs: {},            // 火堆武器祝福累积（仅当局，不写存档）
+        tempMods: {},               // 火堆局内通用改件（仅当局，不写存档）
+        buffedWeapon: null,         // 当前已生效火堆祝福的武器 id（仅当局）
         hitFlash: null,
         combat,
         points: source?.points || {},

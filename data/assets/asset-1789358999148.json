@@ -1,0 +1,208 @@
+{
+  "id": "asset-1789358999148",
+  "name": "杰作升级图标",
+  "bgColor": "#ffffff",
+  "center": {
+    "x": 0,
+    "y": 0
+  },
+  "scale": 1,
+  "elements": [
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 20,
+      "sides": 6,
+      "cols": 12,
+      "rows": 12,
+      "cellSize": 8,
+      "gridColor": "",
+      "cells": [],
+      "lineWidth": 4,
+      "color": "#000000",
+      "fill": "#000000",
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "pattern": "plain",
+      "tickShortLen": 6,
+      "tickLongLen": 12,
+      "tickDensity": 12,
+      "tickRatio": 1,
+      "tickDir": "in",
+      "handLongRadius": 20,
+      "handShortRadius": 20,
+      "handLongColor": "#000000",
+      "handShortColor": "#000000",
+      "points": [
+        {
+          "x": -150,
+          "y": -60
+        },
+        {
+          "x": -45,
+          "y": -89
+        },
+        {
+          "x": 7,
+          "y": 132
+        },
+        {
+          "x": 46,
+          "y": 122
+        },
+        {
+          "x": -4,
+          "y": -100
+        },
+        {
+          "x": 42,
+          "y": -113
+        },
+        {
+          "x": 30,
+          "y": -150
+        },
+        {
+          "x": -30,
+          "y": -135
+        },
+        {
+          "x": -60,
+          "y": -150
+        },
+        {
+          "x": -167,
+          "y": -120
+        }
+      ],
+      "closed": true,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 20,
+      "sides": 6,
+      "cols": 12,
+      "rows": 12,
+      "cellSize": 8,
+      "gridColor": "",
+      "cells": [],
+      "lineWidth": 4,
+      "color": "#000000",
+      "fill": "#000000",
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "pattern": "plain",
+      "tickShortLen": 6,
+      "tickLongLen": 12,
+      "tickDensity": 12,
+      "tickRatio": 1,
+      "tickDir": "in",
+      "handLongRadius": 20,
+      "handShortRadius": 20,
+      "handLongColor": "#000000",
+      "handShortColor": "#000000",
+      "points": [
+        {
+          "x": 90,
+          "y": 120
+        },
+        {
+          "x": 90,
+          "y": 90
+        },
+        {
+          "x": 120,
+          "y": 60
+        },
+        {
+          "x": 150,
+          "y": 90
+        },
+        {
+          "x": 150,
+          "y": 120
+        },
+        {
+          "x": 120,
+          "y": 90
+        }
+      ],
+      "closed": true,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    },
+    {
+      "shape": "stroke",
+      "count": 1,
+      "orbitRadius": 0,
+      "radius": 20,
+      "sides": 6,
+      "cols": 12,
+      "rows": 12,
+      "cellSize": 8,
+      "gridColor": "",
+      "cells": [],
+      "lineWidth": 4,
+      "color": "#000000",
+      "fill": "#000000",
+      "rotSpeed": 0,
+      "phase": 0,
+      "dir": 1,
+      "arcStart": 0,
+      "arcEnd": 300,
+      "pattern": "plain",
+      "tickShortLen": 6,
+      "tickLongLen": 12,
+      "tickDensity": 12,
+      "tickRatio": 1,
+      "tickDir": "in",
+      "handLongRadius": 20,
+      "handShortRadius": 20,
+      "handLongColor": "#000000",
+      "handShortColor": "#000000",
+      "points": [
+        {
+          "x": 90,
+          "y": 60
+        },
+        {
+          "x": 90,
+          "y": 30
+        },
+        {
+          "x": 120,
+          "y": 0
+        },
+        {
+          "x": 150,
+          "y": 30
+        },
+        {
+          "x": 150,
+          "y": 60
+        },
+        {
+          "x": 120,
+          "y": 30
+        }
+      ],
+      "closed": true,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetSpeed": 1
+    }
+  ]
+}

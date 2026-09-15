@@ -8,6 +8,7 @@
  *   fireTrigger / dispatchTriggerEvent      —— 触发器点火 / 单事件派发
  *   triggerHasPendingWaves                  —— 本触发器是否仍有未生成波次
  *   setGatesActive / activeGateWalls        —— 门开合 / 生效门的碰撞矩形
+ *   lockChest / unlockChest（事件）          —— 经 dispatchTriggerEvent 转交 interactables.js:setChestsLocked
  *   triggerSpawnEnemy / runTriggerWave      —— 生成事件入口 / 波次定时链
  *   stopTriggerSpawn                        —— 中止波次并清理特效与冻结敌人
  *
@@ -56,6 +57,10 @@ export const TriggersMixin = {
         this.settleVictory();
       } else if (ev.type === 'playCinematic') {
         this.playCutsceneById(ev.cinematicId, { focusTarget: ev.focusTarget });
+      } else if (ev.type === 'lockChest') {
+        this.setChestsLocked(ev.chestIds, true);
+      } else if (ev.type === 'unlockChest') {
+        this.setChestsLocked(ev.chestIds, false);
       }
     },
 
@@ -176,7 +181,7 @@ export const TriggersMixin = {
       const fire = () => {
         st.timer = null;
         if (wave.mode === 'offscreen') {
-          this.spawnOffscreen(t, wave.count, wave.enemyType);
+          this.spawnOffscreen(t, wave);
         } else if (wave.mode === 'inscreen') {
           this.spawnInScreen(t, wave);
         } else {
@@ -191,8 +196,11 @@ export const TriggersMixin = {
         }
       };
 
-      // 勾选「等待清理」时：场上仍有存活敌人则延后到这波生成
-      const enemiesCleared = () => !this.enemies.some(e => e.alive);
+      // 勾选「等待清理」时：**本触发器召唤的**敌人仍有存活则延后到这波生成。
+      // 不能按「全场无存活敌人」判：关卡里手摆的敌人（如待机 BOSS，triggerId 为空且永远 alive）与
+      // 其它触发器召唤的敌人会永远卡住本触发器的波次链（真实踩过：Level1-Scene2 trigger-178，
+      // 第 3 波 waitForClear 永不生成）。判据与 checkAsyncTriggerEvents 一致，同按 triggerId 过滤。
+      const enemiesCleared = () => !this.enemies.some(e => e.alive && e.triggerId === t.id);
       const run = () => {
         if (wave.waitForClear && !enemiesCleared()) {
           st.timer = this.time.delayedCall(120, run);
